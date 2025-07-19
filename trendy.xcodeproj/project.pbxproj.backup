@@ -400,8 +400,6 @@
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app needs full access to your calendar to import events for tracking and visualization.";
-				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to import events for tracking and visualization.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -430,8 +428,6 @@
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "This app needs full access to your calendar to import events for tracking and visualization.";
-				INFOPLIST_KEY_NSCalendarsUsageDescription = "This app needs access to your calendar to import events for tracking and visualization.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

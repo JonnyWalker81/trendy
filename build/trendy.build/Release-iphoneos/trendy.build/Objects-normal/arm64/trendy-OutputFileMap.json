@@ -1,0 +1,100 @@
+{
+  "" : {
+    "const-values" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master.swiftconstvalues",
+    "dependencies" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master.d",
+    "diagnostics" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master.dia",
+    "emit-module-dependencies" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master-emit-module.dia",
+    "swift-dependencies" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendy-master.swiftdeps"
+  },
+  "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/GeneratedAssetSymbols.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/ContentView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/ContentView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Models/Event.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/Event.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/Event.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/Event.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Models/EventError.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventError.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventError.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventError.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Models/EventType.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventType.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventType.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventType.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/ViewModels/AnalyticsViewModel.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsViewModel.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsViewModel.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsViewModel.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/ViewModels/EventStore.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventStore.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventStore.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventStore.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Analytics/AnalyticsView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AnalyticsView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Calendar/CalendarView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Components/CalendarDayView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarDayView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarDayView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/CalendarDayView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Components/EventBubbleView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventBubbleView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventBubbleView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventBubbleView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Components/EventRowView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventRowView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventRowView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventRowView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Dashboard/BubblesView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/BubblesView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/BubblesView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/BubblesView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/List/EventListView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventListView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventListView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventListView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/MainTabView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/MainTabView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/MainTabView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/MainTabView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Settings/AddEventTypeView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AddEventTypeView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AddEventTypeView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/AddEventTypeView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/Views/Settings/EventTypeSettingsView.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventTypeSettingsView.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventTypeSettingsView.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/EventTypeSettingsView.o"
+  },
+  "/Users/phantom/Repositories/trendy/trendy/trendyApp.swift" : {
+    "index-unit-output-path" : "/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendyApp.o",
+    "llvm-bc" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendyApp.bc",
+    "object" : "/Users/phantom/Repositories/trendy/build/trendy.build/Release-iphoneos/trendy.build/Objects-normal/arm64/trendyApp.o"
+  }
+}
