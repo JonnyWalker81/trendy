@@ -1,5 +1,9 @@
 # Trendy
 
+<div align="center">
+  <img src="trendy/Assets.xcassets/AppIcon.appiconset/trendyAppIcon 1.png" width="120" height="120" alt="Trendy App Icon">
+</div>
+
 A modern iOS app for tracking personal events and visualizing patterns over time. Built with SwiftUI and SwiftData.
 
 ## Features
@@ -49,6 +53,10 @@ open trendy.xcodeproj
 ```
 
 3. Build and run (⌘R)
+
+## App Icon
+
+The app features a modern, colorful design that represents the bubble-based tracking interface. The icon adapts to both light and dark modes.
 
 ## Architecture
 
