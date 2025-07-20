@@ -18,6 +18,8 @@ class EventStore {
     var errorMessage: String?
     
     private var modelContext: ModelContext?
+    private var calendarManager: CalendarManager?
+    var syncWithCalendar = true
     
     init() { }
     
@@ -26,6 +28,10 @@ class EventStore {
         Task {
             await fetchData()
         }
+    }
+    
+    func setCalendarManager(_ manager: CalendarManager) {
+        self.calendarManager = manager
     }
     
     func fetchData() async {
@@ -51,11 +57,66 @@ class EventStore {
         isLoading = false
     }
     
-    func recordEvent(type: EventType) async {
+    func recordEvent(type: EventType, timestamp: Date = Date(), isAllDay: Bool = false, endDate: Date? = nil, notes: String? = nil) async {
         guard let modelContext else { return }
         
-        let newEvent = Event(eventType: type)
+        let newEvent = Event(
+            timestamp: timestamp,
+            eventType: type,
+            notes: notes,
+            isAllDay: isAllDay,
+            endDate: endDate
+        )
+        
+        // Sync with system calendar if enabled
+        if syncWithCalendar, let calendarManager = calendarManager, calendarManager.isAuthorized {
+            do {
+                let calendarEventId = try await calendarManager.addEventToCalendar(
+                    title: type.name,
+                    startDate: timestamp,
+                    endDate: endDate,
+                    isAllDay: isAllDay,
+                    notes: notes
+                )
+                newEvent.calendarEventId = calendarEventId
+            } catch {
+                print("Failed to add event to calendar: \(error)")
+                // Continue even if calendar sync fails
+            }
+        }
+        
         modelContext.insert(newEvent)
+        
+        do {
+            try modelContext.save()
+            await fetchData()
+        } catch {
+            errorMessage = EventError.saveFailed.localizedDescription
+        }
+    }
+    
+    func updateEvent(_ event: Event) async {
+        guard let modelContext else { return }
+        
+        // Update system calendar if synced
+        if syncWithCalendar, 
+           let calendarManager = calendarManager,
+           calendarManager.isAuthorized,
+           let calendarEventId = event.calendarEventId {
+            do {
+                try await calendarManager.updateCalendarEvent(
+                    identifier: calendarEventId,
+                    title: event.eventType?.name,
+                    startDate: event.timestamp,
+                    endDate: event.endDate,
+                    isAllDay: event.isAllDay,
+                    notes: event.notes
+                )
+            } catch {
+                print("Failed to update calendar event: \(error)")
+                // Continue even if calendar sync fails
+            }
+        }
         
         do {
             try modelContext.save()
@@ -67,6 +128,19 @@ class EventStore {
     
     func deleteEvent(_ event: Event) async {
         guard let modelContext else { return }
+        
+        // Delete from system calendar if synced
+        if syncWithCalendar,
+           let calendarManager = calendarManager,
+           calendarManager.isAuthorized,
+           let calendarEventId = event.calendarEventId {
+            do {
+                try await calendarManager.deleteCalendarEvent(identifier: calendarEventId)
+            } catch {
+                print("Failed to delete calendar event: \(error)")
+                // Continue even if calendar sync fails
+            }
+        }
         
         modelContext.delete(event)
         

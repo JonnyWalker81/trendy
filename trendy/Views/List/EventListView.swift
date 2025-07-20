@@ -59,7 +59,7 @@ struct EventListView: View {
                                 deleteEvents(at: indexSet, for: date)
                             }
                         } header: {
-                            Text(date, format: .dateTime.weekday().month().day())
+                            Text(date, format: .dateTime.weekday().month().day().year())
                                 .font(.headline)
                         }
                     }

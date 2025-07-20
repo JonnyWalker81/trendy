@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct BubblesView: View {
     @Environment(EventStore.self) private var eventStore
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var calendarManager: CalendarManager
     @State private var showingAddEventType = false
     @State private var selectedEventType: EventType?
-    @State private var showingNoteInput = false
     
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 150), spacing: 20)
@@ -26,12 +28,12 @@ struct BubblesView: View {
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(eventStore.eventTypes) { eventType in
                             EventBubbleView(eventType: eventType) {
+                                selectedEventType = eventType
+                            } onLongPress: {
+                                // Quick record without opening edit view
                                 Task {
                                     await recordEvent(eventType)
                                 }
-                            } onLongPress: {
-                                selectedEventType = eventType
-                                showingNoteInput = true
                             }
                         }
                         
@@ -52,15 +54,12 @@ struct BubblesView: View {
             }
             .sheet(isPresented: $showingAddEventType) {
                 AddEventTypeView()
+                    .environment(eventStore)
             }
-            .sheet(isPresented: $showingNoteInput) {
-                if let eventType = selectedEventType {
-                    NoteInputView(eventType: eventType) { note in
-                        Task {
-                            await recordEvent(eventType, withNote: note)
-                        }
-                    }
-                }
+            .sheet(item: $selectedEventType) { eventType in
+                EventEditView(eventType: eventType)
+                    .environment(eventStore)
+                    .environmentObject(calendarManager)
             }
             .task {
                 await eventStore.fetchData()
@@ -116,46 +115,10 @@ struct BubblesView: View {
         }
     }
     
-    private func recordEvent(_ eventType: EventType, withNote note: String? = nil) async {
+    private func recordEvent(_ eventType: EventType) async {
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
         
         await eventStore.recordEvent(type: eventType)
-    }
-}
-
-struct NoteInputView: View {
-    let eventType: EventType
-    let onSave: (String) -> Void
-    
-    @State private var noteText = ""
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Add a note for \(eventType.name)") {
-                    TextEditor(text: $noteText)
-                        .frame(minHeight: 100)
-                }
-            }
-            .navigationTitle("Add Note")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        onSave(noteText)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
     }
 }

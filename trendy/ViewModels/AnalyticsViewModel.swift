@@ -19,8 +19,11 @@ struct Statistics {
     let totalCount: Int
     let averagePerDay: Double
     let averagePerWeek: Double
+    let averagePerMonth: Double
+    let averagePerYear: Double
     let trend: Trend
     let lastOccurrence: Date?
+    let timeRange: TimeRange
     
     enum Trend {
         case increasing
@@ -62,7 +65,7 @@ class AnalyticsViewModel {
         return dataPoints
     }
     
-    func generateStatistics(for eventType: EventType, events: [Event]) async -> Statistics {
+    func generateStatistics(for eventType: EventType, events: [Event], timeRange: TimeRange) async -> Statistics {
         let filteredEvents = events.filter { $0.eventType?.id == eventType.id }
         
         let totalCount = filteredEvents.count
@@ -77,8 +80,11 @@ class AnalyticsViewModel {
                 totalCount: 0,
                 averagePerDay: 0,
                 averagePerWeek: 0,
+                averagePerMonth: 0,
+                averagePerYear: 0,
                 trend: .stable,
-                lastOccurrence: nil
+                lastOccurrence: nil,
+                timeRange: timeRange
             )
         }
         
@@ -90,6 +96,8 @@ class AnalyticsViewModel {
         
         let averagePerDay = Double(totalCount) / Double(totalDays)
         let averagePerWeek = averagePerDay * 7.0
+        let averagePerMonth = averagePerDay * 30.0
+        let averagePerYear = averagePerDay * 365.0
         
         // Calculate trend
         let trend = calculateTrend(events: filteredEvents)
@@ -98,8 +106,11 @@ class AnalyticsViewModel {
             totalCount: totalCount,
             averagePerDay: averagePerDay,
             averagePerWeek: averagePerWeek,
+            averagePerMonth: averagePerMonth,
+            averagePerYear: averagePerYear,
             trend: trend,
-            lastOccurrence: lastOccurrence
+            lastOccurrence: lastOccurrence,
+            timeRange: timeRange
         )
     }
     

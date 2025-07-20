@@ -43,6 +43,12 @@ struct EventTypeSettingsView: View {
                     } label: {
                         Label("Import from Calendar", systemImage: "calendar.badge.plus")
                     }
+                    
+                    NavigationLink {
+                        CalendarSyncSettingsView()
+                    } label: {
+                        Label("Calendar Sync", systemImage: "calendar.badge.checkmark")
+                    }
                 }
             }
             .navigationTitle("Settings")

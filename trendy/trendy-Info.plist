@@ -6,5 +6,12 @@
     <string>This app needs access to your calendar to import events for tracking and visualization.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>This app needs full access to your calendar to import events for tracking and visualization.</string>
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>AccentColor</string>
+        <key>UIImageName</key>
+        <string></string>
+    </dict>
 </dict>
 </plist>

@@ -24,8 +24,9 @@ final class Event {
     var originalTitle: String?
     var isAllDay: Bool = false
     var endDate: Date?
+    var calendarEventId: String?
     
-    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil) {
+    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil) {
         self.id = UUID()
         self.timestamp = timestamp
         self.eventType = eventType
@@ -35,5 +36,6 @@ final class Event {
         self.originalTitle = originalTitle
         self.isAllDay = isAllDay
         self.endDate = endDate
+        self.calendarEventId = calendarEventId
     }
 }

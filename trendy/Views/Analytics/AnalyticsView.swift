@@ -149,9 +149,9 @@ struct AnalyticsView: View {
                     )
                     
                     StatisticItem(
-                        title: "Avg/Day",
-                        value: String(format: "%.1f", statistics.averagePerDay),
-                        icon: "calendar.day.timeline.left"
+                        title: averageTitle(for: timeRange),
+                        value: String(format: "%.1f", averageValue(for: statistics, timeRange: timeRange)),
+                        icon: averageIcon(for: timeRange)
                     )
                     
                     StatisticItem(
@@ -246,7 +246,8 @@ struct AnalyticsView: View {
         
         statistics = await analyticsViewModel.generateStatistics(
             for: eventType,
-            events: eventStore.events
+            events: eventStore.events,
+            timeRange: timeRange
         )
     }
     
@@ -271,6 +272,30 @@ struct AnalyticsView: View {
         case .week: return .dateTime.weekday(.abbreviated)
         case .month: return .dateTime.day()
         case .year: return .dateTime.month(.abbreviated)
+        }
+    }
+    
+    private func averageTitle(for timeRange: TimeRange) -> String {
+        switch timeRange {
+        case .week: return "Avg/Day"
+        case .month: return "Avg/Week"
+        case .year: return "Avg/Month"
+        }
+    }
+    
+    private func averageValue(for statistics: Statistics, timeRange: TimeRange) -> Double {
+        switch timeRange {
+        case .week: return statistics.averagePerDay
+        case .month: return statistics.averagePerWeek
+        case .year: return statistics.averagePerMonth
+        }
+    }
+    
+    private func averageIcon(for timeRange: TimeRange) -> String {
+        switch timeRange {
+        case .week: return "calendar.day.timeline.left"
+        case .month: return "calendar"
+        case .year: return "calendar.badge.clock"
         }
     }
 }

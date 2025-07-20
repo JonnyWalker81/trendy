@@ -94,3 +94,6 @@ iOSInjectionProject/
 
 # Backup files
 *.backup
+
+# Development notes
+SCRATCHPAD.md
