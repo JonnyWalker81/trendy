@@ -1,7 +1,0 @@
-server:
-  port: "8080"
-  env: "development"
-
-supabase:
-  url: "https://cwxghazeohicindcznhx.supabase.co"
-  service_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3eGdoYXplb2hpY2luZGN6bmh4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjU2MzE0NSwiZXhwIjoyMDc4MTM5MTQ1fQ.DHn4dzMv1-ae38k3Q_4I_AtWx1liXezwz4jpLyj6RTo"
