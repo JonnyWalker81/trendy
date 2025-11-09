@@ -29,6 +29,10 @@
             postgresql
             supabase-cli
 
+            # Cloud deployment tools
+            google-cloud-sdk
+            docker
+
             # Development utilities
             git
             curl
@@ -47,12 +51,15 @@
             echo "  - Go $(go version | cut -d' ' -f3)"
             echo "  - Just $(just --version)"
             echo "  - Supabase CLI $(supabase --version | head -n1)"
+            echo "  - Google Cloud SDK $(gcloud --version | head -n1)"
+            echo "  - Docker $(docker --version)"
             echo ""
             echo "💡 Quick commands:"
             echo "  just --list          # Show all available commands"
             echo "  just install         # Install all dependencies"
             echo "  just dev             # Start development servers"
             echo "  just db-migrate      # Run database migrations"
+            echo "  just gcp-setup       # Setup Google Cloud deployment"
             echo ""
           '';
         };

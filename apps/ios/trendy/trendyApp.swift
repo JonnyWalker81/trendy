@@ -10,10 +10,13 @@ import SwiftData
 
 @main
 struct trendyApp: App {
+    @State private var authViewModel = AuthViewModel()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Event.self,
-            EventType.self
+            EventType.self,
+            QueuedOperation.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -27,6 +30,7 @@ struct trendyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(authViewModel)
         }
         .modelContainer(sharedModelContainer)
     }

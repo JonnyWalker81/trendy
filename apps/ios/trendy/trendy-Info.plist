@@ -2,16 +2,36 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSCalendarsUsageDescription</key>
-    <string>This app needs access to your calendar to import events for tracking and visualization.</string>
-    <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>This app needs full access to your calendar to import events for tracking and visualization.</string>
-    <key>UILaunchScreen</key>
-    <dict>
-        <key>UIColorName</key>
-        <string>AccentColor</string>
-        <key>UIImageName</key>
-        <string></string>
-    </dict>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Trendy</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs access to your calendar to import events for tracking and visualization.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>This app needs full access to your calendar to import events for tracking and visualization.</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>AccentColor</string>
+		<key>UIImageName</key>
+		<string></string>
+	</dict>
+	<key>SUPABASE_URL</key>
+	<string>https://cwxghazeohicindcznhx.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>sb_publishable_SraJB44Ph6xwzsxvH-yXrA_BDK0oheV</string>
+	<key>API_BASE_URL</key>
+	<string>https://trendy-api-dev-wo3aoiilrq-uc.a.run.app/api/v1</string>
 </dict>
 </plist>

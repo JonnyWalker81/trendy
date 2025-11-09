@@ -1,0 +1,48 @@
+# Configuration files (use environment variables instead)
+config.yaml
+.env
+.env.*
+
+# Build artifacts
+trendy-api
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+
+# Development files
+.git
+.gitignore
+.gitattributes
+*.md
+README.md
+LICENSE
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Documentation
+docs/
+deployment/
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+cloudbuild.yaml

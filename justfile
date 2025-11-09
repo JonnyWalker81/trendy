@@ -1,5 +1,12 @@
 # Trendy Monorepo Commands
 
+# Google Cloud Platform Configuration
+# Update these with your GCP project details
+GCP_PROJECT_ID := "trendy-477704"
+GCP_REGION := "us-central1"
+ARTIFACT_REGISTRY_REPO := "trendy"
+IMAGE_NAME := "trendy-api"
+
 # Default recipe to display help information
 default:
     @just --list
@@ -238,6 +245,90 @@ deploy-web:
     @echo "1. Build: just build-web"
     @echo "2. Deploy the 'apps/web/dist' folder to your hosting"
     @echo "   (Vercel, Netlify, AWS S3, etc.)"
+
+# Google Cloud Platform Deployment
+
+# Build Docker image for backend
+docker-build-backend ENV="dev":
+    @echo "🐳 Building Docker image for {{ENV}} environment..."
+    cd apps/backend && docker build --platform linux/amd64 -t {{IMAGE_NAME}}:{{ENV}} .
+    @echo "✅ Docker image built: {{IMAGE_NAME}}:{{ENV}}"
+
+# Push Docker image to Google Artifact Registry (using Cloud Build)
+gcp-push-backend ENV="dev":
+    @echo "📦 Building and pushing to Artifact Registry using Cloud Build..."
+    @echo "→ Submitting build to Google Cloud Build..."
+    @echo "   (This builds natively on AMD64 architecture in the cloud)"
+    cd apps/backend && gcloud builds submit \
+        --tag={{GCP_REGION}}-docker.pkg.dev/{{GCP_PROJECT_ID}}/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
+        --project={{GCP_PROJECT_ID}} \
+        --machine-type=e2-highcpu-8
+    @echo "→ Tagging as latest..."
+    @gcloud artifacts docker tags add \
+        {{GCP_REGION}}-docker.pkg.dev/{{GCP_PROJECT_ID}}/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
+        {{GCP_REGION}}-docker.pkg.dev/{{GCP_PROJECT_ID}}/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:latest \
+        --project={{GCP_PROJECT_ID}} 2>/dev/null || echo "✓ Latest tag updated"
+    @echo "✅ Image built and pushed successfully!"
+
+# Deploy backend to Google Cloud Run
+gcp-deploy-backend ENV="dev":
+    @echo "🚀 Deploying backend to Cloud Run ({{ENV}} environment)..."
+    @echo ""
+    @echo "Configuration:"
+    @echo "  Service: trendy-api-{{ENV}}"
+    @echo "  Region: {{GCP_REGION}}"
+    @echo "  Port: 8888"
+    @echo "  Memory: 256Mi"
+    @echo "  CPU: 1"
+    @echo ""
+    just gcp-push-backend {{ENV}}
+    @echo "→ Deploying to Cloud Run..."
+    gcloud run deploy trendy-api-{{ENV}} \
+        --image={{GCP_REGION}}-docker.pkg.dev/{{GCP_PROJECT_ID}}/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
+        --platform=managed \
+        --region={{GCP_REGION}} \
+        --allow-unauthenticated \
+        --port=8888 \
+        --memory=256Mi \
+        --cpu=1 \
+        --min-instances=0 \
+        --max-instances=10 \
+        --timeout=300 \
+        --set-env-vars="TRENDY_SERVER_ENV=production" \
+        --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
+        --project={{GCP_PROJECT_ID}}
+    @echo ""
+    @echo "✅ Deployment complete!"
+    @echo ""
+    @echo "View logs:"
+    @echo "  gcloud run services logs tail trendy-api-{{ENV}} --region={{GCP_REGION}}"
+    @echo ""
+    @echo "Get service URL:"
+    @echo "  gcloud run services describe trendy-api-{{ENV}} --region={{GCP_REGION}} --format='value(status.url)'"
+
+# Setup Google Artifact Registry repository
+gcp-setup:
+    @echo "🔧 Setting up Google Cloud Artifact Registry..."
+    @echo ""
+    @echo "Project: {{GCP_PROJECT_ID}}"
+    @echo "Region: {{GCP_REGION}}"
+    @echo "Repository: {{ARTIFACT_REGISTRY_REPO}}"
+    @echo ""
+    @echo "→ Creating repository..."
+    @gcloud artifacts repositories create {{ARTIFACT_REGISTRY_REPO}} \
+        --repository-format=docker \
+        --location={{GCP_REGION}} \
+        --description="Trendy container images" \
+        --project={{GCP_PROJECT_ID}} 2>&1 | grep -v "ALREADY_EXISTS" || echo "✓ Repository exists or created"
+    @echo "✅ Artifact Registry setup complete!"
+    @echo ""
+    @echo "Next steps:"
+    @echo "1. Set up secrets: just gcp-secrets-setup ENV=prod"
+    @echo "2. Deploy backend: just gcp-deploy-backend ENV=prod"
+
+# Setup Google Secret Manager secrets
+gcp-secrets-setup ENV="dev":
+    @./apps/backend/deployment/setup-secrets.sh {{GCP_PROJECT_ID}} {{ENV}}
 
 # Development helpers
 
