@@ -27,11 +27,21 @@
 		<key>UIImageName</key>
 		<string></string>
 	</dict>
+	<!-- LOCAL SUPABASE (Development) -->
+	<key>SUPABASE_URL</key>
+	<string>http://127.0.0.1:54321</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH</string>
+	<!-- Local backend API -->
+	<key>API_BASE_URL</key>
+	<string>http://localhost:8888/api/v1</string>
+	<!-- REMOTE SUPABASE (Production - commented for local dev)
 	<key>SUPABASE_URL</key>
 	<string>https://cwxghazeohicindcznhx.supabase.co</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>sb_publishable_SraJB44Ph6xwzsxvH-yXrA_BDK0oheV</string>
 	<key>API_BASE_URL</key>
 	<string>https://trendy-api-dev-wo3aoiilrq-uc.a.run.app/api/v1</string>
+	-->
 </dict>
 </plist>
