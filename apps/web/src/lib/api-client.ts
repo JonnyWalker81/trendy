@@ -10,7 +10,8 @@ import type {
   TrendData,
 } from '../types'
 
-const API_BASE = '/api/v1'
+// Use environment variable for production, fallback to proxy path for local dev
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
