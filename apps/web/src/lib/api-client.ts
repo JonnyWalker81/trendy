@@ -13,6 +13,18 @@ import type {
 // Use environment variable for production, fallback to proxy path for local dev
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
+// Debug: Log API base URL in development
+if (import.meta.env.DEV) {
+  console.log('🔧 API Configuration:', {
+    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+    API_BASE,
+    isDev: import.meta.env.DEV,
+    mode: import.meta.env.MODE,
+  })
+} else {
+  console.log('🚀 Production API Base:', API_BASE)
+}
+
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
