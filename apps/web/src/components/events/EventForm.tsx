@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useEventTypes } from '@/hooks/api/useEventTypes'
-import type { Event, EventType } from '@/types'
+import type { Event } from '@/types'
 
 interface EventFormProps {
   open: boolean
