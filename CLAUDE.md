@@ -291,19 +291,45 @@ In Xcode:
 - URL: `https://github.com/supabase/supabase-swift`
 - Version: 2.0.0+
 
-**2. Configure Supabase Credentials**
+**2. Environment Configuration**
 
-Update `apps/ios/trendy/trendy-Info.plist`:
-```xml
-<key>SUPABASE_URL</key>
-<string>https://your-project.supabase.co</string>
-<key>SUPABASE_ANON_KEY</key>
-<string>your-anon-key-here</string>
-<key>API_BASE_URL</key>
-<string>http://localhost:8080/api/v1</string>
-```
+The iOS app supports multiple environments (Local, Staging, Production, TestFlight) using xcconfig files. See `apps/ios/ENVIRONMENT_SETUP.md` for complete documentation.
+
+**Quick Setup:**
+
+1. Copy the secrets template:
+   ```bash
+   cd apps/ios/Config
+   cp Secrets.xcconfig.example Secrets.xcconfig
+   ```
+
+2. In Xcode, configure build configurations and schemes (one-time setup):
+   - Link xcconfig files to build configurations
+   - Create shared schemes for each environment
+   - See `apps/ios/ENVIRONMENT_SETUP.md` for detailed steps
+
+3. Switch environments by selecting the appropriate scheme in Xcode:
+   - **Trendy (Local)** - Local development (localhost backend + Supabase)
+   - **Trendy (Staging)** - Remote staging environment
+   - **Trendy (TestFlight)** - Beta builds for TestFlight
+   - **Trendy (Production)** - Production/App Store builds
+
+**Environment Variables:**
+
+All environment-specific settings are defined in `apps/ios/Config/*.xcconfig` files:
+- `SUPABASE_URL` - Supabase backend URL
+- `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `API_BASE_URL` - Go backend API URL
+- `PRODUCT_BUNDLE_IDENTIFIER` - Unique bundle ID per environment
 
 **IMPORTANT:** Use the **anon key** (NOT service_role key) for iOS app.
+
+**Configuration Files:**
+- `apps/ios/Config/Debug.xcconfig` - Local development settings
+- `apps/ios/Config/Staging.xcconfig` - Remote staging settings
+- `apps/ios/Config/Release.xcconfig` - Production settings
+- `apps/ios/Config/TestFlight.xcconfig` - TestFlight beta settings
+- `apps/ios/Config/Secrets.xcconfig` - Developer-specific overrides (gitignored)
 
 **3. Update SwiftData Schema**
 

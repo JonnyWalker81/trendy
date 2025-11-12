@@ -11,24 +11,21 @@ import Supabase
 /// Service class for managing Supabase authentication
 @Observable
 class SupabaseService {
-    static let shared = SupabaseService()
-
     private(set) var client: SupabaseClient
     private(set) var currentSession: Session?
     private(set) var isAuthenticated = false
 
-    private init() {
-        // Read configuration from Info.plist
-        guard let supabaseURL = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
-              let supabaseKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String,
-              let url = URL(string: supabaseURL) else {
-            fatalError("Supabase configuration missing from Info.plist. Please add SUPABASE_URL and SUPABASE_ANON_KEY.")
+    /// Initialize SupabaseService with configuration
+    /// - Parameter configuration: Supabase configuration containing URL and anon key
+    init(configuration: SupabaseConfiguration) {
+        guard let url = URL(string: configuration.url) else {
+            fatalError("Invalid Supabase URL: \(configuration.url)")
         }
 
         // Initialize Supabase client
         self.client = SupabaseClient(
             supabaseURL: url,
-            supabaseKey: supabaseKey
+            supabaseKey: configuration.anonKey
         )
 
         // Try to restore existing session

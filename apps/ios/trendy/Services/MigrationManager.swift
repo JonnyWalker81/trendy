@@ -23,11 +23,16 @@ class MigrationManager {
     // UUID mapping: iOS UUID → Backend UUID string
     private var eventTypeMapping: [UUID: String] = [:]
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
     private let modelContext: ModelContext
 
-    init(modelContext: ModelContext) {
+    /// Initialize MigrationManager with dependencies
+    /// - Parameters:
+    ///   - modelContext: SwiftData context for local data access
+    ///   - apiClient: API client for backend communication
+    init(modelContext: ModelContext, apiClient: APIClient) {
         self.modelContext = modelContext
+        self.apiClient = apiClient
     }
 
     // MARK: - Migration Progress

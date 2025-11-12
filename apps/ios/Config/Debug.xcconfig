@@ -1,0 +1,35 @@
+// Debug.xcconfig
+// Configuration for local development environment
+
+// MARK: - Base Settings
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1,2
+ENABLE_BITCODE = NO
+DEVELOPMENT_TEAM = 6H6N882H4S
+CODE_SIGN_STYLE = Automatic
+PRODUCT_NAME = Trendy
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+INFOPLIST_FILE = trendy/trendy-Info.plist
+
+// MARK: - Bundle Identifier
+// Different bundle ID allows installing Debug build alongside other environments
+PRODUCT_BUNDLE_IDENTIFIER = com.memento.trendy.dev
+
+// MARK: - Display Name
+// Shows "Trendy Dev" in app name to distinguish from other builds
+PRODUCT_DISPLAY_NAME = Trendy Dev
+
+// MARK: - Environment Settings
+// Secrets loaded from Secrets-Debug.xcconfig (gitignored)
+// Copy Secrets-Debug.xcconfig.example to Secrets-Debug.xcconfig and fill in your values
+#include "Secrets-Debug.xcconfig"
+
+// MARK: - Build Settings
+// Enable debugging
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+GCC_OPTIMIZATION_LEVEL = 0
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+OTHER_SWIFT_FLAGS = -D DEBUG

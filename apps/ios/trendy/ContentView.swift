@@ -31,7 +31,15 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    // Create preview configuration
+    let previewConfig = SupabaseConfiguration(
+        url: "http://127.0.0.1:54321",
+        anonKey: "preview_key"
+    )
+    let previewSupabase = SupabaseService(configuration: previewConfig)
+    let previewAuthViewModel = AuthViewModel(supabaseService: previewSupabase)
+
+    return ContentView()
         .modelContainer(for: [Event.self, EventType.self], inMemory: true)
-        .environment(AuthViewModel())
+        .environment(previewAuthViewModel)
 }

@@ -9,8 +9,6 @@ import Foundation
 
 /// HTTP client for backend API requests
 class APIClient {
-    static let shared = APIClient()
-
     private let baseURL: String
     private let session: URLSession
     private let supabaseService: SupabaseService
@@ -28,15 +26,14 @@ class APIClient {
         return decoder
     }()
 
-    private init() {
-        // Read API base URL from Info.plist
-        guard let apiBaseURL = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String else {
-            fatalError("API_BASE_URL missing from Info.plist")
-        }
-
-        self.baseURL = apiBaseURL
+    /// Initialize APIClient with configuration
+    /// - Parameters:
+    ///   - configuration: API configuration containing base URL
+    ///   - supabaseService: Supabase service for authentication
+    init(configuration: APIConfiguration, supabaseService: SupabaseService) {
+        self.baseURL = configuration.baseURL
         self.session = URLSession.shared
-        self.supabaseService = SupabaseService.shared
+        self.supabaseService = supabaseService
     }
 
     // MARK: - Helper Methods

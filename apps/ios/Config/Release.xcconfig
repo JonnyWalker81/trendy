@@ -1,0 +1,44 @@
+// Release.xcconfig
+// Configuration for production environment
+
+// MARK: - Base Settings
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1,2
+ENABLE_BITCODE = NO
+DEVELOPMENT_TEAM = 6H6N882H4S
+CODE_SIGN_STYLE = Automatic
+PRODUCT_NAME = Trendy
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+INFOPLIST_FILE = trendy/trendy-Info.plist
+
+// MARK: - Bundle Identifier
+// Production bundle ID (matches App Store listing)
+PRODUCT_BUNDLE_IDENTIFIER = com.memento.trendy
+
+// MARK: - Display Name
+// Shows "Trendy" in app name (clean production name)
+PRODUCT_DISPLAY_NAME = Trendy
+
+// MARK: - Environment Settings
+// Secrets loaded from Secrets-Release.xcconfig (gitignored)
+#include "Secrets-Release.xcconfig"
+
+// MARK: - Build Settings
+// Full optimization for production
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+GCC_OPTIMIZATION_LEVEL = s
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = RELEASE
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_OPTIMIZATION_LEVEL = -O
+OTHER_SWIFT_FLAGS = -D RELEASE
+
+// Deployment settings
+ENABLE_TESTABILITY = NO
+VALIDATE_PRODUCT = YES
+
+// MARK: - App Store Settings
+// Strip debugging symbols
+COPY_PHASE_STRIP = YES
+STRIP_INSTALLED_PRODUCT = YES

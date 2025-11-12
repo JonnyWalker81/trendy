@@ -7,7 +7,7 @@
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Trendy</string>
+	<string>$(PRODUCT_DISPLAY_NAME)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,21 +27,14 @@
 		<key>UIImageName</key>
 		<string></string>
 	</dict>
-	<!-- LOCAL SUPABASE (Development) -->
+	<!-- Environment Configuration -->
+	<!-- These values are populated from xcconfig files based on the selected build configuration -->
+	<!-- See apps/ios/Config/ directory for environment-specific settings -->
 	<key>SUPABASE_URL</key>
-	<string>http://127.0.0.1:54321</string>
+	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
-	<string>sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH</string>
-	<!-- Local backend API -->
+	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>API_BASE_URL</key>
-	<string>http://localhost:8888/api/v1</string>
-	<!-- REMOTE SUPABASE (Production - commented for local dev)
-	<key>SUPABASE_URL</key>
-	<string>https://cwxghazeohicindcznhx.supabase.co</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>sb_publishable_SraJB44Ph6xwzsxvH-yXrA_BDK0oheV</string>
-	<key>API_BASE_URL</key>
-	<string>https://trendy-api-dev-wo3aoiilrq-uc.a.run.app/api/v1</string>
-	-->
+	<string>$(API_BASE_URL)</string>
 </dict>
 </plist>

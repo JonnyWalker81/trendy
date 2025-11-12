@@ -16,9 +16,13 @@ class AuthViewModel {
     private(set) var errorMessage: String?
     private(set) var currentUserEmail: String?
 
-    private let supabaseService = SupabaseService.shared
+    private let supabaseService: SupabaseService
 
-    init() {
+    /// Initialize AuthViewModel with SupabaseService
+    /// - Parameter supabaseService: Supabase service for authentication
+    init(supabaseService: SupabaseService) {
+        self.supabaseService = supabaseService
+
         // Check initial auth state
         Task {
             await checkAuthState()

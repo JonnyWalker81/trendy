@@ -10,6 +10,7 @@ import SwiftData
 
 struct MigrationView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.apiClient) private var apiClient
     @AppStorage("migration_completed") private var migrationCompleted = false
 
     @State private var migrationManager: MigrationManager?
@@ -133,8 +134,14 @@ struct MigrationView: View {
     private func startMigration() {
         hasMigrationStarted = true
 
+        // Get API client from environment
+        guard let apiClient = apiClient else {
+            print("Error: APIClient not available in environment")
+            return
+        }
+
         // Create migration manager
-        let manager = MigrationManager(modelContext: modelContext)
+        let manager = MigrationManager(modelContext: modelContext, apiClient: apiClient)
         self.migrationManager = manager
 
         // Start migration

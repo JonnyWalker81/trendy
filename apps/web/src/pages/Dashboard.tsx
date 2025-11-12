@@ -59,7 +59,7 @@ export function Dashboard() {
                 <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-md">
                   <span className="text-xl">📊</span>
                 </div>
-                <h1 className="ml-3 text-xl font-bold">Trendy</h1>
+                <h1 className="ml-3 text-xl font-bold">TrendSight</h1>
               </div>
               <div className="hidden sm:ml-8 sm:flex sm:space-x-1">
                 <a href="/" className="bg-accent text-foreground px-4 py-2 rounded-lg text-sm font-semibold">

@@ -16,13 +16,18 @@ class SyncQueue {
     private(set) var pendingCount = 0
     private(set) var hasPendingOperations = false
 
-    private let apiClient = APIClient.shared
+    private let apiClient: APIClient
     private let modelContext: ModelContext
     private let monitor = NWPathMonitor()
     private var isOnline = false
 
-    init(modelContext: ModelContext) {
+    /// Initialize SyncQueue with dependencies
+    /// - Parameters:
+    ///   - modelContext: SwiftData context for queue operations
+    ///   - apiClient: API client for backend communication
+    init(modelContext: ModelContext, apiClient: APIClient) {
         self.modelContext = modelContext
+        self.apiClient = apiClient
 
         // Monitor network connectivity
         monitor.pathUpdateHandler = { [weak self] path in

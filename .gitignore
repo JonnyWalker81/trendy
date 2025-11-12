@@ -47,3 +47,21 @@ result-*
 # Node modules
 node_modules/
 config.yaml
+
+# iOS
+# Xcode user-specific files
+apps/ios/*.xcodeproj/xcuserdata/
+apps/ios/*.xcworkspace/xcuserdata/
+apps/ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Xcode build products
+apps/ios/DerivedData/
+apps/ios/build/
+
+# iOS secrets and developer-specific configs (per-environment)
+apps/ios/Config/Secrets-*.xcconfig
+
+# iOS signing certificates
+apps/ios/*.p12
+apps/ios/*.mobileprovision
+apps/ios/*.cer

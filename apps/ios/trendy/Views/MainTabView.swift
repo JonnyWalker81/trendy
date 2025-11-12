@@ -10,7 +10,8 @@ import SwiftData
 
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var eventStore = EventStore()
+    @Environment(\.apiClient) private var apiClient
+    @State private var eventStore: EventStore?
     @StateObject private var calendarManager = CalendarManager()
     @State private var selectedTab = 0
     @State private var isLoading = true
@@ -58,15 +59,24 @@ struct MainTabView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .task {
-            eventStore.setModelContext(modelContext)
-            eventStore.setCalendarManager(calendarManager)
-            
+            // Initialize EventStore with APIClient from environment
+            guard let apiClient = apiClient else {
+                print("Error: APIClient not available in environment")
+                return
+            }
+
+            let store = EventStore(apiClient: apiClient)
+            eventStore = store
+
+            store.setModelContext(modelContext)
+            store.setCalendarManager(calendarManager)
+
             // Give a moment for the UI to render
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-            
+
             // Load initial data
-            await eventStore.fetchData()
-            
+            await store.fetchData()
+
             // Hide loading screen
             withAnimation {
                 isLoading = false

@@ -11,7 +11,7 @@ export function Analytics() {
                   <span className="text-xl">📊</span>
                 </div>
                 <h1 className="ml-3 text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
-                  Trendy
+                  TrendSight
                 </h1>
               </div>
               <div className="hidden sm:ml-8 sm:flex sm:space-x-1">

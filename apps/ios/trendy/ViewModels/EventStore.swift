@@ -23,8 +23,8 @@ class EventStore {
     private var syncQueue: SyncQueue?
     var syncWithCalendar = true
 
-    // Backend integration
-    private let apiClient = APIClient.shared
+    // Backend integration (injected)
+    private let apiClient: APIClient
 
     // UserDefaults-backed properties (can't use @AppStorage with @Observable)
     @ObservationIgnored private var useBackend: Bool {
@@ -45,7 +45,11 @@ class EventStore {
     private var eventTypeBackendIds: [UUID: String] = [:]
     private var eventBackendIds: [UUID: String] = [:]
 
-    init() {
+    /// Initialize EventStore with APIClient
+    /// - Parameter apiClient: API client for backend communication
+    init(apiClient: APIClient) {
+        self.apiClient = apiClient
+
         // Monitor network status
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
@@ -62,7 +66,7 @@ class EventStore {
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        self.syncQueue = SyncQueue(modelContext: context)
+        self.syncQueue = SyncQueue(modelContext: context, apiClient: apiClient)
 
         // Enable backend mode after migration
         if migrationCompleted {
