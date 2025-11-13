@@ -221,17 +221,22 @@ func (c *Client) VerifyToken(token string) (*User, error) {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to verify token: %w", err)
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("invalid token")
+		return nil, fmt.Errorf("token verification failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var user User
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &user); err != nil {
+		return nil, fmt.Errorf("failed to decode user: %w", err)
 	}
 
 	return &user, nil
