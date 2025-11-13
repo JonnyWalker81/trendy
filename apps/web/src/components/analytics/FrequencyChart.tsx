@@ -1,7 +1,5 @@
 import {
-  LineChart,
   Line,
-  AreaChart,
   Area,
   XAxis,
   YAxis,
@@ -34,21 +32,6 @@ export function FrequencyChart({ data, color, timeRange }: FrequencyChartProps) 
         return format(date, 'MMM d')
     }
   }
-
-  // Convert hex color to RGB for opacity
-  const hexToRgb = (hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-    return result
-      ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
-      : { r: 59, g: 130, b: 246 } // Fallback to blue
-  }
-
-  const rgb = hexToRgb(color)
-  const fillColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`
 
   if (data.length === 0) {
     return (
