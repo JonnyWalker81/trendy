@@ -109,7 +109,7 @@ func (r *eventRepository) GetByUserID(ctx context.Context, userID string, limit,
 func (r *eventRepository) GetByUserIDAndDateRange(ctx context.Context, userID string, startDate, endDate time.Time) ([]models.Event, error) {
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),
-		"timestamp": fmt.Sprintf("gte.%s&timestamp=lte.%s", startDate.Format(time.RFC3339), endDate.Format(time.RFC3339)),
+		"and":     fmt.Sprintf("(timestamp.gte.%s,timestamp.lte.%s)", startDate.Format(time.RFC3339), endDate.Format(time.RFC3339)),
 		"select":  "*,event_type:event_types(*)",
 		"order":   "timestamp.desc",
 	}
