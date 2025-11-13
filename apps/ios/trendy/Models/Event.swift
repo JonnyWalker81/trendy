@@ -25,8 +25,20 @@ final class Event {
     var isAllDay: Bool = false
     var endDate: Date?
     var calendarEventId: String?
-    
-    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil) {
+    var propertiesData: Data? // Encoded [String: PropertyValue]
+
+    // Computed property for convenient access to properties
+    var properties: [String: PropertyValue] {
+        get {
+            guard let data = propertiesData else { return [:] }
+            return (try? JSONDecoder().decode([String: PropertyValue].self, from: data)) ?? [:]
+        }
+        set {
+            propertiesData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, properties: [String: PropertyValue] = [:]) {
         self.id = UUID()
         self.timestamp = timestamp
         self.eventType = eventType
@@ -37,5 +49,6 @@ final class Event {
         self.isAllDay = isAllDay
         self.endDate = endDate
         self.calendarEventId = calendarEventId
+        self.propertiesData = try? JSONEncoder().encode(properties)
     }
 }

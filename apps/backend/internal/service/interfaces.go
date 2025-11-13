@@ -38,3 +38,12 @@ type AuthService interface {
 	Signup(ctx context.Context, req *models.SignupRequest) (*models.AuthResponse, error)
 	GetUserByID(ctx context.Context, userID string) (*models.User, error)
 }
+
+// PropertyDefinitionService defines the interface for property definition business logic
+type PropertyDefinitionService interface {
+	CreatePropertyDefinition(ctx context.Context, userID string, req *models.CreatePropertyDefinitionRequest) (*models.PropertyDefinition, error)
+	GetPropertyDefinition(ctx context.Context, userID, propertyDefID string) (*models.PropertyDefinition, error)
+	GetPropertyDefinitionsByEventType(ctx context.Context, userID, eventTypeID string) ([]models.PropertyDefinition, error)
+	UpdatePropertyDefinition(ctx context.Context, userID, propertyDefID string, req *models.UpdatePropertyDefinitionRequest) (*models.PropertyDefinition, error)
+	DeletePropertyDefinition(ctx context.Context, userID, propertyDefID string) error
+}

@@ -58,6 +58,7 @@ struct APIEvent: Codable, Identifiable {
     let sourceType: String
     let externalId: String?
     let originalTitle: String?
+    let properties: [String: APIPropertyValue]?
     let createdAt: Date
     let updatedAt: Date
     let eventType: APIEventType?
@@ -73,6 +74,7 @@ struct APIEvent: Codable, Identifiable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case properties
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case eventType = "event_type"
@@ -89,6 +91,7 @@ struct CreateEventRequest: Codable {
     let sourceType: String
     let externalId: String?
     let originalTitle: String?
+    let properties: [String: APIPropertyValue]?
 
     enum CodingKeys: String, CodingKey {
         case eventTypeId = "event_type_id"
@@ -99,6 +102,7 @@ struct CreateEventRequest: Codable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case properties
     }
 }
 
@@ -112,6 +116,7 @@ struct UpdateEventRequest: Codable {
     let sourceType: String?
     let externalId: String?
     let originalTitle: String?
+    let properties: [String: APIPropertyValue]?
 
     enum CodingKeys: String, CodingKey {
         case eventTypeId = "event_type_id"
@@ -122,6 +127,136 @@ struct UpdateEventRequest: Codable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case properties
+    }
+}
+
+// MARK: - Property Models
+
+/// Property value from API
+struct APIPropertyValue: Codable, Equatable {
+    let type: String  // Maps to PropertyType enum
+    let value: AnyCodable
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case value
+    }
+
+    // Custom encoding to match backend format
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+
+        // Special handling for dates - encode as ISO8601 string
+        if type == "date", let date = value.value as? Date {
+            let dateString = ISO8601DateFormatter().string(from: date)
+            try container.encode(AnyCodable(dateString), forKey: .value)
+        } else {
+            try container.encode(value, forKey: .value)
+        }
+    }
+
+    // Convenience getters
+    var stringValue: String? { value.value as? String }
+    var intValue: Int? { value.value as? Int }
+    var doubleValue: Double? { value.value as? Double }
+    var boolValue: Bool? { value.value as? Bool }
+    var dateValue: Date? {
+        if let string = stringValue {
+            return ISO8601DateFormatter().date(from: string)
+        }
+        return value.value as? Date
+    }
+
+    // Custom Equatable implementation
+    static func == (lhs: APIPropertyValue, rhs: APIPropertyValue) -> Bool {
+        guard lhs.type == rhs.type else { return false }
+
+        // Compare values based on type
+        switch lhs.type {
+        case "text", "url", "email", "select":
+            return lhs.stringValue == rhs.stringValue
+        case "number", "duration":
+            // Compare as doubles for flexibility
+            return lhs.doubleValue == rhs.doubleValue
+        case "boolean":
+            return lhs.boolValue == rhs.boolValue
+        case "date":
+            return lhs.dateValue == rhs.dateValue
+        default:
+            // Fallback: try to compare as strings
+            return String(describing: lhs.value.value) == String(describing: rhs.value.value)
+        }
+    }
+}
+
+/// Property definition from API
+struct APIPropertyDefinition: Codable, Identifiable {
+    let id: String
+    let eventTypeId: String
+    let userId: String
+    let key: String
+    let label: String
+    let propertyType: String  // Maps to PropertyType enum
+    let options: [String]?
+    let defaultValue: AnyCodable?
+    let displayOrder: Int
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case eventTypeId = "event_type_id"
+        case userId = "user_id"
+        case key
+        case label
+        case propertyType = "property_type"
+        case options
+        case defaultValue = "default_value"
+        case displayOrder = "display_order"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+/// Request model for creating property definitions
+struct CreatePropertyDefinitionRequest: Codable {
+    let eventTypeId: String
+    let key: String
+    let label: String
+    let propertyType: String  // PropertyType as string
+    let options: [String]?
+    let defaultValue: AnyCodable?
+    let displayOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case eventTypeId = "event_type_id"
+        case key
+        case label
+        case propertyType = "property_type"
+        case options
+        case defaultValue = "default_value"
+        case displayOrder = "display_order"
+    }
+}
+
+/// Request model for updating property definitions
+struct UpdatePropertyDefinitionRequest: Codable {
+    let key: String?
+    let label: String?
+    let propertyType: String?  // PropertyType as string
+    let options: [String]?
+    let defaultValue: AnyCodable?
+    let displayOrder: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case label
+        case propertyType = "property_type"
+        case options
+        case defaultValue = "default_value"
+        case displayOrder = "display_order"
     }
 }
 

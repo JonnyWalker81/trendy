@@ -24,6 +24,7 @@ struct trendyApp: App {
     // MARK: - View Models
 
     @State private var authViewModel: AuthViewModel
+    @State private var themeManager: ThemeManager
 
     // MARK: - SwiftData
 
@@ -70,6 +71,9 @@ struct trendyApp: App {
 
         // Initialize AuthViewModel with Supabase service
         _authViewModel = State(initialValue: AuthViewModel(supabaseService: supabaseService))
+
+        // Initialize ThemeManager
+        _themeManager = State(initialValue: ThemeManager())
     }
 
     // MARK: - Body
@@ -78,6 +82,7 @@ struct trendyApp: App {
         WindowGroup {
             ContentView()
                 .environment(authViewModel)
+                .environment(themeManager)
                 .environment(\.supabaseService, supabaseService)
                 .environment(\.apiClient, apiClient)
         }

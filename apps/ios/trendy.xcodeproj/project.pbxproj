@@ -8,10 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		471955AC2EC0349400C72F91 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 471955AB2EC0349400C72F91 /* Supabase */; };
-		47CA3F3C2EC418A3004C79DB /* Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */; };
-		47CA3F3E2EC418BB004C79DB /* Staging.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */; };
-		47CA3F402EC418C5004C79DB /* TestFlight.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */; };
-		47CA3F422EC418CF004C79DB /* Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F412EC418CF004C79DB /* Release.xcconfig */; };
+		47CA3F3C2EC418A3004C79DB /* Config/Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */; };
+		47CA3F3E2EC418BB004C79DB /* Config/Staging.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */; };
+		47CA3F402EC418C5004C79DB /* Config/TestFlight.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */; };
+		47CA3F422EC418CF004C79DB /* Config/Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,10 +35,10 @@
 		47312F2C2E2B3EC800E7F111 /* trendy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = trendy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		47312F3B2E2B3ECA00E7F111 /* trendyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = trendyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		47312F452E2B3ECA00E7F111 /* trendyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = trendyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = "<group>"; };
-		47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Staging.xcconfig; sourceTree = "<group>"; };
-		47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/TestFlight.xcconfig; sourceTree = "<group>"; };
-		47CA3F412EC418CF004C79DB /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
+		47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = "<group>"; };
+		47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Staging.xcconfig; sourceTree = "<group>"; };
+		47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/TestFlight.xcconfig; sourceTree = "<group>"; };
+		47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -100,10 +100,10 @@
 				47312F482E2B3ECA00E7F111 /* trendyUITests */,
 				471955A02EC0349400C72F91 /* Frameworks */,
 				47312F2D2E2B3EC800E7F111 /* Products */,
-				47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */,
-				47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */,
-				47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */,
-				47CA3F412EC418CF004C79DB /* Release.xcconfig */,
+				47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */,
+				47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */,
+				47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */,
+				47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -241,10 +241,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				47CA3F3E2EC418BB004C79DB /* Staging.xcconfig in Resources */,
-				47CA3F422EC418CF004C79DB /* Release.xcconfig in Resources */,
-				47CA3F3C2EC418A3004C79DB /* Debug.xcconfig in Resources */,
-				47CA3F402EC418C5004C79DB /* TestFlight.xcconfig in Resources */,
+				47CA3F3E2EC418BB004C79DB /* Config/Staging.xcconfig in Resources */,
+				47CA3F422EC418CF004C79DB /* Config/Release.xcconfig in Resources */,
+				47CA3F3C2EC418A3004C79DB /* Config/Debug.xcconfig in Resources */,
+				47CA3F402EC418C5004C79DB /* Config/TestFlight.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,7 +304,7 @@
 /* Begin XCBuildConfiguration section */
 		47312F4D2E2B3ECA00E7F111 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */;
+			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -370,7 +370,7 @@
 		};
 		47312F4E2E2B3ECA00E7F111 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Release.xcconfig */;
+			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -429,7 +429,7 @@
 		};
 		47312F502E2B3ECA00E7F111 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */;
+			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -460,7 +460,7 @@
 		};
 		47312F512E2B3ECA00E7F111 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Release.xcconfig */;
+			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -567,7 +567,7 @@
 		};
 		47CA3F332EC41867004C79DB /* Staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */;
+			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -633,7 +633,7 @@
 		};
 		47CA3F342EC41867004C79DB /* Staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */;
+			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -702,7 +702,7 @@
 		};
 		47CA3F372EC41873004C79DB /* TestFlight */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */;
+			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -761,7 +761,7 @@
 		};
 		47CA3F382EC41873004C79DB /* TestFlight */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */;
+			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

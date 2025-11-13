@@ -1,0 +1,137 @@
+import Foundation
+import SwiftData
+
+enum PropertyType: String, Codable, CaseIterable {
+    case text
+    case number
+    case boolean
+    case date
+    case select
+    case duration
+    case url
+    case email
+
+    var displayName: String {
+        switch self {
+        case .text: return "Text"
+        case .number: return "Number"
+        case .boolean: return "Boolean"
+        case .date: return "Date"
+        case .select: return "Select"
+        case .duration: return "Duration"
+        case .url: return "URL"
+        case .email: return "Email"
+        }
+    }
+}
+
+@Model
+final class PropertyDefinition {
+    var id: UUID
+    var eventTypeId: UUID
+    var key: String
+    var label: String
+    var propertyType: PropertyType
+    var optionsData: Data? // Encoded [String]
+    var defaultValueData: Data? // Encoded AnyCodable
+    var displayOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    var eventType: EventType?
+
+    // Computed properties for convenience
+    var options: [String] {
+        get {
+            guard let data = optionsData else { return [] }
+            return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        }
+        set {
+            optionsData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    var defaultValue: AnyCodable? {
+        get {
+            guard let data = defaultValueData else { return nil }
+            return try? JSONDecoder().decode(AnyCodable.self, from: data)
+        }
+        set {
+            defaultValueData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    init(
+        id: UUID = UUID(),
+        eventTypeId: UUID,
+        key: String,
+        label: String,
+        propertyType: PropertyType,
+        options: [String] = [],
+        defaultValue: AnyCodable? = nil,
+        displayOrder: Int = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.eventTypeId = eventTypeId
+        self.key = key
+        self.label = label
+        self.propertyType = propertyType
+        self.optionsData = try? JSONEncoder().encode(options)
+        self.defaultValueData = try? JSONEncoder().encode(defaultValue)
+        self.displayOrder = displayOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// AnyCodable for flexible JSON encoding/decoding
+struct AnyCodable: Codable {
+    let value: Any
+
+    init(_ value: Any) {
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let double = try? container.decode(Double.self) {
+            value = double
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else if let array = try? container.decode([AnyCodable].self) {
+            value = array.map { $0.value }
+        } else if let dict = try? container.decode([String: AnyCodable].self) {
+            value = dict.mapValues { $0.value }
+        } else {
+            value = NSNull()
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+
+        switch value {
+        case let string as String:
+            try container.encode(string)
+        case let int as Int:
+            try container.encode(int)
+        case let double as Double:
+            try container.encode(double)
+        case let bool as Bool:
+            try container.encode(bool)
+        case let array as [Any]:
+            try container.encode(array.map { AnyCodable($0) })
+        case let dict as [String: Any]:
+            try container.encode(dict.mapValues { AnyCodable($0) })
+        default:
+            try container.encodeNil()
+        }
+    }
+}

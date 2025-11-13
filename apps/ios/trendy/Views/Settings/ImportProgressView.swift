@@ -18,7 +18,7 @@ struct ImportProgressView: View {
             
             ZStack {
                 Circle()
-                    .stroke(Color(.systemGray5), lineWidth: 8)
+                    .stroke(Color.chipBackground, lineWidth: 8)
                     .frame(width: 120, height: 120)
                 
                 Circle()

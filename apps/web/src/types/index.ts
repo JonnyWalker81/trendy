@@ -26,6 +26,7 @@ export interface Event {
   source_type: 'manual' | 'imported'
   external_id?: string
   original_title?: string
+  properties?: Record<string, PropertyValue>
   created_at: string
   updated_at: string
   event_type?: EventType
@@ -40,6 +41,7 @@ export interface CreateEventRequest {
   source_type?: 'manual' | 'imported'
   external_id?: string
   original_title?: string
+  properties?: Record<string, PropertyValue>
 }
 
 export interface UpdateEventRequest {
@@ -51,6 +53,7 @@ export interface UpdateEventRequest {
   source_type?: 'manual' | 'imported'
   external_id?: string
   original_title?: string
+  properties?: Record<string, PropertyValue>
 }
 
 export interface CreateEventTypeRequest {
@@ -82,4 +85,53 @@ export interface TrendData {
 export interface TimeSeriesDataPoint {
   date: string
   count: number
+}
+
+// Property Types
+export type PropertyType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'select'
+  | 'duration'
+  | 'url'
+  | 'email'
+
+export interface PropertyValue {
+  type: PropertyType
+  value: string | number | boolean | Date
+}
+
+export interface PropertyDefinition {
+  id: string
+  event_type_id: string
+  user_id: string
+  key: string
+  label: string
+  property_type: PropertyType
+  options?: string[]
+  default_value?: any
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreatePropertyDefinitionRequest {
+  event_type_id: string
+  key: string
+  label: string
+  property_type: PropertyType
+  options?: string[]
+  default_value?: any
+  display_order?: number
+}
+
+export interface UpdatePropertyDefinitionRequest {
+  key?: string
+  label?: string
+  property_type?: PropertyType
+  options?: string[]
+  default_value?: any
+  display_order?: number
 }

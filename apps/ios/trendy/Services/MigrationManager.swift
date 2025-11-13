@@ -14,6 +14,8 @@ class MigrationManager {
     // Progress tracking
     private(set) var totalEventTypes = 0
     private(set) var migratedEventTypes = 0
+    private(set) var totalPropertyDefinitions = 0
+    private(set) var migratedPropertyDefinitions = 0
     private(set) var totalEvents = 0
     private(set) var migratedEvents = 0
     private(set) var currentOperation = ""
@@ -22,6 +24,7 @@ class MigrationManager {
 
     // UUID mapping: iOS UUID → Backend UUID string
     private var eventTypeMapping: [UUID: String] = [:]
+    private var propertyDefinitionMapping: [UUID: String] = [:]
 
     private let apiClient: APIClient
     private let modelContext: ModelContext
@@ -38,9 +41,9 @@ class MigrationManager {
     // MARK: - Migration Progress
 
     var progress: Double {
-        let totalItems = Double(totalEventTypes + totalEvents)
+        let totalItems = Double(totalEventTypes + totalPropertyDefinitions + totalEvents)
         guard totalItems > 0 else { return 0 }
-        let completedItems = Double(migratedEventTypes + migratedEvents)
+        let completedItems = Double(migratedEventTypes + migratedPropertyDefinitions + migratedEvents)
         return completedItems / totalItems
     }
 
@@ -71,7 +74,10 @@ class MigrationManager {
             // Step 1: Migrate EventTypes
             try await migrateEventTypes()
 
-            // Step 2: Migrate Events
+            // Step 2: Migrate PropertyDefinitions
+            try await migratePropertyDefinitions()
+
+            // Step 3: Migrate Events
             try await migrateEvents()
 
             // Mark as complete
@@ -92,15 +98,18 @@ class MigrationManager {
 
     private func checkDataToMigrate() async throws {
         let eventTypeDescriptor = FetchDescriptor<EventType>()
+        let propertyDefDescriptor = FetchDescriptor<PropertyDefinition>()
         let eventDescriptor = FetchDescriptor<Event>()
 
         let eventTypes = try modelContext.fetch(eventTypeDescriptor)
+        let propertyDefs = try modelContext.fetch(propertyDefDescriptor)
         let events = try modelContext.fetch(eventDescriptor)
 
         await MainActor.run {
             self.totalEventTypes = eventTypes.count
+            self.totalPropertyDefinitions = propertyDefs.count
             self.totalEvents = events.count
-            self.currentOperation = "Found \(eventTypes.count) event types and \(events.count) events to sync"
+            self.currentOperation = "Found \(eventTypes.count) event types, \(propertyDefs.count) properties, and \(events.count) events to sync"
         }
 
         // Give UI a moment to update
@@ -144,6 +153,55 @@ class MigrationManager {
             await MainActor.run {
                 self.migratedEventTypes = index + 1
                 self.currentOperation = "Synced \(index + 1)/\(self.totalEventTypes) event types"
+            }
+        }
+    }
+
+    // MARK: - PropertyDefinition Migration
+
+    private func migratePropertyDefinitions() async throws {
+        await MainActor.run {
+            self.currentOperation = "Syncing property definitions..."
+        }
+
+        let descriptor = FetchDescriptor<PropertyDefinition>()
+        let localPropertyDefs = try modelContext.fetch(descriptor)
+
+        for (index, localPropDef) in localPropertyDefs.enumerated() {
+            // Get backend event type ID for this property definition
+            guard let backendEventTypeId = eventTypeMapping[localPropDef.eventTypeId] else {
+                print("Skipping property definition without mapped event type: \(localPropDef.id)")
+                await MainActor.run {
+                    self.migratedPropertyDefinitions = index + 1
+                }
+                continue
+            }
+
+            // Convert default value to AnyCodable
+            let defaultValue: AnyCodable? = localPropDef.defaultValue
+
+            // Create request
+            let request = CreatePropertyDefinitionRequest(
+                eventTypeId: backendEventTypeId,
+                key: localPropDef.key,
+                label: localPropDef.label,
+                propertyType: localPropDef.propertyType.rawValue,
+                options: localPropDef.propertyType == .select ? localPropDef.options : nil,
+                defaultValue: defaultValue,
+                displayOrder: localPropDef.displayOrder
+            )
+
+            // Create on backend
+            let created = try await apiClient.createPropertyDefinition(
+                eventTypeId: backendEventTypeId,
+                request
+            )
+            propertyDefinitionMapping[localPropDef.id] = created.id
+            print("Created PropertyDefinition '\(localPropDef.label)' with backend ID: \(created.id)")
+
+            await MainActor.run {
+                self.migratedPropertyDefinitions = index + 1
+                self.currentOperation = "Synced \(index + 1)/\(self.totalPropertyDefinitions) property definitions"
             }
         }
     }
@@ -201,6 +259,14 @@ class MigrationManager {
             }
         }
 
+        // Convert properties to API format
+        let apiProperties: [String: APIPropertyValue]? = localEvent.properties.isEmpty ? nil : localEvent.properties.mapValues { propValue in
+            APIPropertyValue(
+                type: propValue.type.rawValue,
+                value: propValue.value
+            )
+        }
+
         // Create request
         let request = CreateEventRequest(
             eventTypeId: backendEventTypeId,
@@ -210,7 +276,8 @@ class MigrationManager {
             endDate: localEvent.endDate,
             sourceType: localEvent.sourceType.rawValue,
             externalId: localEvent.externalId,
-            originalTitle: localEvent.originalTitle
+            originalTitle: localEvent.originalTitle,
+            properties: apiProperties
         )
 
         // Create on backend

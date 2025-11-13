@@ -136,7 +136,7 @@ struct CalendarView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .cornerRadius(12)
     }
     

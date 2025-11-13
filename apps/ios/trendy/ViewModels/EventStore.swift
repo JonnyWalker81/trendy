@@ -185,7 +185,7 @@ class EventStore {
         eventTypes = try modelContext.fetch(typeDescriptor)
     }
     
-    func recordEvent(type: EventType, timestamp: Date = Date(), isAllDay: Bool = false, endDate: Date? = nil, notes: String? = nil) async {
+    func recordEvent(type: EventType, timestamp: Date = Date(), isAllDay: Bool = false, endDate: Date? = nil, notes: String? = nil, properties: [String: PropertyValue] = [:]) async {
         guard let modelContext else { return }
 
         // Sync with system calendar if enabled (iOS-only feature)
@@ -212,6 +212,14 @@ class EventStore {
                     throw EventError.saveFailed
                 }
 
+                // Convert properties to API format
+                let apiProperties: [String: APIPropertyValue]? = properties.isEmpty ? nil : properties.mapValues { propValue in
+                    APIPropertyValue(
+                        type: propValue.type.rawValue,
+                        value: propValue.value
+                    )
+                }
+
                 let request = CreateEventRequest(
                     eventTypeId: backendTypeId,
                     timestamp: timestamp,
@@ -220,7 +228,8 @@ class EventStore {
                     endDate: endDate,
                     sourceType: "manual",
                     externalId: nil,
-                    originalTitle: nil
+                    originalTitle: nil,
+                    properties: apiProperties
                 )
 
                 if isOnline {
@@ -234,7 +243,8 @@ class EventStore {
                         notes: notes,
                         sourceType: .manual,
                         isAllDay: isAllDay,
-                        endDate: endDate
+                        endDate: endDate,
+                        properties: properties
                     )
                     newEvent.calendarEventId = calendarEventId
                     modelContext.insert(newEvent)
@@ -249,7 +259,8 @@ class EventStore {
                         notes: notes,
                         sourceType: .manual,
                         isAllDay: isAllDay,
-                        endDate: endDate
+                        endDate: endDate,
+                        properties: properties
                     )
                     newEvent.calendarEventId = calendarEventId
                     modelContext.insert(newEvent)
@@ -271,7 +282,8 @@ class EventStore {
                 notes: notes,
                 sourceType: .manual,
                 isAllDay: isAllDay,
-                endDate: endDate
+                endDate: endDate,
+                properties: properties
             )
             newEvent.calendarEventId = calendarEventId
             modelContext.insert(newEvent)

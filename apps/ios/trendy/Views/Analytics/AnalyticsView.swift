@@ -111,7 +111,7 @@ struct AnalyticsView: View {
                         .fontWeight(.medium)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selectedEventType?.id == eventType.id ? eventType.color : Color.secondary.opacity(0.2))
+                        .background(selectedEventType?.id == eventType.id ? eventType.color : Color.chipBackground)
                         .foregroundColor(selectedEventType?.id == eventType.id ? .white : .primary)
                         .clipShape(Capsule())
                     }
@@ -174,10 +174,10 @@ struct AnalyticsView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .cornerRadius(12)
     }
-    
+
     private var frequencyChart: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Frequency Over Time")
@@ -231,10 +231,10 @@ struct AnalyticsView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .cornerRadius(12)
     }
-    
+
     private func loadAnalytics() async {
         guard let eventType = selectedEventType else { return }
         

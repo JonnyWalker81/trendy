@@ -40,6 +40,9 @@ func (r *eventRepository) Create(ctx context.Context, event *models.Event) (*mod
 	if event.OriginalTitle != nil {
 		data["original_title"] = *event.OriginalTitle
 	}
+	if event.Properties != nil && len(event.Properties) > 0 {
+		data["properties"] = event.Properties
+	}
 
 	body, err := r.client.Insert("events", data)
 	if err != nil {
@@ -150,6 +153,9 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 	}
 	if event.OriginalTitle != nil {
 		data["original_title"] = *event.OriginalTitle
+	}
+	if event.Properties != nil && len(event.Properties) > 0 {
+		data["properties"] = event.Properties
 	}
 
 	body, err := r.client.Update("events", id, data)

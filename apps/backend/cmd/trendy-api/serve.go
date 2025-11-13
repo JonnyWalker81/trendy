@@ -51,18 +51,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 	eventRepo := repository.NewEventRepository(supabaseClient)
 	eventTypeRepo := repository.NewEventTypeRepository(supabaseClient)
 	userRepo := repository.NewUserRepository(supabaseClient)
+	propertyDefRepo := repository.NewPropertyDefinitionRepository(supabaseClient)
 
 	// Initialize services
 	eventService := service.NewEventService(eventRepo, eventTypeRepo)
 	eventTypeService := service.NewEventTypeService(eventTypeRepo)
 	analyticsService := service.NewAnalyticsService(eventRepo)
 	authService := service.NewAuthService(supabaseClient, userRepo)
+	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
 	eventTypeHandler := handlers.NewEventTypeHandler(eventTypeService)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	authHandler := handlers.NewAuthHandler(authService)
+	propertyDefHandler := handlers.NewPropertyDefinitionHandler(propertyDefService)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -113,6 +116,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/event-types/:id", eventTypeHandler.GetEventType)
 			protected.PUT("/event-types/:id", eventTypeHandler.UpdateEventType)
 			protected.DELETE("/event-types/:id", eventTypeHandler.DeleteEventType)
+
+			// Property definition routes
+			protected.GET("/event-types/:id/properties", propertyDefHandler.GetPropertyDefinitionsByEventType)
+			protected.POST("/event-types/:id/properties", propertyDefHandler.CreatePropertyDefinition)
+			protected.GET("/property-definitions/:id", propertyDefHandler.GetPropertyDefinition)
+			protected.PUT("/property-definitions/:id", propertyDefHandler.UpdatePropertyDefinition)
+			protected.DELETE("/property-definitions/:id", propertyDefHandler.DeletePropertyDefinition)
 
 			// Analytics routes
 			protected.GET("/analytics/summary", analyticsHandler.GetSummary)

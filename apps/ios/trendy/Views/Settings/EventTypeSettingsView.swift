@@ -9,13 +9,33 @@ import SwiftUI
 
 struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
+    @Environment(ThemeManager.self) private var themeManager
     @State private var showingAddEventType = false
     @State private var editingEventType: EventType?
     @State private var showingCalendarImport = false
-    
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { themeManager.currentTheme },
+                        set: { themeManager.currentTheme = $0 }
+                    )) {
+                        ForEach(AppTheme.allCases, id: \.self) { theme in
+                            Label {
+                                Text(theme.displayName)
+                            } icon: {
+                                Image(systemName: theme.iconName)
+                            }
+                            .tag(theme)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                } header: {
+                    Text("Appearance")
+                }
+
                 Section {
                     ForEach(eventStore.eventTypes) { eventType in
                         EventTypeRow(eventType: eventType) {
@@ -184,7 +204,7 @@ struct EditEventTypeView: View {
                                 .frame(width: 44, height: 44)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(selectedIcon == icon ? Color.secondary.opacity(0.2) : Color.clear)
+                                        .fill(selectedIcon == icon ? Color.chipBackground : Color.clear)
                                 )
                                 .foregroundColor(selectedIcon == icon ? .primary : .secondary)
                                 .onTapGesture {

@@ -21,6 +21,7 @@ struct EventEditView: View {
     @State private var isAllDay = false
     @State private var notes = ""
     @State private var showEndDate = false
+    @State private var properties: [String: PropertyValue] = [:]
     
     init(eventType: EventType, existingEvent: Event? = nil) {
         self.eventType = eventType
@@ -74,7 +75,14 @@ struct EventEditView: View {
                     TextEditor(text: $notes)
                         .frame(minHeight: 100)
                 }
-                
+
+                Section("Properties") {
+                    DynamicPropertyFieldsView(
+                        eventTypeId: eventType.id,
+                        properties: $properties
+                    )
+                }
+
                 if eventStore.syncWithCalendar && calendarManager.isAuthorized {
                     Section {
                         HStack {
@@ -109,6 +117,7 @@ struct EventEditView: View {
                 selectedDate = event.timestamp
                 isAllDay = event.isAllDay
                 notes = event.notes ?? ""
+                properties = event.properties
                 if let eventEndDate = event.endDate {
                     showEndDate = true
                     endDate = eventEndDate
@@ -125,7 +134,8 @@ struct EventEditView: View {
                 existingEvent.isAllDay = isAllDay
                 existingEvent.notes = notes.isEmpty ? nil : notes
                 existingEvent.endDate = (isAllDay && showEndDate) ? endDate : nil
-                
+                existingEvent.properties = properties
+
                 await eventStore.updateEvent(existingEvent)
             } else {
                 // Create new event
@@ -134,7 +144,8 @@ struct EventEditView: View {
                     timestamp: selectedDate,
                     isAllDay: isAllDay,
                     endDate: (isAllDay && showEndDate) ? endDate : nil,
-                    notes: notes.isEmpty ? nil : notes
+                    notes: notes.isEmpty ? nil : notes,
+                    properties: properties
                 )
             }
             dismiss()

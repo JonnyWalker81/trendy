@@ -200,6 +200,33 @@ class APIClient {
         return events.first
     }
 
+    // MARK: - Property Definition Endpoints
+
+    /// Get property definitions for an event type
+    func getPropertyDefinitions(eventTypeId: String) async throws -> [APIPropertyDefinition] {
+        return try await request("GET", endpoint: "/event-types/\(eventTypeId)/properties")
+    }
+
+    /// Get single property definition
+    func getPropertyDefinition(id: String) async throws -> APIPropertyDefinition {
+        return try await request("GET", endpoint: "/property-definitions/\(id)")
+    }
+
+    /// Create property definition
+    func createPropertyDefinition(eventTypeId: String, _ request: CreatePropertyDefinitionRequest) async throws -> APIPropertyDefinition {
+        return try await self.request("POST", endpoint: "/event-types/\(eventTypeId)/properties", body: request)
+    }
+
+    /// Update property definition
+    func updatePropertyDefinition(id: String, _ request: UpdatePropertyDefinitionRequest) async throws -> APIPropertyDefinition {
+        return try await self.request("PUT", endpoint: "/property-definitions/\(id)", body: request)
+    }
+
+    /// Delete property definition
+    func deletePropertyDefinition(id: String) async throws {
+        try await requestWithoutResponse("DELETE", endpoint: "/property-definitions/\(id)")
+    }
+
     // MARK: - Analytics Endpoints
 
     /// Get analytics summary

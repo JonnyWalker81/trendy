@@ -43,19 +43,19 @@ struct SignupView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     SecureField("Password", text: $password)
                         .textContentType(.newPassword)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     SecureField("Confirm Password", text: $confirmPassword)
                         .textContentType(.newPassword)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     // Password Requirements

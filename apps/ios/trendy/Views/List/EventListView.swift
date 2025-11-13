@@ -154,7 +154,7 @@ struct FilterChip: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? color : Color.secondary.opacity(0.2))
+                .background(isSelected ? color : Color.chipBackground)
                 .foregroundColor(isSelected ? .white : .primary)
                 .clipShape(Capsule())
         }

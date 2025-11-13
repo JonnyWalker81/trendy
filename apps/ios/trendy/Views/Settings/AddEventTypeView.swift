@@ -62,7 +62,7 @@ struct AddEventTypeView: View {
                                 .frame(width: 44, height: 44)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(selectedIcon == icon ? Color.secondary.opacity(0.2) : Color.clear)
+                                        .fill(selectedIcon == icon ? Color.chipBackground : Color.clear)
                                 )
                                 .foregroundColor(selectedIcon == icon ? .primary : .secondary)
                                 .onTapGesture {

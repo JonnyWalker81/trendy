@@ -100,7 +100,7 @@ struct BubblesView: View {
             VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.secondary.opacity(0.2))
+                        .fill(Color.chipBackground)
                         .frame(width: 80, height: 80)
                     
                     Image(systemName: "plus")

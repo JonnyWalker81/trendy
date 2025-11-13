@@ -52,7 +52,7 @@ struct CompactMonthView: View {
             }
         }
         .padding(8)
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .cornerRadius(8)
     }
     

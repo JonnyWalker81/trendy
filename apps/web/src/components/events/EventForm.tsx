@@ -14,7 +14,8 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useEventTypes } from '@/hooks/api/useEventTypes'
-import type { Event } from '@/types'
+import { DynamicPropertyFields } from '@/components/properties/DynamicPropertyFields'
+import type { Event, PropertyValue } from '@/types'
 
 interface EventFormProps {
   open: boolean
@@ -27,6 +28,7 @@ interface EventFormProps {
     notes?: string
     is_all_day?: boolean
     end_date?: string
+    properties?: Record<string, PropertyValue>
   }) => Promise<void>
   loading?: boolean
 }
@@ -47,6 +49,7 @@ export function EventForm({
   const [isAllDay, setIsAllDay] = useState(false)
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [properties, setProperties] = useState<Record<string, PropertyValue>>({})
 
   // Reset form when dialog opens/closes or event changes
   useEffect(() => {
@@ -60,6 +63,7 @@ export function EventForm({
         setIsAllDay(event.is_all_day)
         setEndDate(event.end_date ? format(new Date(event.end_date), 'yyyy-MM-dd') : '')
         setNotes(event.notes || '')
+        setProperties(event.properties || {})
       } else {
         // Creating new event
         setEventTypeId(defaultEventTypeId || (eventTypes[0]?.id || ''))
@@ -69,6 +73,7 @@ export function EventForm({
         setIsAllDay(false)
         setEndDate('')
         setNotes('')
+        setProperties({})
       }
     }
   }, [open, event, defaultEventTypeId, eventTypes])
@@ -98,6 +103,11 @@ export function EventForm({
     // Add end date if it's an all-day event and end date is provided
     if (isAllDay && endDate) {
       data.end_date = new Date(`${endDate}T12:00:00Z`).toISOString()
+    }
+
+    // Add properties if any
+    if (Object.keys(properties).length > 0) {
+      data.properties = properties
     }
 
     await onSubmit(data)
@@ -196,6 +206,18 @@ export function EventForm({
                 rows={3}
               />
             </div>
+
+            {/* Custom Properties */}
+            {eventTypeId && (
+              <div className="space-y-2">
+                <Label>Properties</Label>
+                <DynamicPropertyFields
+                  eventTypeId={eventTypeId}
+                  properties={properties}
+                  onChange={setProperties}
+                />
+              </div>
+            )}
           </div>
 
           <DialogFooter className="mt-6">

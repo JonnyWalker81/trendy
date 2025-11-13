@@ -10,9 +10,12 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(ThemeManager.self) private var themeManager
     @AppStorage("migration_completed") private var migrationCompleted = false
 
     var body: some View {
+        @Bindable var themeManager = themeManager
+
         Group {
             if authViewModel.isAuthenticated {
                 if migrationCompleted {
@@ -27,6 +30,7 @@ struct ContentView: View {
                 LoginView()
             }
         }
+        .preferredColorScheme(themeManager.currentTheme.colorScheme)
     }
 }
 

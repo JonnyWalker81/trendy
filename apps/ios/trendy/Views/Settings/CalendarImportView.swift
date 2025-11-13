@@ -315,7 +315,7 @@ struct CalendarImportView: View {
                 }
             }
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.cardBackground)
             .cornerRadius(12)
             
             Button("Done") {
@@ -561,7 +561,7 @@ struct EventTypeMappingRow: View {
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(Color(.systemGray5))
+                        .background(Color.chipBackground)
                         .cornerRadius(4)
                 }
                 }

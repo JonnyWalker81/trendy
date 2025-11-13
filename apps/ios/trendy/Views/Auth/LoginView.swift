@@ -40,13 +40,13 @@ struct LoginView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     SecureField("Password", text: $password)
                         .textContentType(.password)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     // Error Message

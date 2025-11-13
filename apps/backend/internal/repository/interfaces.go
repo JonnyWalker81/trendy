@@ -33,3 +33,12 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) (*models.User, error)
 }
+
+// PropertyDefinitionRepository defines the interface for property definition data access
+type PropertyDefinitionRepository interface {
+	Create(ctx context.Context, def *models.PropertyDefinition) (*models.PropertyDefinition, error)
+	GetByID(ctx context.Context, id string) (*models.PropertyDefinition, error)
+	GetByEventTypeID(ctx context.Context, eventTypeID string) ([]models.PropertyDefinition, error)
+	Update(ctx context.Context, id string, def *models.PropertyDefinition) (*models.PropertyDefinition, error)
+	Delete(ctx context.Context, id string) error
+}

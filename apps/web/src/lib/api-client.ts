@@ -8,6 +8,9 @@ import type {
   UpdateEventTypeRequest,
   AnalyticsSummary,
   TrendData,
+  PropertyDefinition,
+  CreatePropertyDefinitionRequest,
+  UpdatePropertyDefinitionRequest,
 } from '../types'
 
 // Use environment variable for production, fallback to proxy path for local dev
@@ -173,5 +176,67 @@ export const analyticsApi = {
       { headers }
     )
     return handleResponse<TrendData>(response)
+  },
+}
+
+// Property Definition API
+export const propertyDefinitionApi = {
+  getByEventType: async (eventTypeId: string): Promise<PropertyDefinition[]> => {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_BASE}/event-types/${eventTypeId}/properties`,
+      { headers }
+    )
+    return handleResponse<PropertyDefinition[]>(response)
+  },
+
+  getById: async (id: string): Promise<PropertyDefinition> => {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/property-definitions/${id}`, {
+      headers,
+    })
+    return handleResponse<PropertyDefinition>(response)
+  },
+
+  create: async (
+    eventTypeId: string,
+    data: Omit<CreatePropertyDefinitionRequest, 'event_type_id'>
+  ): Promise<PropertyDefinition> => {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_BASE}/event-types/${eventTypeId}/properties`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      }
+    )
+    return handleResponse<PropertyDefinition>(response)
+  },
+
+  update: async (
+    id: string,
+    data: UpdatePropertyDefinitionRequest
+  ): Promise<PropertyDefinition> => {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/property-definitions/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+    })
+    return handleResponse<PropertyDefinition>(response)
+  },
+
+  delete: async (id: string): Promise<void> => {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/property-definitions/${id}`, {
+      method: 'DELETE',
+      headers,
+    })
+    if (!response.ok) {
+      throw new Error(
+        `Failed to delete property definition: ${response.statusText}`
+      )
+    }
   },
 }

@@ -19,7 +19,10 @@ final class EventType {
     
     @Relationship(deleteRule: .cascade, inverse: \Event.eventType)
     var events: [Event]?
-    
+
+    @Relationship(deleteRule: .cascade, inverse: \PropertyDefinition.eventType)
+    var propertyDefinitions: [PropertyDefinition]?
+
     init(name: String, colorHex: String = "#007AFF", iconName: String = "circle.fill") {
         self.id = UUID()
         self.name = name
