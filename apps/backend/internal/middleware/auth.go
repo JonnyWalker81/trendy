@@ -31,6 +31,8 @@ func Auth(client *supabase.Client) gin.HandlerFunc {
 		// Verify token with Supabase
 		user, err := client.VerifyToken(token)
 		if err != nil {
+			// Log the actual error for debugging
+			c.Error(err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
