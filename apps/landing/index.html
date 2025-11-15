@@ -3,39 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrendSight - Track What Matters</title>
+    <title>TrendSight - Track Anything, Discover Your Patterns</title>
+    <meta name="description" content="Stop relying on memory. TrendSight is your flexible event tracking and life analytics app. Log any habit, symptom, or event—then discover meaningful patterns with beautiful insights.">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background: #0f1318;
         }
         .gradient-bg {
             background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
         }
-        .feature-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        .gradient-text {
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
-        .feature-card:hover {
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
             transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
-        .pricing-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .pricing-card:hover {
-            transform: scale(1.05);
-        }
-        .app-badge {
-            transition: opacity 0.3s ease;
-        }
-        .app-badge:hover {
-            opacity: 0.8;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
     </style>
 </head>
-<body class="bg-gray-950">
+<body class="bg-gray-950 text-gray-100">
     <!-- Navigation -->
     <nav class="bg-gray-900/95 backdrop-blur-sm shadow-lg border-b border-gray-800 fixed w-full z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,261 +42,637 @@
                         <span class="ml-2 text-xl font-bold text-white">TrendSight</span>
                     </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="#features" class="text-gray-300 hover:text-blue-400 px-3 py-2 text-sm font-medium transition">Features</a>
-                    <a href="#pricing" class="text-gray-300 hover:text-blue-400 px-3 py-2 text-sm font-medium transition">Pricing</a>
-                    <a href="https://app.trendsight.com/login" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Login</a>
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="#use-cases" class="text-gray-300 hover:text-blue-400 text-sm font-medium transition">Use Cases</a>
+                    <a href="#how-it-works" class="text-gray-300 hover:text-blue-400 text-sm font-medium transition">How It Works</a>
+                    <a href="#faq" class="text-gray-300 hover:text-blue-400 text-sm font-medium transition">FAQ</a>
+                    <a href="#waitlist" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">Join Waitlist</a>
                 </div>
             </div>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="gradient-bg pt-32 pb-20 px-4 sm:px-6 lg:px-8">
-        <div class="max-w-7xl mx-auto text-center">
-            <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-6">
-                Track What Matters
-            </h1>
-            <p class="text-xl md:text-2xl text-blue-100 mb-12 max-w-3xl mx-auto">
-                Create custom events, log them with a tap, and discover meaningful patterns in your life through beautiful visualizations.
-            </p>
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-                <a href="https://apps.apple.com/app/trendsight" class="app-badge">
-                    <img src="data:image/svg+xml,%3Csvg width='120' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='120' height='40' rx='5' fill='%23000'/%3E%3Ctext x='60' y='25' font-family='Arial' font-size='12' fill='white' text-anchor='middle'%3EApp Store%3C/text%3E%3C/svg%3E" alt="Download on the App Store" class="h-12">
-                </a>
-                <a href="https://app.trendsight.com/login" class="bg-white text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition shadow-lg">
-                    Open Web App
-                </a>
+    <section class="gradient-bg pt-32 pb-24 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center max-w-4xl mx-auto mb-16">
+                <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold text-white mb-6 leading-tight">
+                    Track Anything,<br/>Discover Your Patterns
+                </h1>
+                <p class="text-xl md:text-2xl text-blue-100 mb-8 leading-relaxed">
+                    Stop relying on memory and guesswork. TrendSight lets you log any life event—habits, symptoms, workouts, spending—and turns your data into clear insights and actionable trends.
+                </p>
+
+                <!-- Key Benefits -->
+                <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-10 text-left">
+                    <ul class="space-y-3 text-blue-50">
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span><strong>Create custom event types</strong> for anything you want to track—no rigid templates</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span><strong>Log events in seconds</strong> with optional notes and custom details</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span><strong>See beautiful charts and trends</strong> across days, weeks, and months</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span><strong>Discover patterns and triggers</strong> you never noticed before</span>
+                        </li>
+                        <li class="flex items-start">
+                            <svg class="w-6 h-6 text-green-400 mr-3 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span><strong>Make data-backed decisions</strong> instead of guessing based on faulty memory</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- CTA Buttons -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <a href="#waitlist" class="bg-white text-blue-600 px-8 py-4 rounded-xl text-lg font-bold hover:bg-gray-100 transition shadow-2xl w-full sm:w-auto">
+                        Join the Waitlist
+                    </a>
+                    <a href="#use-cases" class="bg-blue-700/50 text-white border-2 border-blue-400 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-blue-700 transition w-full sm:w-auto">
+                        See Use Cases
+                    </a>
+                </div>
             </div>
-            <div class="mt-16">
-                <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-2xl p-8 max-w-4xl mx-auto border border-gray-700">
-                    <img src="data:image/svg+xml,%3Csvg width='800' height='500' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='800' height='500' fill='%23f3f4f6'/%3E%3Ctext x='400' y='250' font-family='Arial' font-size='24' fill='%239ca3af' text-anchor='middle'%3EApp Screenshot%3C/text%3E%3C/svg%3E" alt="App Interface" class="w-full rounded-lg">
+
+            <!-- Hero Visual Placeholder -->
+            <div class="max-w-5xl mx-auto">
+                <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-gray-700">
+                    <div class="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl aspect-video flex items-center justify-center">
+                        <div class="text-center">
+                            <svg class="w-20 h-20 text-blue-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            <p class="text-gray-400 text-sm">(Concept: Dashboard showing event trends and insights)</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section id="features" class="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900">
+    <!-- Social Proof / Credibility -->
+    <section class="bg-gray-900 py-16 px-4 sm:px-6 lg:px-8 border-y border-gray-800">
+        <div class="max-w-5xl mx-auto text-center">
+            <p class="text-gray-400 text-lg mb-6">
+                Join the growing movement of people using <strong class="text-white">personal data tracking</strong> to build better habits, understand their health, and make smarter decisions.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-10">
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-blue-400 mb-2">Proven Science</div>
+                    <p class="text-gray-400 text-sm">Tracking behavior improves goal achievement and habit formation</p>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-blue-400 mb-2">Flexible</div>
+                    <p class="text-gray-400 text-sm">Track what matters to YOU, not generic preset habits</p>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-blue-400 mb-2">Simple</div>
+                    <p class="text-gray-400 text-sm">Easier than journals or spreadsheets, more powerful than memory</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem / Agitation Section -->
+    <section class="bg-gray-950 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
+                    Your Memory Isn't as Good as You Think
+                </h2>
+                <p class="text-xl text-gray-400">
+                    We all overestimate or underestimate how often things happen. Without data, it's impossible to know the truth.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                <div class="bg-red-900/20 border-2 border-red-800/50 rounded-xl p-6">
+                    <div class="flex items-start mb-4">
+                        <svg class="w-8 h-8 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div>
+                            <h3 class="text-lg font-bold text-red-300 mb-2">The Guessing Game</h3>
+                            <p class="text-gray-300 text-sm leading-relaxed">
+                                "I <em>feel</em> like I go to the gym a lot" or "I think I only get migraines occasionally"—but are you sure? Memory is notoriously unreliable, leading to <strong>over- or underestimating</strong> your habits and symptoms.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-red-900/20 border-2 border-red-800/50 rounded-xl p-6">
+                    <div class="flex items-start mb-4">
+                        <svg class="w-8 h-8 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div>
+                            <h3 class="text-lg font-bold text-red-300 mb-2">Unanswered Questions</h3>
+                            <p class="text-gray-300 text-sm leading-relaxed">
+                                Without data, you can't confidently answer: "How many times did I get a migraine this month?" "How often am I <em>actually</em> working out?" "Am I eating out more than I think?"
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-red-900/20 border-2 border-red-800/50 rounded-xl p-6">
+                    <div class="flex items-start mb-4">
+                        <svg class="w-8 h-8 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <div>
+                            <h3 class="text-lg font-bold text-red-300 mb-2">Manual Journals Are a Chore</h3>
+                            <p class="text-gray-300 text-sm leading-relaxed">
+                                Notebooks and spreadsheets are <strong>tedious and time-consuming</strong>. They're easy to abandon when life gets busy, leaving you with incomplete data or no data at all.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-red-900/20 border-2 border-red-800/50 rounded-xl p-6">
+                    <div class="flex items-start mb-4">
+                        <svg class="w-8 h-8 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        <div>
+                            <h3 class="text-lg font-bold text-red-300 mb-2">Rigid Habit Apps Don't Cut It</h3>
+                            <p class="text-gray-300 text-sm leading-relaxed">
+                                Most habit trackers force you into <strong>generic, predefined habits</strong>. But what if you want to track migraines, spending, deep work sessions, or mood patterns? You're out of luck.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl p-8 border border-gray-700">
+                <p class="text-2xl font-semibold text-white">
+                    <span class="text-red-400">The Problem:</span> There's no easy, flexible way to log your real-life events and see meaningful patterns over time.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Overview -->
+    <section class="bg-gray-900 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
+                    Introducing TrendSight: Your Flexible Life Analytics Tool
+                </h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">
+                    TrendSight gives you the freedom to track what matters to you, the simplicity to log events in seconds, and the insights to understand your patterns.
+                </p>
+            </div>
+
+            <div class="bg-gradient-to-br from-blue-900/40 to-purple-900/40 rounded-2xl p-8 md:p-12 border border-blue-800/50 mb-12">
+                <h3 class="text-2xl font-bold text-white mb-8 text-center">How TrendSight Works</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-4">1</div>
+                        <h4 class="text-lg font-semibold text-blue-300 mb-2">Create Your Events</h4>
+                        <p class="text-gray-300 text-sm">Define custom event types: "Migraine," "Gym Session," "Takeout Dinner," "Mood Check-In"—anything you care about.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-4">2</div>
+                        <h4 class="text-lg font-semibold text-purple-300 mb-2">Log with One Tap</h4>
+                        <p class="text-gray-300 text-sm">Tap an event to log it instantly. Add optional notes, timestamps, or custom fields if you want more context.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-pink-600 rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-4">3</div>
+                        <h4 class="text-lg font-semibold text-pink-300 mb-2">Discover Patterns</h4>
+                        <p class="text-gray-300 text-sm">See trends over days, weeks, and months. Spot correlations, streaks, and triggers you never noticed before.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h4 class="text-lg font-bold text-green-400 mb-3 flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Completely Customizable
+                    </h4>
+                    <p class="text-gray-300 text-sm">No rigid templates. Track exactly what you want, the way you want.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h4 class="text-lg font-bold text-green-400 mb-3 flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Fast and Frictionless
+                    </h4>
+                    <p class="text-gray-300 text-sm">Logging takes seconds, not minutes. No friction means you'll actually use it.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h4 class="text-lg font-bold text-green-400 mb-3 flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Insightful Visualizations
+                    </h4>
+                    <p class="text-gray-300 text-sm">Beautiful charts show your trends. See streaks, averages, and patterns at a glance.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h4 class="text-lg font-bold text-green-400 mb-3 flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Data-Backed Decisions
+                    </h4>
+                    <p class="text-gray-300 text-sm">Stop guessing. Use objective data to make smarter choices about your habits and health.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section -->
+    <section id="use-cases" class="bg-gray-950 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-6xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">
+                    Track What Matters to You
+                </h2>
+                <p class="text-xl text-gray-400">
+                    TrendSight adapts to your life. Here are five powerful ways people use it:
+                </p>
+            </div>
+
+            <div class="space-y-8">
+                <!-- Use Case 1: Habits -->
+                <div class="card-hover bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-2xl p-8 border-2 border-green-800/50">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center mr-6 flex-shrink-0">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-green-300 mb-3">Habit Building & Self-Improvement</h3>
+                            <p class="text-gray-200 mb-3 leading-relaxed">
+                                Log daily habits like reading, meditating, drinking water, or journaling. See your progress fill up over time with visual streaks and weekly summaries.
+                            </p>
+                            <div class="bg-green-950/50 rounded-lg p-4 border border-green-800/30">
+                                <p class="text-sm text-green-200">
+                                    <strong>Before:</strong> "I think I'm meditating regularly..."<br/>
+                                    <strong>After:</strong> "I can see I meditated 18 out of 30 days this month—time to push for 25!"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 2: Health -->
+                <div class="card-hover bg-gradient-to-r from-red-900/30 to-pink-900/30 rounded-2xl p-8 border-2 border-red-800/50">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center mr-6 flex-shrink-0">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-red-300 mb-3">Health & Symptom Tracking</h3>
+                            <p class="text-gray-200 mb-3 leading-relaxed">
+                                Track migraines, mood swings, allergy flare-ups, or digestive issues. Add notes about sleep quality, stress level, diet, or weather to help identify patterns and triggers.
+                            </p>
+                            <div class="bg-red-950/50 rounded-lg p-4 border border-red-800/30">
+                                <p class="text-sm text-red-200">
+                                    <strong>Before:</strong> "I can't figure out what triggers my migraines..."<br/>
+                                    <strong>After:</strong> "The data shows I get migraines 3 days after poor sleep—now I know what to fix."
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 3: Fitness -->
+                <div class="card-hover bg-gradient-to-r from-blue-900/30 to-cyan-900/30 rounded-2xl p-8 border-2 border-blue-800/50">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mr-6 flex-shrink-0">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-blue-300 mb-3">Fitness & Workout Analytics</h3>
+                            <p class="text-gray-200 mb-3 leading-relaxed">
+                                Track gym visits, runs, walks, or yoga sessions. See workouts per week, monthly averages, and identify when you tend to skip—so you can stay consistent and motivated.
+                            </p>
+                            <div class="bg-blue-950/50 rounded-lg p-4 border border-blue-800/30">
+                                <p class="text-sm text-blue-200">
+                                    <strong>Before:</strong> "I feel like I'm working out enough..."<br/>
+                                    <strong>After:</strong> "I averaged 2.5 workouts per week. Let's aim for 4!"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 4: Lifestyle -->
+                <div class="card-hover bg-gradient-to-r from-amber-900/30 to-yellow-900/30 rounded-2xl p-8 border-2 border-amber-800/50">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center mr-6 flex-shrink-0">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-amber-300 mb-3">Lifestyle & Spending Habits</h3>
+                            <p class="text-gray-200 mb-3 leading-relaxed">
+                                Log events like "ate out," "bought coffee," "ordered delivery," or "late-night scrolling." See how these small habits add up over weeks and months—great for budgeting and awareness.
+                            </p>
+                            <div class="bg-amber-950/50 rounded-lg p-4 border border-amber-800/30">
+                                <p class="text-sm text-amber-200">
+                                    <strong>Before:</strong> "I barely eat out..."<br/>
+                                    <strong>After:</strong> "Whoa—I spent money on takeout 18 times this month. Time to meal prep!"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Use Case 5: Custom -->
+                <div class="card-hover bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-2xl p-8 border-2 border-purple-800/50">
+                    <div class="flex items-start">
+                        <div class="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mr-6 flex-shrink-0">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-purple-300 mb-3">Custom Events & Personal Experiments</h3>
+                            <p class="text-gray-200 mb-3 leading-relaxed">
+                                Track <em>anything</em>: mood scores vs. vitamin intake, deep work hours vs. time of day, social time vs. happiness. Run personal experiments and discover what actually affects your life.
+                            </p>
+                            <div class="bg-purple-950/50 rounded-lg p-4 border border-purple-800/30">
+                                <p class="text-sm text-purple-200">
+                                    <strong>Before:</strong> "Does morning sunlight improve my mood? Who knows..."<br/>
+                                    <strong>After:</strong> "My mood scores are 30% higher on days I get sunlight before 9am!"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Feature Highlights -->
+    <section class="bg-gray-900 py-20 px-4 sm:px-6 lg:px-8">
         <div class="max-w-7xl mx-auto">
             <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">Powerful Features</h2>
-                <p class="text-xl text-gray-400">Everything you need to track and understand your patterns</p>
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Everything You Need to Understand Your Life</h2>
+                <p class="text-xl text-gray-400">Powerful features that make tracking effortless and insights meaningful</p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <!-- Feature 1 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-blue-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-blue-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Create Custom Events</h3>
-                    <p class="text-gray-300">Design your own events to track anything from daily habits to special moments. Complete flexibility for your needs.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Custom Event Types & Categories</h3>
+                    <p class="text-gray-300 text-sm">Create unlimited event types. Organize them with colors, icons, and categories.</p>
                 </div>
 
-                <!-- Feature 2 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-cyan-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-cyan-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">One-Tap Logging</h3>
-                    <p class="text-gray-300">Log events instantly with a single tap. Fast, simple, and designed to capture moments as they happen.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Quick Logging with Timestamps</h3>
+                    <p class="text-gray-300 text-sm">Log events instantly with automatic timestamps. Adjust time if needed.</p>
                 </div>
 
-                <!-- Feature 3 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-emerald-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-emerald-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Rich Details</h3>
-                    <p class="text-gray-300">Add notes and custom properties to each event. Capture context that matters to you.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Notes & Custom Properties</h3>
+                    <p class="text-gray-300 text-sm">Add rich context to each event with notes and custom fields you define.</p>
                 </div>
 
-                <!-- Feature 4 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-pink-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-pink-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Beautiful Trends</h3>
-                    <p class="text-gray-300">Visualize your patterns over weeks, months, and years with stunning charts and insights.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Trend Charts Over Time</h3>
+                    <p class="text-gray-300 text-sm">Visualize daily, weekly, monthly, and yearly trends with beautiful charts.</p>
                 </div>
 
-                <!-- Feature 5 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-amber-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-amber-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Native iOS App</h3>
-                    <p class="text-gray-300">Lightning-fast native app designed specifically for iPhone. Track events on the go.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Streaks & Summaries</h3>
+                    <p class="text-gray-300 text-sm">See your current streaks, totals, and averages at a glance.</p>
                 </div>
 
-                <!-- Feature 6 -->
-                <div class="feature-card bg-gray-800/50 backdrop-blur-sm p-8 rounded-xl shadow-lg border border-gray-700">
-                    <div class="w-12 h-12 bg-indigo-900/50 rounded-lg flex items-center justify-center mb-6">
+                <div class="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
+                    <div class="w-12 h-12 bg-indigo-900/50 rounded-lg flex items-center justify-center mb-4">
                         <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Web Access</h3>
-                    <p class="text-gray-300">Access your data from anywhere with our powerful web app. Desktop or mobile browser.</p>
+                    <h3 class="text-xl font-semibold text-white mb-3">Growing Insights</h3>
+                    <p class="text-gray-300 text-sm">Start with basic stats. Unlock deeper analytics and correlations as you collect more data.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    <section id="pricing" class="py-20 px-4 sm:px-6 lg:px-8 bg-gray-950">
-        <div class="max-w-7xl mx-auto">
+    <!-- How It Works -->
+    <section id="how-it-works" class="bg-gray-950 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto">
             <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">Simple, Transparent Pricing</h2>
-                <p class="text-xl text-gray-400">Choose the plan that's right for you</p>
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">How It Works</h2>
+                <p class="text-xl text-gray-400">From setup to insights in four simple steps</p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                <!-- Free Plan -->
-                <div class="pricing-card bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-lg p-8 border-2 border-gray-700">
-                    <h3 class="text-2xl font-bold text-white mb-4">Free</h3>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold text-white">$0</span>
-                        <span class="text-gray-400">/month</span>
+
+            <div class="space-y-6">
+                <div class="flex items-start bg-gray-800/50 rounded-xl p-6 border-l-4 border-blue-500">
+                    <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-xl font-bold text-white mr-6 flex-shrink-0">1</div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Create Your Events</h3>
+                        <p class="text-gray-300">Set up custom event types for what you want to track. Name them, choose colors and icons, add any custom properties you need.</p>
                     </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Up to 5 custom events</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Basic notes</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Weekly trends</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">iOS & Web access</span>
-                        </li>
-                    </ul>
-                    <a href="https://app.trendsight.com/signup" class="block w-full bg-blue-600 text-white text-center py-3 rounded-lg font-semibold hover:bg-blue-700 transition">Get Started</a>
                 </div>
 
-                <!-- Pro Plan -->
-                <div class="pricing-card bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-8 border-2 border-blue-500 transform scale-105">
-                    <div class="bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full inline-block mb-4">MOST POPULAR</div>
-                    <h3 class="text-2xl font-bold text-white mb-4">Pro</h3>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold text-white">$9</span>
-                        <span class="text-blue-200">/month</span>
+                <div class="flex items-start bg-gray-800/50 rounded-xl p-6 border-l-4 border-purple-500">
+                    <div class="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-xl font-bold text-white mr-6 flex-shrink-0">2</div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Log Them in Seconds</h3>
+                        <p class="text-gray-300">When an event happens, tap it to log. Add optional notes or custom details. It takes just seconds.</p>
                     </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-blue-200 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-white">Unlimited events</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-blue-200 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-white">Custom properties</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-blue-200 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-white">Advanced analytics</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-blue-200 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-white">Monthly & yearly trends</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-blue-200 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-white">Data export</span>
-                        </li>
-                    </ul>
-                    <a href="https://app.trendsight.com/signup?plan=pro" class="block w-full bg-white text-blue-600 text-center py-3 rounded-lg font-semibold hover:bg-gray-100 transition">Start Free Trial</a>
                 </div>
 
-                <!-- Team Plan -->
-                <div class="pricing-card bg-gray-800/50 backdrop-blur-sm rounded-2xl shadow-lg p-8 border-2 border-gray-700">
-                    <h3 class="text-2xl font-bold text-white mb-4">Team</h3>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold text-white">$29</span>
-                        <span class="text-gray-400">/month</span>
+                <div class="flex items-start bg-gray-800/50 rounded-xl p-6 border-l-4 border-pink-500">
+                    <div class="w-12 h-12 bg-pink-600 rounded-full flex items-center justify-center text-xl font-bold text-white mr-6 flex-shrink-0">3</div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Review Your Trends</h3>
+                        <p class="text-gray-300">Check your dashboard to see trends, streaks, and patterns. View by day, week, month, or year.</p>
                     </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Everything in Pro</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Up to 5 team members</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Shared events</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Team analytics</span>
-                        </li>
-                        <li class="flex items-start">
-                            <svg class="w-6 h-6 text-emerald-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            <span class="text-gray-300">Priority support</span>
-                        </li>
-                    </ul>
-                    <a href="https://app.trendsight.com/signup?plan=team" class="block w-full bg-blue-600 text-white text-center py-3 rounded-lg font-semibold hover:bg-blue-700 transition">Start Free Trial</a>
+                </div>
+
+                <div class="flex items-start bg-gray-800/50 rounded-xl p-6 border-l-4 border-green-500">
+                    <div class="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center text-xl font-bold text-white mr-6 flex-shrink-0">4</div>
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-2">Make Data-Backed Decisions</h3>
+                        <p class="text-gray-300">Use insights to adjust your habits, identify triggers, and make smarter choices. Track progress over time with confidence.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="gradient-bg py-20 px-4 sm:px-6 lg:px-8">
+    <!-- Who It's For -->
+    <section class="bg-gray-900 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Who Is TrendSight For?</h2>
+                <p class="text-xl text-gray-400">Anyone who wants clarity, control, and self-awareness</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Habit Builders</h3>
+                    <p class="text-gray-300 text-sm">People who want to build better habits and see consistent progress over time.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Health-Conscious Individuals</h3>
+                    <p class="text-gray-300 text-sm">Anyone managing symptoms, tracking triggers, or wanting clearer health insights.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Fitness Enthusiasts</h3>
+                    <p class="text-gray-300 text-sm">People who want to stay consistent with workouts and see measurable fitness trends.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Budget-Minded People</h3>
+                    <p class="text-gray-300 text-sm">Those who want better control over spending and lifestyle habits that add up.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Data-Loving Experimenters</h3>
+                    <p class="text-gray-300 text-sm">Curious self-experimenters who love running personal "tests" and analyzing results.</p>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-blue-300 mb-3">Anyone Seeking Clarity</h3>
+                    <p class="text-gray-300 text-sm">If you're tired of guessing and want objective insights into your life, TrendSight is for you.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="bg-gray-950 py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Frequently Asked Questions</h2>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">What kind of events can I track with TrendSight?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Absolutely anything you want! TrendSight is completely customizable. Track habits (meditation, reading), health symptoms (migraines, allergies), fitness (gym visits, runs), lifestyle events (eating out, spending), mood, productivity—you name it. If it's worth tracking, TrendSight can handle it.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">Is my data private and secure?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Yes. Your data is private and belongs to you. We use industry-standard encryption and security practices. Your personal events and insights are never shared with third parties or used for advertising.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">How is this different from a typical habit tracker?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Most habit trackers force you into predefined habits and rigid checklists. TrendSight is <strong>flexible</strong>—you create your own event types and track <em>anything</em> that matters to you. It's not just for habits; it's for health, fitness, lifestyle, and personal experiments. Plus, TrendSight focuses on trends and insights, not just checkmarks.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">Do I have to be "data-savvy" to use this?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Not at all! TrendSight is designed to be simple and intuitive. Logging an event takes seconds, and the charts are easy to understand. You don't need to be a data scientist—just someone who wants better clarity about their life.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">Will there be both iOS and web versions?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Yes! We're launching with a native iOS app and a powerful web app, so you can track and review your data from anywhere—iPhone, iPad, or desktop browser.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">Is TrendSight free? Will there be a paid plan?</h3>
+                    <p class="text-gray-300 text-sm">
+                        TrendSight will offer a generous free tier to get you started. For users who want unlimited events, advanced analytics, and deeper insights, we'll offer an optional paid plan. We'll share pricing details closer to launch.
+                    </p>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-bold text-white mb-3">Can I export my data?</h3>
+                    <p class="text-gray-300 text-sm">
+                        Yes! Your data is yours. You'll be able to export your events and insights whenever you want.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section id="waitlist" class="gradient-bg py-24 px-4 sm:px-6 lg:px-8">
         <div class="max-w-4xl mx-auto text-center">
-            <h2 class="text-4xl font-bold text-white mb-6">Ready to Start Tracking?</h2>
-            <p class="text-xl text-blue-100 mb-10">Join thousands of users discovering patterns in their lives</p>
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href="https://apps.apple.com/app/trendsight" class="app-badge">
-                    <img src="data:image/svg+xml,%3Csvg width='135' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='135' height='40' rx='5' fill='%23000'/%3E%3Ctext x='67.5' y='25' font-family='Arial' font-size='11' fill='white' text-anchor='middle'%3EDownload on the%3C/text%3E%3Ctext x='67.5' y='35' font-family='Arial' font-size='14' font-weight='bold' fill='white' text-anchor='middle'%3EApp Store%3C/text%3E%3C/svg%3E" alt="Download on the App Store" class="h-14">
-                </a>
-                <a href="https://app.trendsight.com/signup" class="bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-100 transition shadow-lg">
-                    Try Web App Free
-                </a>
+            <h2 class="text-4xl md:text-5xl font-extrabold text-white mb-6">
+                Ready to Discover Your Patterns?
+            </h2>
+            <p class="text-xl md:text-2xl text-blue-100 mb-4">
+                Stop guessing. Start tracking. Turn your life events into clear insights.
+            </p>
+            <p class="text-lg text-blue-200 mb-10 italic">
+                "Track Anything, Discover Your Patterns."
+            </p>
+
+            <!-- Waitlist Form -->
+            <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8">
+                <h3 class="text-2xl font-bold text-white mb-6">Join the Waitlist for Early Access</h3>
+                <form class="max-w-md mx-auto">
+                    <div class="mb-4">
+                        <input type="email" placeholder="Enter your email" required class="w-full px-6 py-4 rounded-lg text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-blue-300">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-bold hover:bg-blue-700 transition shadow-lg">
+                        Get Early Access
+                    </button>
+                    <p class="text-blue-200 text-sm mt-4">Be the first to know when TrendSight launches. No spam, ever.</p>
+                </form>
+            </div>
+
+            <div class="text-blue-100">
+                <p class="text-lg">Questions? <a href="mailto:hello@trendsight.com" class="underline hover:text-white">Get in touch</a></p>
             </div>
         </div>
     </section>
@@ -318,15 +688,15 @@
                         </svg>
                         <span class="ml-2 text-xl font-bold text-white">TrendSight</span>
                     </div>
-                    <p class="text-sm">Track what matters, discover your patterns.</p>
+                    <p class="text-sm">Track anything, discover your patterns.</p>
                 </div>
                 <div>
                     <h4 class="text-white font-semibold mb-4">Product</h4>
                     <ul class="space-y-2 text-sm">
-                        <li><a href="#features" class="hover:text-white transition">Features</a></li>
-                        <li><a href="#pricing" class="hover:text-white transition">Pricing</a></li>
-                        <li><a href="https://app.trendsight.com" class="hover:text-white transition">Web App</a></li>
-                        <li><a href="https://apps.apple.com/app/trendsight" class="hover:text-white transition">iOS App</a></li>
+                        <li><a href="#use-cases" class="hover:text-white transition">Use Cases</a></li>
+                        <li><a href="#how-it-works" class="hover:text-white transition">How It Works</a></li>
+                        <li><a href="#faq" class="hover:text-white transition">FAQ</a></li>
+                        <li><a href="#waitlist" class="hover:text-white transition">Join Waitlist</a></li>
                     </ul>
                 </div>
                 <div>
@@ -334,8 +704,7 @@
                     <ul class="space-y-2 text-sm">
                         <li><a href="#" class="hover:text-white transition">About</a></li>
                         <li><a href="#" class="hover:text-white transition">Blog</a></li>
-                        <li><a href="#" class="hover:text-white transition">Support</a></li>
-                        <li><a href="#" class="hover:text-white transition">Contact</a></li>
+                        <li><a href="mailto:hello@trendsight.com" class="hover:text-white transition">Contact</a></li>
                     </ul>
                 </div>
                 <div>
@@ -343,7 +712,6 @@
                     <ul class="space-y-2 text-sm">
                         <li><a href="#" class="hover:text-white transition">Privacy Policy</a></li>
                         <li><a href="#" class="hover:text-white transition">Terms of Service</a></li>
-                        <li><a href="#" class="hover:text-white transition">Cookie Policy</a></li>
                     </ul>
                 </div>
             </div>
