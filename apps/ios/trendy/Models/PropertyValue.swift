@@ -19,7 +19,13 @@ struct PropertyValue: Codable, Equatable {
     }
 
     var doubleValue: Double? {
-        value.value as? Double
+        // Handle both Int and Double types
+        if let double = value.value as? Double {
+            return double
+        } else if let int = value.value as? Int {
+            return Double(int)
+        }
+        return nil
     }
 
     var boolValue: Bool? {

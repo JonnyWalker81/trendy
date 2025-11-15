@@ -1,0 +1,343 @@
+{
+  "configurations" : [
+    {
+      "id" : "8C9E3F2A-1B4D-4E7C-9A5F-3D8B6C4E2A1F",
+      "name" : "Unit Tests (Debug)",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : true,
+          "targets" : [
+            {
+              "containerPath" : "container:trendy.xcodeproj",
+              "identifier" : "trendy",
+              "name" : "trendy"
+            }
+          ]
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : false
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "0"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 60,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "testExecutionOrdering" : "random",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "deleteOnSuccess",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "deleteOnSuccess"
+      }
+    },
+    {
+      "id" : "7B8D2E1C-0A3F-4D6E-8B4A-2C7D5E3F1B9A",
+      "name" : "Unit Tests (Release)",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : true,
+          "targets" : [
+            {
+              "containerPath" : "container:trendy.xcodeproj",
+              "identifier" : "trendy",
+              "name" : "trendy"
+            }
+          ]
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : false
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "0"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : false,
+        "maximumTestExecutionTimeAllowance" : 60,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "testExecutionOrdering" : "random",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "deleteOnSuccess",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "deleteOnSuccess"
+      }
+    },
+    {
+      "id" : "6A7C1D9E-2B5F-3C8E-7A4B-1D6E8F2C9B3A",
+      "name" : "UI Tests (Local)",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : true,
+          "targets" : [
+            {
+              "containerPath" : "container:trendy.xcodeproj",
+              "identifier" : "trendy",
+              "name" : "trendy"
+            }
+          ]
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : true
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "1"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "0"
+          },
+          {
+            "key" : "UITEST_LOGGED_IN",
+            "value" : "0"
+          },
+          {
+            "key" : "UITEST_HAS_LOCAL_DATA",
+            "value" : "0"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 120,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:trendy.xcodeproj",
+          "identifier" : "trendy",
+          "name" : "trendy"
+        },
+        "testExecutionOrdering" : "sequential",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "keepAlways",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "keepAlways"
+      }
+    },
+    {
+      "id" : "5B6D8E2A-3C4F-1D7E-9A5B-2E7F3D8C1B4A",
+      "name" : "UI Tests (Migration Flow)",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : true,
+          "targets" : [
+            {
+              "containerPath" : "container:trendy.xcodeproj",
+              "identifier" : "trendy",
+              "name" : "trendy"
+            }
+          ]
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : true
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "1"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "0"
+          },
+          {
+            "key" : "UITEST_HAS_LOCAL_DATA",
+            "value" : "1"
+          },
+          {
+            "key" : "UITEST_FIRST_LOGIN",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 180,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:trendy.xcodeproj",
+          "identifier" : "trendy",
+          "name" : "trendy"
+        },
+        "testExecutionOrdering" : "sequential",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "keepAlways",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "keepAlways"
+      }
+    },
+    {
+      "id" : "4A5C7D1B-2E6F-3C9E-8A4B-1D7E9F2C8B5A",
+      "name" : "Performance Tests",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : false
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : false
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "1"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : false,
+        "maximumTestExecutionTimeAllowance" : 300,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "testExecutionOrdering" : "sequential",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "deleteOnSuccess",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "deleteOnSuccess"
+      }
+    },
+    {
+      "id" : "3B4D6E8A-1C5F-2D9E-7A3B-2E8F4D7C9B6A",
+      "name" : "Integration Tests",
+      "options" : {
+        "addressSanitizer" : {
+          "enabled" : false
+        },
+        "codeCoverage" : {
+          "enabled" : true,
+          "targets" : [
+            {
+              "containerPath" : "container:trendy.xcodeproj",
+              "identifier" : "trendy",
+              "name" : "trendy"
+            }
+          ]
+        },
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "--uitesting",
+            "enabled" : false
+          }
+        ],
+        "environmentVariableEntries" : [
+          {
+            "key" : "UITEST_RESET_STATE",
+            "value" : "1"
+          },
+          {
+            "key" : "UITEST_USE_MOCK_API",
+            "value" : "1"
+          }
+        ],
+        "language" : "en",
+        "mainThreadCheckerEnabled" : true,
+        "maximumTestExecutionTimeAllowance" : 120,
+        "preferredScreenCaptureFormat" : "screenshot",
+        "region" : "US",
+        "testExecutionOrdering" : "random",
+        "threadSanitizerEnabled" : false,
+        "uiTestingScreenshotsLifetime" : "deleteOnSuccess",
+        "undefinedBehaviorSanitizerEnabled" : false,
+        "userAttachmentLifetime" : "deleteOnSuccess"
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : {
+      "enabled" : true,
+      "targets" : [
+        {
+          "containerPath" : "container:trendy.xcodeproj",
+          "identifier" : "trendy",
+          "name" : "trendy"
+        }
+      ]
+    },
+    "language" : "en",
+    "maximumTestExecutionTimeAllowance" : 60,
+    "region" : "US",
+    "testExecutionOrdering" : "random"
+  },
+  "testTargets" : [
+    {
+      "enabled" : true,
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:trendy.xcodeproj",
+        "identifier" : "trendyTests",
+        "name" : "trendyTests"
+      },
+      "skippedTests" : [
+        "EventStoreTests\/test_eventStore_performanceOfFetchEvents()",
+        "EventCreationFlowUITests\/test_eventCreation_performance()",
+        "EventCreationFlowUITests\/test_eventList_scrollPerformance()",
+        "LoginFlowUITests\/test_login_performanceOfAuthentication()",
+        "MigrationFlowUITests\/test_migration_performanceWith100Events()"
+      ]
+    },
+    {
+      "enabled" : true,
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:trendy.xcodeproj",
+        "identifier" : "trendyUITests",
+        "name" : "trendyUITests"
+      },
+      "skippedTests" : [
+        "EventCreationFlowUITests\/test_eventCreation_performance()",
+        "EventCreationFlowUITests\/test_eventList_scrollPerformance()",
+        "LoginFlowUITests\/test_login_performanceOfAuthentication()",
+        "MigrationFlowUITests\/test_migration_performanceWith100Events()"
+      ]
+    }
+  ],
+  "version" : 1
+}
