@@ -1,0 +1,23 @@
+{
+  "name": "trendsight-landing",
+  "version": "1.0.0",
+  "description": "TrendSight landing page with Cloudflare Pages waitlist form",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev .",
+    "deploy": "wrangler pages deploy .",
+    "db:create": "wrangler d1 create trendsight-waitlist",
+    "db:init": "wrangler d1 execute trendsight-waitlist --local --file=./schema.sql",
+    "db:init:remote": "wrangler d1 execute trendsight-waitlist --remote --file=./schema.sql",
+    "db:query": "wrangler d1 execute trendsight-waitlist --local --command",
+    "db:query:remote": "wrangler d1 execute trendsight-waitlist --remote --command",
+    "db:export": "wrangler d1 export trendsight-waitlist --output=waitlist-export.sql"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.95.0"
+  }
+}

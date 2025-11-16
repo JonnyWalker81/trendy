@@ -6,6 +6,7 @@
     <title>TrendSight - Track Anything, Discover Your Patterns</title>
     <meta name="description" content="Stop relying on memory. TrendSight is your flexible event tracking and life analytics app. Log any habit, symptom, or event—then discover meaningful patterns with beautiful insights.">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         body {
@@ -660,16 +661,111 @@
             <!-- Waitlist Form -->
             <div class="bg-white/10 backdrop-blur-sm rounded-2xl p-8 mb-8">
                 <h3 class="text-2xl font-bold text-white mb-6">Join the Waitlist for Early Access</h3>
-                <form class="max-w-md mx-auto">
+                <form id="waitlist-form" class="max-w-md mx-auto">
+                    <input type="hidden" name="_static_form_name" value="waitlist">
                     <div class="mb-4">
-                        <input type="email" placeholder="Enter your email" required class="w-full px-6 py-4 rounded-lg text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-blue-300">
+                        <input
+                            type="email"
+                            name="email"
+                            id="email"
+                            placeholder="Your email address"
+                            required
+                            class="w-full px-6 py-4 rounded-lg text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-blue-300"
+                        >
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-bold hover:bg-blue-700 transition shadow-lg">
+                    <div class="mb-4">
+                        <input
+                            type="text"
+                            name="name"
+                            id="name"
+                            placeholder="Your name (optional)"
+                            class="w-full px-6 py-4 rounded-lg text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-blue-300"
+                        >
+                    </div>
+                    <div class="mb-4">
+                        <select
+                            name="referral_source"
+                            id="referral_source"
+                            class="w-full px-6 py-4 rounded-lg text-gray-900 text-lg focus:outline-none focus:ring-4 focus:ring-blue-300"
+                        >
+                            <option value="">How did you hear about us? (optional)</option>
+                            <option value="search">Search Engine (Google, etc.)</option>
+                            <option value="social">Social Media</option>
+                            <option value="friend">Friend or Colleague</option>
+                            <option value="blog">Blog or Article</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-4 flex justify-center">
+                        <div class="cf-turnstile" data-sitekey="0x4AAAAAACBCi2ib7kgsVZvQ" data-theme="dark"></div>
+                        <!-- <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div> -->
+                    </div>
+                    <button
+                        type="submit"
+                        id="submit-btn"
+                        class="w-full bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-bold hover:bg-blue-700 transition shadow-lg disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    >
                         Get Early Access
                     </button>
+                    <div id="form-message" class="mt-4 text-center hidden"></div>
                     <p class="text-blue-200 text-sm mt-4">Be the first to know when TrendSight launches. No spam, ever.</p>
                 </form>
             </div>
+
+            <script>
+                // Waitlist form submission handling
+                (function() {
+                    const form = document.getElementById('waitlist-form');
+                    const submitBtn = document.getElementById('submit-btn');
+                    const messageDiv = document.getElementById('form-message');
+
+                    form.addEventListener('submit', async function(e) {
+                        e.preventDefault();
+
+                        // Disable submit button and show loading state
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'Submitting...';
+                        messageDiv.className = 'mt-4 text-center hidden';
+
+                        try {
+                            const formData = new FormData(form);
+
+                            const response = await fetch(window.location.pathname, {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            const result = await response.json();
+
+                            if (response.ok) {
+                                // Success
+                                messageDiv.className = 'mt-4 text-center p-4 bg-green-500/20 border border-green-500 rounded-lg text-green-200';
+                                messageDiv.textContent = result.message || 'Thanks for joining! Check your email for confirmation.';
+
+                                // Reset form
+                                form.reset();
+
+                                // Reset Turnstile widget
+                                if (window.turnstile) {
+                                    turnstile.reset();
+                                }
+                            } else {
+                                // Error
+                                messageDiv.className = 'mt-4 text-center p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200';
+                                messageDiv.textContent = result.error || 'An error occurred. Please try again.';
+                            }
+                        } catch (error) {
+                            // Network error
+                            messageDiv.className = 'mt-4 text-center p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200';
+                            messageDiv.textContent = 'Network error. Please check your connection and try again.';
+                        } finally {
+                            // Re-enable submit button
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Get Early Access';
+                        }
+                    });
+                })();
+            </script>
 
             <div class="text-blue-100">
                 <p class="text-lg">Questions? <a href="mailto:hello@trendsight.com" class="underline hover:text-white">Get in touch</a></p>

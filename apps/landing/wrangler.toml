@@ -1,0 +1,42 @@
+# Wrangler configuration for TrendSight Landing Page
+# See: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+
+name = "trendsight-landing"
+compatibility_date = "2024-11-01"
+
+# Pages-specific configuration
+pages_build_output_dir = "."
+
+# D1 Database Bindings
+# NOTE: After creating the D1 database, update the `database_id` below
+# Create database with: wrangler d1 create trendsight-waitlist
+[[d1_databases]]
+binding = "WAITLIST_DB"  # This is the variable name used in your code (env.WAITLIST_DB)
+database_name = "trendsight-waitlist"
+database_id = "154cc0f9-81a6-400b-b17f-9926ebad8682"  # Replace with actual database ID after creation
+
+# Environment Variables (non-secret)
+# Secrets should be set via: wrangler secret put SECRET_NAME
+# Or in Cloudflare Dashboard: Workers & Pages > Your Project > Settings > Environment Variables
+[vars]
+# Add non-secret environment variables here if needed
+# Example:
+# PUBLIC_URL = "https://trendsight.com"
+
+# For local development, create a .dev.vars file with:
+# RESEND_API_KEY=your_resend_api_key
+# TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+# ADMIN_EMAIL=admin@yourdomain.com
+# FROM_EMAIL=noreply@yourdomain.com
+
+# Production secrets must be set in Cloudflare dashboard or via:
+# wrangler secret put RESEND_API_KEY --env production
+# wrangler secret put TURNSTILE_SECRET_KEY --env production
+# wrangler secret put ADMIN_EMAIL --env production
+# wrangler secret put FROM_EMAIL --env production
+
+# Node.js compatibility (required for Resend SDK)
+node_compat = true
+
+# Compatibility flags
+compatibility_flags = ["nodejs_compat"]

@@ -1,0 +1,14 @@
+# Cloudflare Pages Local Development Environment Variables
+# Copy this file to .dev.vars and fill in your actual values
+
+# Resend API Key (get from https://resend.com/api-keys)
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Cloudflare Turnstile Secret Key (get from Cloudflare Dashboard > Turnstile)
+TURNSTILE_SECRET_KEY=0x4AAAAAAAxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Admin email for waitlist signup notifications
+ADMIN_EMAIL=admin@yourdomain.com
+
+# From email address (must be verified in Resend)
+FROM_EMAIL=noreply@yourdomain.com
