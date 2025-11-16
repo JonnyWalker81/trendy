@@ -351,37 +351,60 @@ async function sendEmails(
   email: string,
   name: string
 ): Promise<void> {
+  // Log environment variables for debugging (first 10 chars of API key)
+  console.log("[EMAIL] Environment check:", {
+    hasResendKey: !!env.RESEND_API_KEY,
+    resendKeyPrefix: env.RESEND_API_KEY?.substring(0, 10) || "undefined",
+    fromEmail: env.FROM_EMAIL || "undefined",
+    adminEmail: env.ADMIN_EMAIL || "undefined",
+  });
+
   // Skip email sending in development mode
   if (!env.RESEND_API_KEY || env.RESEND_API_KEY.startsWith("re_test") || env.RESEND_API_KEY === "re_test_key_placeholder") {
-    console.log("Development mode: Skipping email sending (no valid Resend API key)");
+    console.log("[EMAIL] Development mode: Skipping email sending (no valid Resend API key)");
+    return;
+  }
+
+  // Validate required environment variables
+  if (!env.FROM_EMAIL) {
+    console.error("[EMAIL] FROM_EMAIL environment variable is not set");
+    return;
+  }
+
+  if (!env.ADMIN_EMAIL) {
+    console.error("[EMAIL] ADMIN_EMAIL environment variable is not set");
     return;
   }
 
   // Send confirmation email to user
   try {
+    console.log(`[EMAIL] Attempting to send confirmation email to: ${email}`);
     await sendResendEmail(env, {
       from: env.FROM_EMAIL,
       to: email,
       subject: "Welcome to the TrendSight Waitlist!",
       html: getUserConfirmationEmail(name),
     });
-    console.log(`Confirmation email sent to: ${email}`);
+    console.log(`[EMAIL] ✓ Confirmation email sent successfully to: ${email}`);
   } catch (error) {
-    console.error("Failed to send user confirmation email:", error);
+    console.error("[EMAIL] ✗ Failed to send user confirmation email:", error);
+    console.error("[EMAIL] Error details:", error instanceof Error ? error.message : String(error));
     // Don't throw - signup is still successful even if email fails
   }
 
   // Send notification to admin
   try {
+    console.log(`[EMAIL] Attempting to send admin notification to: ${env.ADMIN_EMAIL}`);
     await sendResendEmail(env, {
       from: env.FROM_EMAIL,
       to: env.ADMIN_EMAIL,
       subject: "New TrendSight Waitlist Signup",
       html: getAdminNotificationEmail(email, name),
     });
-    console.log(`Admin notification sent to: ${env.ADMIN_EMAIL}`);
+    console.log(`[EMAIL] ✓ Admin notification sent successfully to: ${env.ADMIN_EMAIL}`);
   } catch (error) {
-    console.error("Failed to send admin notification email:", error);
+    console.error("[EMAIL] ✗ Failed to send admin notification email:", error);
+    console.error("[EMAIL] Error details:", error instanceof Error ? error.message : String(error));
     // Don't throw - signup is still successful
   }
 }
@@ -393,6 +416,12 @@ async function sendResendEmail(
   env: Env,
   emailData: { from: string; to: string; subject: string; html: string }
 ): Promise<void> {
+  console.log("[RESEND] Sending email request:", {
+    from: emailData.from,
+    to: emailData.to,
+    subject: emailData.subject,
+  });
+
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -402,10 +431,24 @@ async function sendResendEmail(
     body: JSON.stringify(emailData),
   });
 
+  console.log("[RESEND] Response status:", response.status, response.statusText);
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Resend API error: ${error}`);
+    const errorText = await response.text();
+    console.error("[RESEND] API error response:", errorText);
+
+    let errorDetails;
+    try {
+      errorDetails = JSON.parse(errorText);
+    } catch {
+      errorDetails = errorText;
+    }
+
+    throw new Error(`Resend API error (${response.status}): ${JSON.stringify(errorDetails)}`);
   }
+
+  const result = await response.json();
+  console.log("[RESEND] Success response:", result);
 }
 
 /**
