@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler pages dev .",
+    "dev": "wrangler pages dev . --compatibility-date=2024-11-01",
     "deploy": "wrangler pages deploy .",
     "db:create": "wrangler d1 create trendsight-waitlist",
     "db:init": "wrangler d1 execute trendsight-waitlist --local --file=./schema.sql",
@@ -14,10 +14,9 @@
     "db:query:remote": "wrangler d1 execute trendsight-waitlist --remote --command",
     "db:export": "wrangler d1 export trendsight-waitlist --output=waitlist-export.sql"
   },
-  "dependencies": {},
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",
     "typescript": "^5.7.2",
-    "wrangler": "^3.95.0"
+    "wrangler": "^4.47.0"
   }
 }

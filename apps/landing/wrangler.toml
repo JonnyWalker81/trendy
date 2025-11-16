@@ -25,15 +25,27 @@ database_id = "154cc0f9-81a6-400b-b17f-9926ebad8682"  # Replace with actual data
 
 # For local development, create a .dev.vars file with:
 # RESEND_API_KEY=your_resend_api_key
+# RESEND_AUDIENCE_ID=your_audience_id
+# RESEND_WEBHOOK_SECRET=your_webhook_secret
 # TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+VERIFICATION_BASE_URL="https://trendsight.app"
 ADMIN_EMAIL = "support@trendsight.app"
 FROM_EMAIL = "noreply@trendsight.app"
 
-# Production secrets must be set in Cloudflare dashboard or via:
+# Production secrets must be set in Cloudflare dashboard or via wrangler CLI:
 # wrangler secret put RESEND_API_KEY --env production
+# wrangler secret put RESEND_AUDIENCE_ID --env production
+# wrangler secret put RESEND_WEBHOOK_SECRET --env production
 # wrangler secret put TURNSTILE_SECRET_KEY --env production
+# wrangler secret put VERIFICATION_BASE_URL --env production
 # wrangler secret put ADMIN_EMAIL --env production
 # wrangler secret put FROM_EMAIL --env production
+#
+# Required Resend Setup:
+# 1. Create Audience in Resend Dashboard for contact syncing
+# 2. Create Webhook endpoint: POST /webhooks/resend
+#    - Configure events: email.sent, email.opened, email.clicked, email.bounced, email.complained
+# 3. Verify FROM_EMAIL domain in Resend Dashboard
 
 # Node.js compatibility (required for Resend SDK)
 node_compat = true

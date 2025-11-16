@@ -1,10 +1,15 @@
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
+  console.log('[MIDDLEWARE] Request received:', request.method, new URL(request.url).pathname);
+
   // Only handle POST requests to forms
   if (request.method !== "POST") {
-    return env.ASSETS.fetch(request);
+    console.log('[MIDDLEWARE] Not a POST request, passing to next handler');
+    return context.next();
   }
+
+  console.log('[MIDDLEWARE] Processing POST request');
 
   try {
     // Initialize database tables if they don't exist (for local development)
@@ -23,6 +28,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const email = formData.get("email") as string;
     const userName = formData.get("name") as string;
     const referralSource = formData.get("referral_source") as string;
+    const referralCode = formData.get("referral_code") as string; // NEW: referral code from friend
     const turnstileToken = formData.get("cf-turnstile-response") as string;
 
     // Get request metadata
@@ -53,25 +59,35 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         return jsonResponse({ error: "This email is already on the waitlist." }, 409);
       }
 
-      // 5. INSERT INTO DATABASE
-      await insertSignup(env.WAITLIST_DB, {
+      // 5. VALIDATE REFERRAL CODE (if provided)
+      if (referralCode) {
+        const validReferral = await validateReferralCode(env.WAITLIST_DB, referralCode);
+        if (!validReferral) {
+          // Don't fail signup, just log invalid referral code
+          console.log('[SIGNUP] Invalid referral code provided:', referralCode);
+        }
+      }
+
+      // 6. INSERT INTO DATABASE (with verification tokens)
+      const newContact = await insertSignup(env.WAITLIST_DB, {
         email,
         name: userName || null,
         referral_source: referralSource || null,
+        referral_code: referralCode || null,
         ip_address: ipAddress,
         user_agent: userAgent,
       });
 
-      // 6. UPDATE RATE LIMIT TRACKING
+      // 7. UPDATE RATE LIMIT TRACKING
       await updateRateLimit(env.WAITLIST_DB, ipAddress);
 
-      // 7. SEND EMAILS
-      await sendEmails(env, email, userName);
+      // 8. SEND VERIFICATION EMAIL (double opt-in)
+      await sendVerificationEmail(env, newContact);
 
-      // 8. RETURN SUCCESS
+      // 9. RETURN SUCCESS
       return jsonResponse({
         success: true,
-        message: "Thanks for joining the waitlist! Check your email for confirmation."
+        message: "Thanks for joining! Please check your email to verify your address."
       }, 200);
 
   } catch (error) {
@@ -287,25 +303,75 @@ async function checkDuplicate(
 }
 
 /**
- * Insert new signup into database
+ * Validate referral code exists
+ */
+async function validateReferralCode(
+  db: D1Database,
+  referralCode: string
+): Promise<boolean> {
+  try {
+    const referrer = await db
+      .prepare("SELECT id FROM waitlist WHERE invite_code = ?")
+      .bind(referralCode)
+      .first();
+    return referrer !== null;
+  } catch (error) {
+    console.error("Referral code validation error:", error);
+    return false;
+  }
+}
+
+/**
+ * Insert new signup into database with verification tokens
  */
 async function insertSignup(
   db: D1Database,
   data: Partial<WaitlistSignup>
-): Promise<void> {
-  await db
+): Promise<WaitlistSignup> {
+  // Generate verification and unsubscribe tokens
+  const verificationToken = generateToken();
+  const unsubscribeToken = generateToken();
+  const now = new Date().toISOString();
+
+  // Insert the record
+  const result = await db
     .prepare(
-      `INSERT INTO waitlist (email, name, referral_source, ip_address, user_agent)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO waitlist (
+        email, name, referral_source, referral_code, ip_address, user_agent,
+        email_status, verification_token, verification_sent_at, unsubscribe_token
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
     )
     .bind(
       data.email,
       data.name || null,
       data.referral_source || null,
+      data.referral_code || null,
       data.ip_address || null,
-      data.user_agent || null
+      data.user_agent || null,
+      verificationToken,
+      now,
+      unsubscribeToken
     )
     .run();
+
+  // Fetch and return the newly created contact (with auto-generated invite_code from trigger)
+  const contact = await db
+    .prepare("SELECT * FROM waitlist WHERE id = ?")
+    .bind(result.meta.last_row_id)
+    .first<WaitlistSignup>();
+
+  return contact!;
+}
+
+/**
+ * Generate secure random token
+ */
+function generateToken(): string {
+  // Generate 32 random bytes as hex string
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -344,69 +410,95 @@ async function updateRateLimit(
 }
 
 /**
- * Send confirmation email to user and notification to admin
+ * Send verification email (double opt-in)
  */
-async function sendEmails(
+async function sendVerificationEmail(
   env: Env,
-  email: string,
-  name: string
+  contact: WaitlistSignup
 ): Promise<void> {
-  // Log environment variables for debugging (first 10 chars of API key)
-  console.log("[EMAIL] Environment check:", {
-    hasResendKey: !!env.RESEND_API_KEY,
-    resendKeyPrefix: env.RESEND_API_KEY?.substring(0, 10) || "undefined",
-    fromEmail: env.FROM_EMAIL || "undefined",
-    adminEmail: env.ADMIN_EMAIL || "undefined",
-  });
+  console.log("[VERIFY_EMAIL] Sending verification email to:", contact.email);
 
   // Skip email sending in development mode
   if (!env.RESEND_API_KEY || env.RESEND_API_KEY.startsWith("re_test") || env.RESEND_API_KEY === "re_test_key_placeholder") {
-    console.log("[EMAIL] Development mode: Skipping email sending (no valid Resend API key)");
+    console.log("[VERIFY_EMAIL] Development mode: Skipping email (no valid Resend API key)");
     return;
   }
 
   // Validate required environment variables
   if (!env.FROM_EMAIL) {
-    console.error("[EMAIL] FROM_EMAIL environment variable is not set");
+    console.error("[VERIFY_EMAIL] FROM_EMAIL environment variable is not set");
     return;
   }
 
-  if (!env.ADMIN_EMAIL) {
-    console.error("[EMAIL] ADMIN_EMAIL environment variable is not set");
+  if (!env.VERIFICATION_BASE_URL) {
+    console.error("[VERIFY_EMAIL] VERIFICATION_BASE_URL environment variable is not set");
     return;
   }
 
-  // Send confirmation email to user
-  try {
-    console.log(`[EMAIL] Attempting to send confirmation email to: ${email}`);
-    await sendResendEmail(env, {
-      from: env.FROM_EMAIL,
-      to: email,
-      subject: "Welcome to the TrendSight Waitlist!",
-      html: getUserConfirmationEmail(name),
-    });
-    console.log(`[EMAIL] ✓ Confirmation email sent successfully to: ${email}`);
-  } catch (error) {
-    console.error("[EMAIL] ✗ Failed to send user confirmation email:", error);
-    console.error("[EMAIL] Error details:", error instanceof Error ? error.message : String(error));
-    // Don't throw - signup is still successful even if email fails
-  }
+  const verificationUrl = `${env.VERIFICATION_BASE_URL}/verify?token=${contact.verification_token}`;
 
-  // Send notification to admin
   try {
-    console.log(`[EMAIL] Attempting to send admin notification to: ${env.ADMIN_EMAIL}`);
     await sendResendEmail(env, {
       from: env.FROM_EMAIL,
-      to: env.ADMIN_EMAIL,
-      subject: "New TrendSight Waitlist Signup",
-      html: getAdminNotificationEmail(email, name),
+      to: contact.email,
+      subject: "Verify your email for TrendSight waitlist",
+      html: getVerificationEmailHTML(contact, verificationUrl),
     });
-    console.log(`[EMAIL] ✓ Admin notification sent successfully to: ${env.ADMIN_EMAIL}`);
+    console.log(`[VERIFY_EMAIL] ✓ Verification email sent to: ${contact.email}`);
   } catch (error) {
-    console.error("[EMAIL] ✗ Failed to send admin notification email:", error);
-    console.error("[EMAIL] Error details:", error instanceof Error ? error.message : String(error));
-    // Don't throw - signup is still successful
+    console.error("[VERIFY_EMAIL] ✗ Failed to send verification email:", error);
+    console.error("[VERIFY_EMAIL] Error details:", error instanceof Error ? error.message : String(error));
+    // Don't throw - signup is still recorded, user can request new verification
   }
+}
+
+/**
+ * Generate verification email HTML
+ */
+function getVerificationEmailHTML(contact: WaitlistSignup, verificationUrl: string): string {
+  const firstName = contact.name?.split(' ')[0] || 'there';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 0; background-color: #f5f5f5;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <div style="background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%); color: #ffffff; padding: 40px 20px; text-align: center;">
+          <h1 style="margin: 0; font-size: 28px; color: #ffffff;">✉️ Verify Your Email</h1>
+        </div>
+
+        <div style="padding: 40px 30px;">
+          <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333;">Hi ${firstName},</p>
+
+          <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333;">Thanks for joining the TrendSight waitlist! Please verify your email address to confirm your spot.</p>
+
+          <div style="text-align: center; margin: 35px 0;">
+            <a href="${verificationUrl}" style="display: inline-block; background: #1e40af; color: #ffffff !important; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Verify Email Address</a>
+          </div>
+
+          <p style="margin: 20px 0; font-size: 14px; color: #6b7280; text-align: center;">Or copy and paste this link into your browser:</p>
+          <p style="margin: 0 0 30px 0; font-size: 13px; color: #1e40af; word-break: break-all; text-align: center; font-family: 'Courier New', monospace;">${verificationUrl}</p>
+
+          <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px 20px; border-radius: 6px; margin: 30px 0;">
+            <p style="margin: 0; font-size: 14px; color: #92400e;"><strong>⏰ This link expires in 24 hours</strong></p>
+          </div>
+
+          <p style="margin: 30px 0 0 0; font-size: 16px; color: #333333;">Once verified, you'll get your waitlist position and unique invite code to share with friends!</p>
+
+          <p style="margin: 20px 0 0 0; font-size: 14px; color: #6b7280;">If you didn't sign up for TrendSight, you can safely ignore this email.</p>
+        </div>
+
+        <div style="background: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0; color: #6b7280; font-size: 14px;">TrendSight - Track Anything, Discover Your Patterns</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }
 
 /**
