@@ -181,6 +181,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
               { name: 'campaign_type', value: campaign_type },
               { name: 'segment', value: segment },
             ],
+            headers: {
+              'X-Entity-Ref-ID': recipient.email, // Enable per-recipient tracking
+            },
           }),
         });
 
@@ -204,6 +207,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                 { name: 'campaign_type', value: campaign_type },
                 { name: 'segment', value: segment },
               ],
+              headers: {
+                'X-Entity-Ref-ID': recipient.email, // Enable per-recipient tracking
+              },
             }),
           });
         }
