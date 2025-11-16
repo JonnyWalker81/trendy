@@ -1,10 +1,18 @@
 /**
  * Dynamic Landing Page Handler
  * Serves the landing page with environment-specific Turnstile site key
+ * Catch-all handler for GET requests that don't match other routes
  */
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const { env } = context;
+  const { env, request } = context;
+  const url = new URL(request.url);
+
+  // Only serve landing page for root path
+  if (url.pathname !== '/') {
+    // Pass through to other handlers or 404
+    return context.next();
+  }
 
   try {
     // Fetch the template HTML from assets
