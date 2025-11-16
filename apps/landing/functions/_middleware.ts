@@ -1,7 +1,13 @@
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  console.log('[MIDDLEWARE] Request received:', request.method, new URL(request.url).pathname);
+  const pathname = new URL(request.url).pathname;
+  console.log('[MIDDLEWARE] Request received:', request.method, pathname);
+
+  // Skip admin routes - they have their own middleware
+  if (pathname.startsWith('/admin')) {
+    return context.next();
+  }
 
   // Only handle POST requests to forms
   if (request.method !== "POST") {

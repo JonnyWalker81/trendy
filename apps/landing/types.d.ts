@@ -12,8 +12,10 @@ interface Env {
   RESEND_WEBHOOK_SECRET: string;
   RESEND_AUDIENCE_ID: string;
   ADMIN_EMAIL: string;
+  ADMIN_PASSWORD: string; // For admin console login
   FROM_EMAIL: string;
   VERIFICATION_BASE_URL: string;
+  ADMIN_SECRET: string; // For admin API endpoints like /admin/send-launch-emails
 
   // Assets binding (for fetching static files)
   ASSETS: Fetcher;
