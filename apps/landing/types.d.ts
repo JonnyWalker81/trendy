@@ -8,11 +8,15 @@ interface Env {
   // Secrets (set in Cloudflare dashboard or .dev.vars)
   RESEND_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
+  TURNSTILE_SITE_KEY: string;
   RESEND_WEBHOOK_SECRET: string;
   RESEND_AUDIENCE_ID: string;
   ADMIN_EMAIL: string;
   FROM_EMAIL: string;
   VERIFICATION_BASE_URL: string;
+
+  // Assets binding (for fetching static files)
+  ASSETS: Fetcher;
 }
 
 // Email status enum

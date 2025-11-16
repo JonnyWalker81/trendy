@@ -8,8 +8,9 @@
 -- Usage (PRODUCTION):
 --   npx wrangler d1 execute trendsight-waitlist --remote --file=./migrate-existing.sql
 --
-
-BEGIN TRANSACTION;
+-- NOTE: D1 remote databases don't support explicit transaction statements
+--       Each statement runs in its own implicit transaction
+--
 
 -- ============================================================================
 -- STEP 1: Add new columns to waitlist table
@@ -212,8 +213,6 @@ BEGIN
   SET referrals_count = referrals_count + 1
   WHERE invite_code = NEW.referral_code;
 END;
-
-COMMIT;
 
 -- ============================================================================
 -- VERIFICATION
