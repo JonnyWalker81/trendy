@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Dashboard } from './pages/Dashboard'
 import { Login } from './pages/Login'
+import { Signup } from './pages/Signup'
 import { EventList } from './pages/EventList'
 import { Analytics } from './pages/Analytics'
 import { Settings } from './pages/Settings'
@@ -25,6 +26,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={session ? <Navigate to="/" /> : <Login />} />
+          <Route path="/signup" element={session ? <Navigate to="/" /> : <Signup />} />
           <Route path="/" element={session ? <Dashboard /> : <Navigate to="/login" />} />
           <Route path="/events" element={session ? <EventList /> : <Navigate to="/login" />} />
           <Route path="/analytics" element={session ? <Analytics /> : <Navigate to="/login" />} />

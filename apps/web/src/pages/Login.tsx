@@ -1,11 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [isSignup, setIsSignup] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -14,13 +14,8 @@ export function Login() {
     setError('')
 
     try {
-      if (isSignup) {
-        const { error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -40,7 +35,7 @@ export function Login() {
             TrendSight
           </h2>
           <p className="mt-2 text-muted-foreground text-lg">
-            {isSignup ? 'Create your account' : 'Welcome back'}
+            Welcome back
           </p>
         </div>
 
@@ -99,21 +94,20 @@ export function Login() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Processing...
+                  Signing in...
                 </>
               ) : (
-                isSignup ? 'Create Account' : 'Sign In'
+                'Sign In'
               )}
             </button>
 
             <div className="text-center pt-4">
-              <button
-                type="button"
+              <Link
+                to="/signup"
                 className="text-sm text-primary hover:text-primary/80 font-medium transition duration-200"
-                onClick={() => setIsSignup(!isSignup)}
               >
-                {isSignup ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
-              </button>
+                Don't have an account? Sign up
+              </Link>
             </div>
           </form>
         </div>
