@@ -70,11 +70,25 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     console.log('[VERIFY] Email verified successfully', { email: contact.email });
 
-    // 4. Get updated contact with waitlist position (assigned by trigger)
+    // 4. Get updated contact with computed position (score-based ranking)
     const updatedContact = await env.WAITLIST_DB
-      .prepare('SELECT * FROM waitlist WHERE id = ?')
+      .prepare(`
+        SELECT
+          *,
+          (
+            SELECT COUNT(*) + 1
+            FROM waitlist w2
+            WHERE w2.email_status = 'verified'
+            AND (
+              w2.score > w1.score
+              OR (w2.score = w1.score AND w2.created_at < w1.created_at)
+            )
+          ) as position
+        FROM waitlist w1
+        WHERE w1.id = ?
+      `)
       .bind(contact.id)
-      .first<WaitlistSignup>();
+      .first<WaitlistSignup & { position: number }>();
 
     // 5. Sync to Resend Audiences (if configured)
     if (env.RESEND_API_KEY && env.RESEND_AUDIENCE_ID &&
@@ -90,7 +104,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       }
     }
 
-    // 6. Send welcome email with waitlist position
+    // 6. Send welcome email with computed waitlist position
     try {
       await sendWelcomeEmail(env, updatedContact!);
     } catch (error) {
@@ -98,7 +112,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       // Don't fail verification if email sending fails
     }
 
-    // 7. Return success page
+    // 7. Return success page with computed position
     return new Response(getSuccessPage(updatedContact!), {
       status: 200,
       headers: { 'Content-Type': 'text/html' },
@@ -158,7 +172,7 @@ async function syncToResendAudience(env: Env, contact: WaitlistSignup): Promise<
 /**
  * Send welcome email after verification
  */
-async function sendWelcomeEmail(env: Env, contact: WaitlistSignup): Promise<void> {
+async function sendWelcomeEmail(env: Env, contact: WaitlistSignup & { position: number }): Promise<void> {
   // Skip in dev mode
   if (!env.RESEND_API_KEY || env.RESEND_API_KEY.startsWith('re_test') || env.RESEND_API_KEY === 're_test_key_placeholder') {
     console.log('[VERIFY] Skipping welcome email (dev mode)');
@@ -174,7 +188,7 @@ async function sendWelcomeEmail(env: Env, contact: WaitlistSignup): Promise<void
     body: JSON.stringify({
       from: env.FROM_EMAIL,
       to: contact.email,
-      subject: `You're #${contact.waitlist_position} on the TrendSight waitlist!`,
+      subject: `You're #${contact.position} on the TrendSight waitlist!`,
       html: getWelcomeEmailHTML(env, contact),
     }),
   });
@@ -191,9 +205,9 @@ async function sendWelcomeEmail(env: Env, contact: WaitlistSignup): Promise<void
 /**
  * Generate welcome email HTML
  */
-function getWelcomeEmailHTML(env: Env, contact: WaitlistSignup): string {
+function getWelcomeEmailHTML(env: Env, contact: WaitlistSignup & { position: number }): string {
   const firstName = contact.name?.split(' ')[0] || 'there';
-  const position = contact.waitlist_position || 0;
+  const position = contact.position || 0;
   const inviteCode = contact.invite_code || '';
 
   return `
@@ -259,9 +273,9 @@ function getWelcomeEmailHTML(env: Env, contact: WaitlistSignup): string {
 /**
  * Success page HTML
  */
-function getSuccessPage(contact: WaitlistSignup): string {
+function getSuccessPage(contact: WaitlistSignup & { position: number }): string {
   const firstName = contact.name?.split(' ')[0] || 'there';
-  const position = contact.waitlist_position || 0;
+  const position = contact.position || 0;
   const inviteCode = contact.invite_code || '';
 
   return `

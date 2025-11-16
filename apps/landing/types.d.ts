@@ -56,7 +56,8 @@ interface WaitlistSignup {
   unsubscribe_token?: string;
 
   // Waitlist position & personalization
-  waitlist_position?: number;
+  waitlist_position?: number; // DEPRECATED: Use score-based ranking
+  score?: number; // Score-based ranking (higher = better position)
   invite_code?: string;
   referral_code?: string;
   referrals_count?: number;

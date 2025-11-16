@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS waitlist (
   unsubscribe_token TEXT UNIQUE,
 
   -- Waitlist position & personalization
-  waitlist_position INTEGER,
+  waitlist_position INTEGER, -- DEPRECATED: Use score-based ranking instead
+  score REAL DEFAULT 0, -- Score-based ranking (higher = better position)
   invite_code TEXT UNIQUE,
   referral_code TEXT, -- Code they used to sign up (who referred them)
   referrals_count INTEGER DEFAULT 0,
@@ -76,7 +77,8 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist(email);
 CREATE INDEX IF NOT EXISTS idx_waitlist_email_status ON waitlist(email_status);
 CREATE INDEX IF NOT EXISTS idx_waitlist_verification_token ON waitlist(verification_token);
 CREATE INDEX IF NOT EXISTS idx_waitlist_unsubscribe_token ON waitlist(unsubscribe_token);
-CREATE INDEX IF NOT EXISTS idx_waitlist_position ON waitlist(waitlist_position);
+CREATE INDEX IF NOT EXISTS idx_waitlist_position ON waitlist(waitlist_position); -- DEPRECATED
+CREATE INDEX IF NOT EXISTS idx_waitlist_score ON waitlist(score DESC); -- Score-based ranking
 CREATE INDEX IF NOT EXISTS idx_waitlist_invite_code ON waitlist(invite_code);
 CREATE INDEX IF NOT EXISTS idx_waitlist_referral_code ON waitlist(referral_code);
 CREATE INDEX IF NOT EXISTS idx_waitlist_tier ON waitlist(tier);
@@ -174,6 +176,26 @@ CREATE INDEX IF NOT EXISTS idx_rate_limits_last_attempt ON rate_limits(last_atte
 -- TRIGGERS
 -- ============================================================================
 
+-- SCORE-BASED RANKING CONFIGURATION
+-- Score Formula: (CONSTANT - signup_timestamp) + (referrals × REFERRAL_WEIGHT)
+-- CONSTANT = 2524608000 (Unix timestamp for Jan 1, 2050, 00:00:00 UTC)
+-- REFERRAL_WEIGHT = 86400 seconds (1 day)
+--
+-- This formula ensures:
+-- - Earlier signups have higher scores (stable over time)
+-- - Each verified referral adds 86400 to the score
+-- - Position is computed dynamically via ROW_NUMBER() over score DESC
+--
+-- To adjust the referral weight, change the "86400" value in the triggers below:
+-- - recalculate_score_on_verify (line ~224)
+-- - increment_referral_count (line ~244)
+--
+-- Examples:
+--   43200  = 12 hours (weaker referral bonus)
+--   86400  = 1 day (default)
+--   172800 = 2 days (stronger referral bonus)
+--   604800 = 1 week (very strong referral bonus)
+
 -- Update timestamp on any row update
 CREATE TRIGGER IF NOT EXISTS update_waitlist_timestamp
 AFTER UPDATE ON waitlist
@@ -181,21 +203,31 @@ BEGIN
   UPDATE waitlist SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
--- Auto-assign waitlist position when email is verified
-CREATE TRIGGER IF NOT EXISTS assign_waitlist_position
+-- DEPRECATED: Old position-shifting trigger (replaced by score-based ranking)
+-- CREATE TRIGGER IF NOT EXISTS assign_waitlist_position ...
+
+-- Calculate initial score on insert (based on signup time only)
+-- Score = (CONSTANT - signup_timestamp) + (referrals * REFERRAL_WEIGHT)
+-- CONSTANT = 2524608000 (Unix timestamp for Jan 1, 2050, 00:00:00 UTC)
+-- REFERRAL_WEIGHT = 86400 seconds (1 day), meaning 1 referral = signed up 1 day earlier
+-- This formula ensures earlier signups have higher scores and scores are stable over time
+CREATE TRIGGER IF NOT EXISTS calculate_initial_score
+AFTER INSERT ON waitlist
+BEGIN
+  UPDATE waitlist
+  SET score = 2524608000 - CAST(strftime('%s', NEW.created_at) AS INTEGER)
+  WHERE id = NEW.id;
+END;
+
+-- Recalculate score when email is verified (adds referral bonus)
+CREATE TRIGGER IF NOT EXISTS recalculate_score_on_verify
 AFTER UPDATE OF email_status ON waitlist
 WHEN NEW.email_status = 'verified' AND OLD.email_status != 'verified'
 BEGIN
   UPDATE waitlist
-  SET waitlist_position = (
-    SELECT COUNT(*) + 1 FROM waitlist WHERE email_status = 'verified' AND id < NEW.id
-  )
+  SET score = (2524608000 - CAST(strftime('%s', NEW.created_at) AS INTEGER))
+            + (NEW.referrals_count * 86400)
   WHERE id = NEW.id;
-
-  -- Update positions of users who signed up after this one
-  UPDATE waitlist
-  SET waitlist_position = waitlist_position + 1
-  WHERE email_status = 'verified' AND id > NEW.id AND waitlist_position IS NOT NULL;
 END;
 
 -- Auto-generate invite code on insert
@@ -207,13 +239,15 @@ BEGIN
   WHERE id = NEW.id AND invite_code IS NULL;
 END;
 
--- Increment referral count when someone uses a referral code
+-- Increment referral count and recalculate score when someone uses a referral code
 CREATE TRIGGER IF NOT EXISTS increment_referral_count
 AFTER UPDATE OF email_status ON waitlist
 WHEN NEW.email_status = 'verified' AND OLD.email_status != 'verified' AND NEW.referral_code IS NOT NULL
 BEGIN
   UPDATE waitlist
-  SET referrals_count = referrals_count + 1
+  SET referrals_count = referrals_count + 1,
+      score = (2524608000 - CAST(strftime('%s', created_at) AS INTEGER))
+            + ((referrals_count + 1) * 86400)
   WHERE invite_code = NEW.referral_code;
 END;
 
@@ -253,3 +287,51 @@ END;
 
 -- Query: Cleanup old email events (run monthly, keep 2 years)
 -- DELETE FROM email_events WHERE event_timestamp < datetime('now', '-2 years');
+
+-- ============================================================================
+-- SCORE-BASED RANKING QUERIES (NEW SYSTEM)
+-- ============================================================================
+
+-- Query: Get waitlist with dynamic positions (score-based ranking)
+-- SELECT
+--   email,
+--   name,
+--   score,
+--   referrals_count,
+--   ROW_NUMBER() OVER (ORDER BY score DESC, created_at ASC) as position
+-- FROM waitlist
+-- WHERE email_status = 'verified'
+-- ORDER BY score DESC, created_at ASC;
+
+-- Query: Get a single user's position
+-- SELECT
+--   email,
+--   score,
+--   (SELECT COUNT(*) FROM waitlist w2
+--    WHERE w2.email_status = 'verified'
+--    AND (w2.score > w1.score OR (w2.score = w1.score AND w2.created_at < w1.created_at))) + 1 as position
+-- FROM waitlist w1
+-- WHERE email = 'user@example.com' AND email_status = 'verified';
+
+-- Query: Get top N users (leaderboard)
+-- SELECT
+--   email,
+--   name,
+--   score,
+--   referrals_count,
+--   ROW_NUMBER() OVER (ORDER BY score DESC, created_at ASC) as position
+-- FROM waitlist
+-- WHERE email_status = 'verified'
+-- ORDER BY score DESC, created_at ASC
+-- LIMIT 100;
+
+-- Query: Recalculate all scores (maintenance operation)
+-- UPDATE waitlist
+-- SET score = (2524608000 - CAST(strftime('%s', created_at) AS INTEGER))
+--           + (referrals_count * 86400)
+-- WHERE email_status = 'verified';
+
+-- NOTE: Score formula uses a constant future timestamp (Jan 1, 2050) to ensure stability
+-- Referral weight is 86400 seconds (1 day)
+-- This means each verified referral moves you up as if you signed up 1 day earlier
+-- Adjust the 86400 value in triggers to tune the power of referrals vs. signup time
