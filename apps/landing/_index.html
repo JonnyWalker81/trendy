@@ -757,11 +757,6 @@
 
                                 // Reset form
                                 form.reset();
-
-                                // Reset Turnstile widget
-                                if (window.turnstile) {
-                                    turnstile.reset();
-                                }
                             } else {
                                 // Error
                                 messageDiv.className = 'mt-4 text-center p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200';
@@ -775,6 +770,11 @@
                             // Re-enable submit button
                             submitBtn.disabled = false;
                             submitBtn.textContent = 'Get Early Access';
+
+                            // Always reset Turnstile widget to allow resubmission
+                            if (window.turnstile) {
+                                turnstile.reset();
+                            }
                         }
                     });
                 })();
