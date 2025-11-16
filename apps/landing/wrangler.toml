@@ -26,8 +26,8 @@ database_id = "154cc0f9-81a6-400b-b17f-9926ebad8682"  # Replace with actual data
 # For local development, create a .dev.vars file with:
 # RESEND_API_KEY=your_resend_api_key
 # TURNSTILE_SECRET_KEY=your_turnstile_secret_key
-ADMIN_EMAIL=support@trendsight.app
-FROM_EMAIL=noreply@trendsight.app
+ADMIN_EMAIL = "support@trendsight.app"
+FROM_EMAIL = "noreply@trendsight.app"
 
 # Production secrets must be set in Cloudflare dashboard or via:
 # wrangler secret put RESEND_API_KEY --env production
