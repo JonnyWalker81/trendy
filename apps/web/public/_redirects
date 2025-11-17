@@ -1,7 +1,7 @@
 # Cloudflare Pages SPA Routing Configuration
 
 # API proxy to backend (MUST be before SPA fallback)
-/api/*  https://trendy-api-prod-541486728137.us-central1.run.app/api/:splat  200
+/api/*  https://trendy-api-prod-wo3aoiilrq-uc.a.run.app/api/:splat  200
 
 # Serve index.html for all routes (SPA fallback)
 # The 200 status ensures the URL stays the same in the browser
