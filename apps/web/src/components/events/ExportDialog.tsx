@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { format, subDays, subMonths, subYears } from 'date-fns'
+import { format as formatDate, subDays, subYears } from 'date-fns'
 import { Download, Loader2 } from 'lucide-react'
 import {
   Dialog,
@@ -203,7 +203,7 @@ export function ExportDialog({ open, onOpenChange }: ExportDialogProps) {
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    max={customEndDate || format(new Date(), 'yyyy-MM-dd')}
+                    max={customEndDate || formatDate(new Date(), 'yyyy-MM-dd')}
                   />
                 </div>
                 <div>
@@ -216,7 +216,7 @@ export function ExportDialog({ open, onOpenChange }: ExportDialogProps) {
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
                     min={customStartDate}
-                    max={format(new Date(), 'yyyy-MM-dd')}
+                    max={formatDate(new Date(), 'yyyy-MM-dd')}
                   />
                 </div>
               </div>

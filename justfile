@@ -311,30 +311,53 @@ gcp-deploy-backend ENV="dev":
         echo ""
         echo "⚠️  Production deployment requires CORS configuration."
         read -p "Enter allowed CORS origins (e.g., https://yourdomain.com,https://www.yourdomain.com): " CORS_ORIGINS
+        # Remove quotes if user included them
+        CORS_ORIGINS=$(echo "$CORS_ORIGINS" | sed 's/^["'\'']\|["'\'']$//g')
         if [ -z "$CORS_ORIGINS" ]; then
             echo "❌ CORS origins required for production deployment."
             exit 1
         fi
-        ENV_VARS="TRENDY_SERVER_ENV=production,CORS_ALLOWED_ORIGINS=$CORS_ORIGINS"
-    else
-        ENV_VARS="TRENDY_SERVER_ENV=production"
-    fi
 
-    echo "→ Deploying to Cloud Run..."
-    gcloud run deploy trendy-api-{{ENV}} \
-        --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
-        --platform=managed \
-        --region={{GCP_REGION}} \
-        --allow-unauthenticated \
-        --port=8888 \
-        --memory=256Mi \
-        --cpu=1 \
-        --min-instances=0 \
-        --max-instances=10 \
-        --timeout=300 \
-        --set-env-vars="$ENV_VARS" \
-        --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
-        --project=$PROJECT_ID
+        # Create temporary env vars file to handle special characters (colons, commas)
+        ENV_FILE=$(mktemp)
+        echo "TRENDY_SERVER_ENV: production" > "$ENV_FILE"
+        echo "CORS_ALLOWED_ORIGINS: $CORS_ORIGINS" >> "$ENV_FILE"
+
+        echo "→ Deploying to Cloud Run..."
+        gcloud run deploy trendy-api-{{ENV}} \
+            --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
+            --platform=managed \
+            --region={{GCP_REGION}} \
+            --allow-unauthenticated \
+            --port=8888 \
+            --memory=256Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --timeout=300 \
+            --env-vars-file="$ENV_FILE" \
+            --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
+            --project=$PROJECT_ID
+
+        # Clean up temp file
+        rm -f "$ENV_FILE"
+    else
+        echo "→ Deploying to Cloud Run..."
+        gcloud run deploy trendy-api-{{ENV}} \
+            --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
+            --platform=managed \
+            --region={{GCP_REGION}} \
+            --allow-unauthenticated \
+            --port=8888 \
+            --memory=256Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --timeout=300 \
+            --set-env-vars="TRENDY_SERVER_ENV=production" \
+            --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
+            --project=$PROJECT_ID
+    fi
     echo ""
     echo "✅ Deployment complete!"
     echo ""
