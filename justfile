@@ -278,7 +278,8 @@ gcp-push-backend ENV="dev":
     cd apps/backend && gcloud builds submit \
         --tag={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
         --project=$PROJECT_ID \
-        --machine-type=e2-highcpu-8
+        --machine-type=e2-highcpu-8 \
+        --no-cache
     echo "→ Tagging as latest..."
     gcloud artifacts docker tags add \
         {{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
