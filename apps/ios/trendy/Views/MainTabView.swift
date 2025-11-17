@@ -13,6 +13,8 @@ struct MainTabView: View {
     @Environment(\.apiClient) private var apiClient
     @State private var eventStore: EventStore?
     @StateObject private var calendarManager = CalendarManager()
+    @State private var notificationManager = NotificationManager()
+    @State private var geofenceManager: GeofenceManager?
     @State private var selectedTab = 0
     @State private var isLoading = true
     
@@ -55,6 +57,8 @@ struct MainTabView: View {
                 }
                 .environment(eventStore)
                 .environmentObject(calendarManager)
+                .environment(notificationManager)
+                .environment(geofenceManager ?? GeofenceManager(modelContext: modelContext, eventStore: EventStore(apiClient: apiClient!)))
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isLoading)
@@ -70,6 +74,19 @@ struct MainTabView: View {
 
             store.setModelContext(modelContext)
             store.setCalendarManager(calendarManager)
+
+            // Initialize GeofenceManager with dependencies
+            let geoManager = GeofenceManager(
+                modelContext: modelContext,
+                eventStore: store,
+                notificationManager: notificationManager
+            )
+            geofenceManager = geoManager
+
+            // Start monitoring active geofences if authorized
+            if geoManager.hasGeofencingAuthorization {
+                geoManager.startMonitoringAllGeofences()
+            }
 
             // Give a moment for the UI to render
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds

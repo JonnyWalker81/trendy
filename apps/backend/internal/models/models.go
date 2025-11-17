@@ -23,46 +23,58 @@ type EventType struct {
 
 // Event represents a tracked event
 type Event struct {
-	ID            string                    `json:"id"`
-	UserID        string                    `json:"user_id"`
-	EventTypeID   string                    `json:"event_type_id"`
-	Timestamp     time.Time                 `json:"timestamp"`
-	Notes         *string                   `json:"notes,omitempty"`
-	IsAllDay      bool                      `json:"is_all_day"`
-	EndDate       *time.Time                `json:"end_date,omitempty"`
-	SourceType    string                    `json:"source_type"`
-	ExternalID    *string                   `json:"external_id,omitempty"`
-	OriginalTitle *string                   `json:"original_title,omitempty"`
-	Properties    map[string]PropertyValue  `json:"properties,omitempty"`
-	CreatedAt     time.Time                 `json:"created_at"`
-	UpdatedAt     time.Time                 `json:"updated_at"`
-	EventType     *EventType                `json:"event_type,omitempty"`
+	ID                string                    `json:"id"`
+	UserID            string                    `json:"user_id"`
+	EventTypeID       string                    `json:"event_type_id"`
+	Timestamp         time.Time                 `json:"timestamp"`
+	Notes             *string                   `json:"notes,omitempty"`
+	IsAllDay          bool                      `json:"is_all_day"`
+	EndDate           *time.Time                `json:"end_date,omitempty"`
+	SourceType        string                    `json:"source_type"`
+	ExternalID        *string                   `json:"external_id,omitempty"`
+	OriginalTitle     *string                   `json:"original_title,omitempty"`
+	GeofenceID        *string                   `json:"geofence_id,omitempty"`
+	LocationLatitude  *float64                  `json:"location_latitude,omitempty"`
+	LocationLongitude *float64                  `json:"location_longitude,omitempty"`
+	LocationName      *string                   `json:"location_name,omitempty"`
+	Properties        map[string]PropertyValue  `json:"properties,omitempty"`
+	CreatedAt         time.Time                 `json:"created_at"`
+	UpdatedAt         time.Time                 `json:"updated_at"`
+	EventType         *EventType                `json:"event_type,omitempty"`
 }
 
 // CreateEventRequest represents the request to create an event
 type CreateEventRequest struct {
-	EventTypeID   string                    `json:"event_type_id" binding:"required"`
-	Timestamp     time.Time                 `json:"timestamp" binding:"required"`
-	Notes         *string                   `json:"notes"`
-	IsAllDay      bool                      `json:"is_all_day"`
-	EndDate       *time.Time                `json:"end_date"`
-	SourceType    string                    `json:"source_type"`
-	ExternalID    *string                   `json:"external_id"`
-	OriginalTitle *string                   `json:"original_title"`
-	Properties    map[string]PropertyValue  `json:"properties,omitempty"`
+	EventTypeID       string                    `json:"event_type_id" binding:"required"`
+	Timestamp         time.Time                 `json:"timestamp" binding:"required"`
+	Notes             *string                   `json:"notes"`
+	IsAllDay          bool                      `json:"is_all_day"`
+	EndDate           *time.Time                `json:"end_date"`
+	SourceType        string                    `json:"source_type"`
+	ExternalID        *string                   `json:"external_id"`
+	OriginalTitle     *string                   `json:"original_title"`
+	GeofenceID        *string                   `json:"geofence_id"`
+	LocationLatitude  *float64                  `json:"location_latitude"`
+	LocationLongitude *float64                  `json:"location_longitude"`
+	LocationName      *string                   `json:"location_name"`
+	Properties        map[string]PropertyValue  `json:"properties,omitempty"`
 }
 
 // UpdateEventRequest represents the request to update an event
 type UpdateEventRequest struct {
-	EventTypeID   *string                    `json:"event_type_id"`
-	Timestamp     *time.Time                 `json:"timestamp"`
-	Notes         *string                    `json:"notes"`
-	IsAllDay      *bool                      `json:"is_all_day"`
-	EndDate       *time.Time                 `json:"end_date"`
-	SourceType    *string                    `json:"source_type"`
-	ExternalID    *string                    `json:"external_id"`
-	OriginalTitle *string                    `json:"original_title"`
-	Properties    *map[string]PropertyValue  `json:"properties,omitempty"`
+	EventTypeID       *string                    `json:"event_type_id"`
+	Timestamp         *time.Time                 `json:"timestamp"`
+	Notes             *string                    `json:"notes"`
+	IsAllDay          *bool                      `json:"is_all_day"`
+	EndDate           *time.Time                 `json:"end_date"`
+	SourceType        *string                    `json:"source_type"`
+	ExternalID        *string                    `json:"external_id"`
+	OriginalTitle     *string                    `json:"original_title"`
+	GeofenceID        *string                    `json:"geofence_id"`
+	LocationLatitude  *float64                   `json:"location_latitude"`
+	LocationLongitude *float64                   `json:"location_longitude"`
+	LocationName      *string                    `json:"location_name"`
+	Properties        *map[string]PropertyValue  `json:"properties,omitempty"`
 }
 
 // CreateEventTypeRequest represents the request to create an event type
@@ -174,4 +186,49 @@ type UpdatePropertyDefinitionRequest struct {
 	Options      *[]string       `json:"options"`
 	DefaultValue interface{}     `json:"default_value"`
 	DisplayOrder *int            `json:"display_order"`
+}
+
+// Geofence represents a geographic region for automatic event tracking
+type Geofence struct {
+	ID                 string     `json:"id"`
+	UserID             string     `json:"user_id"`
+	Name               string     `json:"name"`
+	Latitude           float64    `json:"latitude"`
+	Longitude          float64    `json:"longitude"`
+	Radius             float64    `json:"radius"`
+	EventTypeEntryID   *string    `json:"event_type_entry_id,omitempty"`
+	EventTypeExitID    *string    `json:"event_type_exit_id,omitempty"`
+	IsActive           bool       `json:"is_active"`
+	NotifyOnEntry      bool       `json:"notify_on_entry"`
+	NotifyOnExit       bool       `json:"notify_on_exit"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	EventTypeEntry     *EventType `json:"event_type_entry,omitempty"`
+	EventTypeExit      *EventType `json:"event_type_exit,omitempty"`
+}
+
+// CreateGeofenceRequest represents the request to create a geofence
+type CreateGeofenceRequest struct {
+	Name             string   `json:"name" binding:"required"`
+	Latitude         float64  `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude        float64  `json:"longitude" binding:"required,min=-180,max=180"`
+	Radius           float64  `json:"radius" binding:"required,min=50,max=10000"`
+	EventTypeEntryID *string  `json:"event_type_entry_id"`
+	EventTypeExitID  *string  `json:"event_type_exit_id"`
+	IsActive         bool     `json:"is_active"`
+	NotifyOnEntry    bool     `json:"notify_on_entry"`
+	NotifyOnExit     bool     `json:"notify_on_exit"`
+}
+
+// UpdateGeofenceRequest represents the request to update a geofence
+type UpdateGeofenceRequest struct {
+	Name             *string  `json:"name"`
+	Latitude         *float64 `json:"latitude" binding:"omitempty,min=-90,max=90"`
+	Longitude        *float64 `json:"longitude" binding:"omitempty,min=-180,max=180"`
+	Radius           *float64 `json:"radius" binding:"omitempty,min=50,max=10000"`
+	EventTypeEntryID *string  `json:"event_type_entry_id"`
+	EventTypeExitID  *string  `json:"event_type_exit_id"`
+	IsActive         *bool    `json:"is_active"`
+	NotifyOnEntry    *bool    `json:"notify_on_entry"`
+	NotifyOnExit     *bool    `json:"notify_on_exit"`
 }

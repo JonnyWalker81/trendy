@@ -58,6 +58,10 @@ struct APIEvent: Codable, Identifiable {
     let sourceType: String
     let externalId: String?
     let originalTitle: String?
+    let geofenceId: String?
+    let locationLatitude: Double?
+    let locationLongitude: Double?
+    let locationName: String?
     let properties: [String: APIPropertyValue]?
     let createdAt: Date
     let updatedAt: Date
@@ -74,6 +78,10 @@ struct APIEvent: Codable, Identifiable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case geofenceId = "geofence_id"
+        case locationLatitude = "location_latitude"
+        case locationLongitude = "location_longitude"
+        case locationName = "location_name"
         case properties
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -91,6 +99,10 @@ struct CreateEventRequest: Codable {
     let sourceType: String
     let externalId: String?
     let originalTitle: String?
+    let geofenceId: String?
+    let locationLatitude: Double?
+    let locationLongitude: Double?
+    let locationName: String?
     let properties: [String: APIPropertyValue]?
 
     enum CodingKeys: String, CodingKey {
@@ -102,6 +114,10 @@ struct CreateEventRequest: Codable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case geofenceId = "geofence_id"
+        case locationLatitude = "location_latitude"
+        case locationLongitude = "location_longitude"
+        case locationName = "location_name"
         case properties
     }
 }
@@ -116,6 +132,10 @@ struct UpdateEventRequest: Codable {
     let sourceType: String?
     let externalId: String?
     let originalTitle: String?
+    let geofenceId: String?
+    let locationLatitude: Double?
+    let locationLongitude: Double?
+    let locationName: String?
     let properties: [String: APIPropertyValue]?
 
     enum CodingKeys: String, CodingKey {
@@ -127,6 +147,10 @@ struct UpdateEventRequest: Codable {
         case sourceType = "source_type"
         case externalId = "external_id"
         case originalTitle = "original_title"
+        case geofenceId = "geofence_id"
+        case locationLatitude = "location_latitude"
+        case locationLongitude = "location_longitude"
+        case locationName = "location_name"
         case properties
     }
 }
@@ -360,5 +384,94 @@ struct APIErrorResponse: Codable {
         case error
         case message
         case statusCode = "status_code"
+    }
+}
+
+// MARK: - Geofence Models
+
+/// Backend Geofence model
+struct APIGeofence: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let name: String
+    let latitude: Double
+    let longitude: Double
+    let radius: Double
+    let eventTypeEntryId: String?
+    let eventTypeExitId: String?
+    let isActive: Bool
+    let notifyOnEntry: Bool
+    let notifyOnExit: Bool
+    let createdAt: Date
+    let updatedAt: Date
+    let eventTypeEntry: APIEventType?
+    let eventTypeExit: APIEventType?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case name
+        case latitude
+        case longitude
+        case radius
+        case eventTypeEntryId = "event_type_entry_id"
+        case eventTypeExitId = "event_type_exit_id"
+        case isActive = "is_active"
+        case notifyOnEntry = "notify_on_entry"
+        case notifyOnExit = "notify_on_exit"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case eventTypeEntry = "event_type_entry"
+        case eventTypeExit = "event_type_exit"
+    }
+}
+
+/// Request model for creating geofences
+struct CreateGeofenceRequest: Codable {
+    let name: String
+    let latitude: Double
+    let longitude: Double
+    let radius: Double
+    let eventTypeEntryId: String?
+    let eventTypeExitId: String?
+    let isActive: Bool
+    let notifyOnEntry: Bool
+    let notifyOnExit: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case latitude
+        case longitude
+        case radius
+        case eventTypeEntryId = "event_type_entry_id"
+        case eventTypeExitId = "event_type_exit_id"
+        case isActive = "is_active"
+        case notifyOnEntry = "notify_on_entry"
+        case notifyOnExit = "notify_on_exit"
+    }
+}
+
+/// Request model for updating geofences
+struct UpdateGeofenceRequest: Codable {
+    let name: String?
+    let latitude: Double?
+    let longitude: Double?
+    let radius: Double?
+    let eventTypeEntryId: String?
+    let eventTypeExitId: String?
+    let isActive: Bool?
+    let notifyOnEntry: Bool?
+    let notifyOnExit: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case latitude
+        case longitude
+        case radius
+        case eventTypeEntryId = "event_type_entry_id"
+        case eventTypeExitId = "event_type_exit_id"
+        case isActive = "is_active"
+        case notifyOnEntry = "notify_on_entry"
+        case notifyOnExit = "notify_on_exit"
     }
 }

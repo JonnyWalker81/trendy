@@ -43,3 +43,13 @@ type PropertyDefinitionRepository interface {
 	Update(ctx context.Context, id string, def *models.PropertyDefinition) (*models.PropertyDefinition, error)
 	Delete(ctx context.Context, id string) error
 }
+
+// GeofenceRepository defines the interface for geofence data access
+type GeofenceRepository interface {
+	Create(ctx context.Context, geofence *models.Geofence) (*models.Geofence, error)
+	GetByID(ctx context.Context, id string) (*models.Geofence, error)
+	GetByUserID(ctx context.Context, userID string) ([]models.Geofence, error)
+	GetActiveByUserID(ctx context.Context, userID string) ([]models.Geofence, error)
+	Update(ctx context.Context, id string, geofence *models.Geofence) (*models.Geofence, error)
+	Delete(ctx context.Context, id string) error
+}

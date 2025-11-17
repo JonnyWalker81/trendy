@@ -31,9 +31,16 @@ struct EventRowView: View {
                 HStack {
                     Text(event.eventType?.name ?? "Unknown")
                         .font(.headline)
-                    
+
+                    // Show location badge for geofence events
+                    if event.sourceType == .geofence, event.locationName != nil {
+                        Image(systemName: "location.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+
                     Spacer()
-                    
+
                     if event.isAllDay {
                         Text("All day")
                             .font(.subheadline)

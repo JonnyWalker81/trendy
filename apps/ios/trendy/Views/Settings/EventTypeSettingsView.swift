@@ -69,6 +69,12 @@ struct EventTypeSettingsView: View {
                     } label: {
                         Label("Calendar Sync", systemImage: "calendar.badge.checkmark")
                     }
+
+                    NavigationLink {
+                        GeofenceListView()
+                    } label: {
+                        Label("Geofences", systemImage: "location.circle.fill")
+                    }
                 }
             }
             .navigationTitle("Settings")

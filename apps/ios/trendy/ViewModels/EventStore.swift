@@ -27,7 +27,7 @@ class EventStore {
     private let apiClient: APIClient
 
     // UserDefaults-backed properties (can't use @AppStorage with @Observable)
-    @ObservationIgnored private var useBackend: Bool {
+    @ObservationIgnored var useBackend: Bool {
         get { UserDefaults.standard.bool(forKey: "use_backend") }
         set { UserDefaults.standard.set(newValue, forKey: "use_backend") }
     }
@@ -229,6 +229,10 @@ class EventStore {
                     sourceType: "manual",
                     externalId: nil,
                     originalTitle: nil,
+                    geofenceId: nil,
+                    locationLatitude: nil,
+                    locationLongitude: nil,
+                    locationName: nil,
                     properties: apiProperties
                 )
 
@@ -484,7 +488,7 @@ class EventStore {
             if event.isAllDay {
                 // For all-day events, check if the date falls within the event duration
                 if let endDate = event.endDate {
-                    return date >= calendar.startOfDay(for: event.timestamp) && 
+                    return date >= calendar.startOfDay(for: event.timestamp) &&
                            date <= calendar.startOfDay(for: endDate)
                 } else {
                     // Single day all-day event
@@ -500,6 +504,83 @@ class EventStore {
                 return first.isAllDay
             }
             return first.timestamp < second.timestamp
+        }
+    }
+
+    // MARK: - Geofence Support
+
+    /// Sync an existing event to the backend (used by GeofenceManager)
+    /// - Parameter event: The event to sync
+    func syncEventToBackend(_ event: Event) async {
+        guard useBackend else { return }
+        guard let eventType = event.eventType else { return }
+        guard let backendTypeId = eventTypeBackendIds[eventType.id] else {
+            print("⚠️ No backend ID for event type: \(eventType.name)")
+            return
+        }
+
+        do {
+            // Check if this event already exists on the backend
+            let existingBackendId = eventBackendIds[event.id]
+
+            if existingBackendId != nil {
+                // Update existing backend event
+                let request = UpdateEventRequest(
+                    eventTypeId: backendTypeId,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId?.uuidString,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    properties: nil // Properties support can be added later
+                )
+
+                if isOnline {
+                    _ = try await apiClient.updateEvent(id: existingBackendId!, request)
+                    print("✅ Updated event on backend: \(event.id)")
+                } else {
+                    // Queue for sync when online
+                    try? syncQueue?.enqueue(type: .updateEvent, entityId: event.id, payload: request)
+                    print("📦 Queued event update for sync: \(event.id)")
+                }
+
+            } else {
+                // Create new backend event
+                let request = CreateEventRequest(
+                    eventTypeId: backendTypeId,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId?.uuidString,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    properties: nil // Properties support can be added later
+                )
+
+                if isOnline {
+                    let apiEvent = try await apiClient.createEvent(request)
+                    eventBackendIds[event.id] = apiEvent.id
+                    print("✅ Created event on backend: \(event.id)")
+                } else {
+                    // Queue for sync when online
+                    try? syncQueue?.enqueue(type: .createEvent, entityId: event.id, payload: request)
+                    print("📦 Queued event creation for sync: \(event.id)")
+                }
+            }
+
+        } catch {
+            print("❌ Failed to sync event to backend: \(error.localizedDescription)")
         }
     }
 }

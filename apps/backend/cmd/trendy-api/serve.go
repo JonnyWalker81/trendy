@@ -52,6 +52,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	eventTypeRepo := repository.NewEventTypeRepository(supabaseClient)
 	userRepo := repository.NewUserRepository(supabaseClient)
 	propertyDefRepo := repository.NewPropertyDefinitionRepository(supabaseClient)
+	geofenceRepo := repository.NewGeofenceRepository(supabaseClient)
 
 	// Initialize services
 	eventService := service.NewEventService(eventRepo, eventTypeRepo)
@@ -59,6 +60,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	analyticsService := service.NewAnalyticsService(eventRepo)
 	authService := service.NewAuthService(supabaseClient, userRepo)
 	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo)
+	geofenceService := service.NewGeofenceService(geofenceRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
@@ -66,6 +68,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	authHandler := handlers.NewAuthHandler(authService)
 	propertyDefHandler := handlers.NewPropertyDefinitionHandler(propertyDefService)
+	geofenceHandler := handlers.NewGeofenceHandler(geofenceService)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -129,6 +132,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/analytics/summary", analyticsHandler.GetSummary)
 			protected.GET("/analytics/trends", analyticsHandler.GetTrends)
 			protected.GET("/analytics/event-type/:id", analyticsHandler.GetEventTypeAnalytics)
+
+			// Geofence routes
+			protected.GET("/geofences", geofenceHandler.GetGeofences)
+			protected.POST("/geofences", geofenceHandler.CreateGeofence)
+			protected.GET("/geofences/:id", geofenceHandler.GetGeofence)
+			protected.PUT("/geofences/:id", geofenceHandler.UpdateGeofence)
+			protected.DELETE("/geofences/:id", geofenceHandler.DeleteGeofence)
 		}
 	}
 
