@@ -207,3 +207,42 @@ func (r *eventRepository) CountByEventType(ctx context.Context, userID string) (
 
 	return counts, nil
 }
+
+func (r *eventRepository) GetForExport(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error) {
+	query := map[string]interface{}{
+		"user_id": fmt.Sprintf("eq.%s", userID),
+		"select":  "*,event_type:event_types(*)",
+		"order":   "timestamp.desc",
+	}
+
+	// Add date range filter if provided
+	if startDate != nil && endDate != nil {
+		query["and"] = fmt.Sprintf("(timestamp.gte.%s,timestamp.lte.%s)", startDate.Format(time.RFC3339), endDate.Format(time.RFC3339))
+	}
+
+	// Add event type filter if provided
+	if len(eventTypeIDs) > 0 {
+		// Build "in" filter: event_type_id=in.(uuid1,uuid2,uuid3)
+		eventTypeFilter := "in.("
+		for i, id := range eventTypeIDs {
+			if i > 0 {
+				eventTypeFilter += ","
+			}
+			eventTypeFilter += id
+		}
+		eventTypeFilter += ")"
+		query["event_type_id"] = eventTypeFilter
+	}
+
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events for export: %w", err)
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return events, nil
+}

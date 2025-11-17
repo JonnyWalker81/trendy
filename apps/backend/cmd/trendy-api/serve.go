@@ -105,6 +105,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		{
 			// Event routes
 			protected.GET("/events", eventHandler.GetEvents)
+			protected.GET("/events/export", eventHandler.ExportEvents)
 			protected.POST("/events", eventHandler.CreateEvent)
 			protected.GET("/events/:id", eventHandler.GetEvent)
 			protected.PUT("/events/:id", eventHandler.UpdateEvent)

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
@@ -77,6 +78,10 @@ func (s *eventService) GetUserEvents(ctx context.Context, userID string, limit, 
 	}
 
 	return s.eventRepo.GetByUserID(ctx, userID, limit, offset)
+}
+
+func (s *eventService) ExportEvents(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error) {
+	return s.eventRepo.GetForExport(ctx, userID, startDate, endDate, eventTypeIDs)
 }
 
 func (s *eventService) UpdateEvent(ctx context.Context, userID, eventID string, req *models.UpdateEventRequest) (*models.Event, error) {

@@ -13,6 +13,7 @@ type EventRepository interface {
 	GetByID(ctx context.Context, id string) (*models.Event, error)
 	GetByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)
 	GetByUserIDAndDateRange(ctx context.Context, userID string, startDate, endDate time.Time) ([]models.Event, error)
+	GetForExport(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error)
 	Update(ctx context.Context, id string, event *models.Event) (*models.Event, error)
 	Delete(ctx context.Context, id string) error
 	CountByEventType(ctx context.Context, userID string) (map[string]int64, error)

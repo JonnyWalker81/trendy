@@ -3,6 +3,8 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/service"
@@ -56,6 +58,59 @@ func (h *EventHandler) GetEvents(c *gin.Context) {
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
 	events, err := h.eventService.GetUserEvents(c.Request.Context(), userID.(string), limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, events)
+}
+
+// ExportEvents handles GET /api/v1/events/export
+func (h *EventHandler) ExportEvents(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	// Parse optional date range parameters
+	var startDate, endDate *time.Time
+	if startDateStr := c.Query("start_date"); startDateStr != "" {
+		parsed, err := time.Parse(time.RFC3339, startDateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start_date format, use RFC3339"})
+			return
+		}
+		startDate = &parsed
+	}
+	if endDateStr := c.Query("end_date"); endDateStr != "" {
+		parsed, err := time.Parse(time.RFC3339, endDateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end_date format, use RFC3339"})
+			return
+		}
+		endDate = &parsed
+	}
+
+	// Validate date range
+	if startDate != nil && endDate != nil && startDate.After(*endDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_date must be before or equal to end_date"})
+		return
+	}
+
+	// Parse optional event type IDs (comma-separated)
+	var eventTypeIDs []string
+	if eventTypeIDsStr := c.Query("event_type_ids"); eventTypeIDsStr != "" {
+		eventTypeIDs = strings.Split(eventTypeIDsStr, ",")
+		// Trim whitespace from each ID
+		for i := range eventTypeIDs {
+			eventTypeIDs[i] = strings.TrimSpace(eventTypeIDs[i])
+		}
+	}
+
+	// Get events
+	events, err := h.eventService.ExportEvents(c.Request.Context(), userID.(string), startDate, endDate, eventTypeIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -71,3 +71,14 @@ export function useDeleteEvent() {
     },
   })
 }
+
+// Export events
+export function useExportEvents() {
+  return useMutation({
+    mutationFn: (params?: {
+      startDate?: string
+      endDate?: string
+      eventTypeIds?: string[]
+    }) => eventApi.export(params),
+  })
+}

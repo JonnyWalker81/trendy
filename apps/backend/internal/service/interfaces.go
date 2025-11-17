@@ -12,6 +12,7 @@ type EventService interface {
 	CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, error)
 	GetEvent(ctx context.Context, userID, eventID string) (*models.Event, error)
 	GetUserEvents(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)
+	ExportEvents(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error)
 	UpdateEvent(ctx context.Context, userID, eventID string, req *models.UpdateEventRequest) (*models.Event, error)
 	DeleteEvent(ctx context.Context, userID, eventID string) error
 }
