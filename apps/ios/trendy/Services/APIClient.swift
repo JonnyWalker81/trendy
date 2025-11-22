@@ -256,6 +256,35 @@ class APIClient {
         return try await request("GET", endpoint: "/analytics/event-type/\(id)")
     }
 
+    // MARK: - Geofence Endpoints
+
+    /// Get all geofences
+    /// - Parameter activeOnly: If true, only return active geofences
+    func getGeofences(activeOnly: Bool = false) async throws -> [APIGeofence] {
+        let endpoint = activeOnly ? "/geofences?active=true" : "/geofences"
+        return try await request("GET", endpoint: endpoint)
+    }
+
+    /// Get single geofence
+    func getGeofence(id: String) async throws -> APIGeofence {
+        return try await request("GET", endpoint: "/geofences/\(id)")
+    }
+
+    /// Create geofence
+    func createGeofence(_ request: CreateGeofenceRequest) async throws -> APIGeofence {
+        return try await self.request("POST", endpoint: "/geofences", body: request)
+    }
+
+    /// Update geofence
+    func updateGeofence(id: String, _ request: UpdateGeofenceRequest) async throws -> APIGeofence {
+        return try await self.request("PUT", endpoint: "/geofences/\(id)", body: request)
+    }
+
+    /// Delete geofence
+    func deleteGeofence(id: String) async throws {
+        try await requestWithoutResponse("DELETE", endpoint: "/geofences/\(id)")
+    }
+
     // MARK: - Health Check
 
     /// Check if API is reachable

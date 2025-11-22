@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<gpx version="1.1" creator="Xcode">
+    <!-- 
+    Geofence Testing GPX File
+    
+    Instructions:
+    1. Replace the lat/lon values with coordinates near your geofence
+    2. The first waypoint should be OUTSIDE your geofence
+    3. The second waypoint should be INSIDE your geofence
+    4. The third waypoint should be OUTSIDE again (to trigger exit)
+    
+    To use:
+    1. Run your app on device via Xcode
+    2. Go to Debug menu → Simulate Location → TestGeofence
+    3. Watch the console for geofence entry/exit logs
+    -->
+    
+    <!-- Starting point: Outside the geofence (adjust coordinates) -->
+    <wpt lat="37.33182" lon="-122.03118">
+        <name>Outside Geofence - Start</name>
+        <time>2025-01-01T00:00:00Z</time>
+    </wpt>
+    
+    <!-- Move inside the geofence (adjust to your geofence center) -->
+    <wpt lat="37.33233" lon="-122.03121">
+        <name>Inside Geofence</name>
+        <time>2025-01-01T00:00:10Z</time>
+    </wpt>
+    
+    <!-- Move back outside the geofence -->
+    <wpt lat="37.33182" lon="-122.03118">
+        <name>Outside Geofence - End</name>
+        <time>2025-01-01T00:00:20Z</time>
+    </wpt>
+</gpx>

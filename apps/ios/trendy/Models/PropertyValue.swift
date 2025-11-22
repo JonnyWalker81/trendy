@@ -15,14 +15,23 @@ struct PropertyValue: Codable, Equatable {
     }
 
     var intValue: Int? {
-        value.value as? Int
+        if let int = value.value as? Int {
+            return int
+        }
+        // Also handle Double -> Int conversion (e.g., for duration stored as TimeInterval)
+        if let double = value.value as? Double {
+            return Int(double)
+        }
+        return nil
     }
 
     var doubleValue: Double? {
-        // Handle both Int and Double types
         if let double = value.value as? Double {
             return double
-        } else if let int = value.value as? Int {
+        }
+
+        // Also handle Int -> Double conversion
+        if let int = value.value as? Int {
             return Double(int)
         }
         return nil

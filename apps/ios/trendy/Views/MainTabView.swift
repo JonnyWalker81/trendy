@@ -13,48 +13,52 @@ struct MainTabView: View {
     @Environment(\.apiClient) private var apiClient
     @State private var eventStore: EventStore?
     @StateObject private var calendarManager = CalendarManager()
+    @State private var notificationManager = NotificationManager()
+    @State private var geofenceManager: GeofenceManager?
     @State private var selectedTab = 0
     @State private var isLoading = true
     
     var body: some View {
         ZStack {
-            if isLoading {
+            if isLoading || eventStore == nil || geofenceManager == nil {
                 LoadingView()
                     .transition(.opacity.combined(with: .scale))
             } else {
                 TabView(selection: $selectedTab) {
-            BubblesView()
-                .tabItem {
-                    Label("Dashboard", systemImage: "square.grid.2x2.fill")
-                }
-                .tag(0)
-            
-            EventListView()
-                .tabItem {
-                    Label("List", systemImage: "list.bullet")
-                }
-                .tag(1)
-            
-            CalendarView()
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                .tag(2)
-            
-            AnalyticsView()
-                .tabItem {
-                    Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tag(3)
-            
-            EventTypeSettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(4)
+                    BubblesView()
+                        .tabItem {
+                            Label("Dashboard", systemImage: "square.grid.2x2.fill")
+                        }
+                        .tag(0)
+                    
+                    EventListView()
+                        .tabItem {
+                            Label("List", systemImage: "list.bullet")
+                        }
+                        .tag(1)
+                    
+                    CalendarView()
+                        .tabItem {
+                            Label("Calendar", systemImage: "calendar")
+                        }
+                        .tag(2)
+                    
+                    AnalyticsView()
+                        .tabItem {
+                            Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+                        }
+                        .tag(3)
+                    
+                    EventTypeSettingsView()
+                        .tabItem {
+                            Label("Settings", systemImage: "gear")
+                        }
+                        .tag(4)
                 }
                 .environment(eventStore)
                 .environmentObject(calendarManager)
+                .environment(notificationManager)
+                .environment(geofenceManager)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isLoading)
@@ -71,8 +75,18 @@ struct MainTabView: View {
             store.setModelContext(modelContext)
             store.setCalendarManager(calendarManager)
 
-            // Give a moment for the UI to render
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            // Initialize GeofenceManager with dependencies
+            let geoManager = GeofenceManager(
+                modelContext: modelContext,
+                eventStore: store,
+                notificationManager: notificationManager
+            )
+            geofenceManager = geoManager
+
+            // Start monitoring active geofences if authorized
+            if geoManager.hasGeofencingAuthorization {
+                geoManager.startMonitoringAllGeofences()
+            }
 
             // Load initial data
             await store.fetchData()

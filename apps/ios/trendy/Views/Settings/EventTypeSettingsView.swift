@@ -11,7 +11,7 @@ struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
     @Environment(ThemeManager.self) private var themeManager
     @State private var showingAddEventType = false
-    @State private var editingEventType: EventType?
+    @State private var editingEventTypeID: UUID?
     @State private var showingCalendarImport = false
 
     var body: some View {
@@ -39,7 +39,7 @@ struct EventTypeSettingsView: View {
                 Section {
                     ForEach(eventStore.eventTypes) { eventType in
                         EventTypeRow(eventType: eventType) {
-                            editingEventType = eventType
+                            editingEventTypeID = eventType.id
                         }
                     }
                     .onDelete(perform: deleteEventTypes)
@@ -69,6 +69,12 @@ struct EventTypeSettingsView: View {
                     } label: {
                         Label("Calendar Sync", systemImage: "calendar.badge.checkmark")
                     }
+
+                    NavigationLink {
+                        GeofenceListView()
+                    } label: {
+                        Label("Geofences", systemImage: "location.circle.fill")
+                    }
                 }
             }
             .navigationTitle("Settings")
@@ -80,8 +86,10 @@ struct EventTypeSettingsView: View {
             .sheet(isPresented: $showingAddEventType) {
                 AddEventTypeView()
             }
-            .sheet(item: $editingEventType) { eventType in
-                EditEventTypeView(eventType: eventType)
+            .sheet(item: $editingEventTypeID) { eventTypeID in
+                if let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
+                    EditEventTypeView(eventType: eventType)
+                }
             }
             .sheet(isPresented: $showingCalendarImport) {
                 CalendarImportView()

@@ -9,6 +9,11 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+// Allow UUID to be used with .sheet(item:) binding
+extension UUID: @retroactive Identifiable {
+    public var id: UUID { self }
+}
+
 @Model
 final class EventType {
     var id: UUID

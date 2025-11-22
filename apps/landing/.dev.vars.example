@@ -1,0 +1,25 @@
+# Cloudflare Pages Local Development Environment Variables
+# Copy this file to .dev.vars and fill in your actual values
+
+# Resend API Key (get from https://resend.com/api-keys)
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Resend Audience ID for contact syncing (get from Resend Dashboard > Audiences)
+RESEND_AUDIENCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Resend Webhook Secret for signature verification (get from Resend Dashboard > Webhooks)
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Cloudflare Turnstile Secret Key (get from Cloudflare Dashboard > Turnstile)
+TURNSTILE_SECRET_KEY=0x4AAAAAAAxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Admin email for waitlist signup notifications
+ADMIN_EMAIL=admin@yourdomain.com
+
+# From email address (must be verified in Resend)
+FROM_EMAIL=noreply@yourdomain.com
+
+# Base URL for email verification links (should be your domain)
+# Local dev: http://localhost:8788
+# Production: https://yourdomain.com
+VERIFICATION_BASE_URL=http://localhost:8788

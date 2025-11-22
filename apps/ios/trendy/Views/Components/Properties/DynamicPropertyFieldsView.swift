@@ -152,12 +152,17 @@ struct DynamicPropertyFieldsView: View {
             .datePickerStyle(.compact)
 
         case .duration:
+            // Duration is stored in seconds, display as minutes
+            let durationSeconds = propertyValue.doubleValue ?? 0
+            let durationMinutes = Int(durationSeconds / 60)
+            
             HStack {
                 TextField("Minutes", text: Binding(
-                    get: { String(propertyValue.intValue ?? 0) },
+                    get: { String(durationMinutes) },
                     set: { newValue in
                         if let minutes = Int(newValue) {
-                            properties[key] = PropertyValue(type: .duration, value: minutes)
+                            // Store as seconds
+                            properties[key] = PropertyValue(type: .duration, value: Double(minutes * 60))
                         }
                     }
                 ))

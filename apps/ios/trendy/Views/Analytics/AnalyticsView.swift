@@ -11,12 +11,17 @@ import Charts
 struct AnalyticsView: View {
     @Environment(EventStore.self) private var eventStore
     @State private var analyticsViewModel = AnalyticsViewModel()
-    @State private var selectedEventType: EventType?
+    @State private var selectedEventTypeID: UUID?
     @State private var timeRange: TimeRange = .month
     @State private var statistics: Statistics?
     
     @AppStorage("analyticsSelectedEventTypeId") private var savedEventTypeId: String = ""
     @AppStorage("analyticsTimeRange") private var savedTimeRangeRaw: String = TimeRange.month.rawValue
+    
+    private var selectedEventType: EventType? {
+        guard let id = selectedEventTypeID else { return nil }
+        return eventStore.eventTypes.first { $0.id == id }
+    }
     
     var body: some View {
         NavigationStack {
@@ -57,9 +62,9 @@ struct AnalyticsView: View {
                 // Restore saved state
                 if !savedEventTypeId.isEmpty,
                    let savedType = eventStore.eventTypes.first(where: { $0.id.uuidString == savedEventTypeId }) {
-                    selectedEventType = savedType
+                    selectedEventTypeID = savedType.id
                 } else if let firstType = eventStore.eventTypes.first {
-                    selectedEventType = firstType
+                    selectedEventTypeID = firstType.id
                 }
                 
                 // Restore time range
@@ -67,7 +72,7 @@ struct AnalyticsView: View {
                     timeRange = savedRange
                 }
             }
-            .task(id: selectedEventType?.id) {
+            .task(id: selectedEventTypeID) {
                 await loadAnalytics()
             }
             .task(id: timeRange) {
@@ -100,7 +105,7 @@ struct AnalyticsView: View {
             HStack(spacing: 12) {
                 ForEach(eventStore.eventTypes) { eventType in
                     Button {
-                        selectedEventType = eventType
+                        selectedEventTypeID = eventType.id
                         savedEventTypeId = eventType.id.uuidString
                     } label: {
                         HStack(spacing: 8) {
@@ -111,8 +116,8 @@ struct AnalyticsView: View {
                         .fontWeight(.medium)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selectedEventType?.id == eventType.id ? eventType.color : Color.chipBackground)
-                        .foregroundColor(selectedEventType?.id == eventType.id ? .white : .primary)
+                        .background(selectedEventTypeID == eventType.id ? eventType.color : Color.chipBackground)
+                        .foregroundColor(selectedEventTypeID == eventType.id ? .white : .primary)
                         .clipShape(Capsule())
                     }
                 }

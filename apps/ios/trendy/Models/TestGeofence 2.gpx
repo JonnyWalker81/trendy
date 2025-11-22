@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<gpx version="1.1" creator="Xcode">
+    <!-- 
+    Geofence Testing GPX File for Trendy
+    Target Location: 34.151094, -118.003666
+    
+    To use:
+    1. Add this file to your Xcode project
+    2. Run your app on device via Xcode
+    3. Go to Debug menu → Simulate Location → TestGeofence
+    4. Watch the console for geofence entry/exit logs
+    
+    The simulation will:
+    - Start ~200m south of the geofence (outside)
+    - Move to the geofence center (inside) 
+    - Move ~200m north of the geofence (outside)
+    -->
+    
+    <!-- Starting point: ~200m SOUTH of the geofence (OUTSIDE) -->
+    <wpt lat="34.149294" lon="-118.003666">
+        <name>Outside Geofence - South</name>
+        <time>2025-01-01T00:00:00Z</time>
+    </wpt>
+    
+    <!-- Approaching the geofence from the south -->
+    <wpt lat="34.150194" lon="-118.003666">
+        <name>Approaching - 100m out</name>
+        <time>2025-01-01T00:00:05Z</time>
+    </wpt>
+    
+    <!-- INSIDE the geofence (center point) -->
+    <wpt lat="34.151094" lon="-118.003666">
+        <name>Inside Geofence - Center</name>
+        <time>2025-01-01T00:00:10Z</time>
+    </wpt>
+    
+    <!-- Still inside, slightly north of center -->
+    <wpt lat="34.151594" lon="-118.003666">
+        <name>Inside Geofence - North</name>
+        <time>2025-01-01T00:00:15Z</time>
+    </wpt>
+    
+    <!-- Exiting the geofence to the north -->
+    <wpt lat="34.152094" lon="-118.003666">
+        <name>Exiting - Edge</name>
+        <time>2025-01-01T00:00:20Z</time>
+    </wpt>
+    
+    <!-- ~200m NORTH of the geofence (OUTSIDE) -->
+    <wpt lat="34.152894" lon="-118.003666">
+        <name>Outside Geofence - North</name>
+        <time>2025-01-01T00:00:25Z</time>
+    </wpt>
+</gpx>

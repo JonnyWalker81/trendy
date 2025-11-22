@@ -32,7 +32,9 @@ struct trendyApp: App {
         let schema = Schema([
             Event.self,
             EventType.self,
-            QueuedOperation.self
+            QueuedOperation.self,
+            Geofence.self,
+            PropertyDefinition.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

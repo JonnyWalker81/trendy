@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EventCard } from '@/components/events/EventCard'
 import { EventForm } from '@/components/events/EventForm'
+import { ExportDialog } from '@/components/events/ExportDialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   useEvents,
@@ -17,6 +18,7 @@ export function EventList() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
 
   const { data: events = [], isLoading } = useEvents()
   const createMutation = useCreateEvent()
@@ -100,10 +102,16 @@ export function EventList() {
             <h2 className="text-3xl font-bold">Events</h2>
             <p className="mt-2 text-muted-foreground">View and manage all your tracked events</p>
           </div>
-          <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Event
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button onClick={handleCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Event
+            </Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-lg border p-6">
@@ -139,6 +147,11 @@ export function EventList() {
         event={selectedEvent}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
       />
 
       <ConfirmDialog

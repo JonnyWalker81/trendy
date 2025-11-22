@@ -10,7 +10,12 @@ import SwiftUI
 struct EventListView: View {
     @Environment(EventStore.self) private var eventStore
     @State private var searchText = ""
-    @State private var selectedEventType: EventType?
+    @State private var selectedEventTypeID: UUID?
+    
+    private var selectedEventType: EventType? {
+        guard let id = selectedEventTypeID else { return nil }
+        return eventStore.eventTypes.first { $0.id == id }
+    }
     
     var filteredEvents: [Event] {
         let events = eventStore.events
@@ -82,21 +87,21 @@ struct EventListView: View {
                 HStack(spacing: 8) {
                     FilterChip(
                         title: "All",
-                        isSelected: selectedEventType == nil
+                        isSelected: selectedEventTypeID == nil
                     ) {
-                        selectedEventType = nil
+                        selectedEventTypeID = nil
                     }
                     
                     ForEach(eventStore.eventTypes) { eventType in
                         FilterChip(
                             title: eventType.name,
                             color: eventType.color,
-                            isSelected: selectedEventType?.id == eventType.id
+                            isSelected: selectedEventTypeID == eventType.id
                         ) {
-                            if selectedEventType?.id == eventType.id {
-                                selectedEventType = nil
+                            if selectedEventTypeID == eventType.id {
+                                selectedEventTypeID = nil
                             } else {
-                                selectedEventType = eventType
+                                selectedEventTypeID = eventType.id
                             }
                         }
                     }

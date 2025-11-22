@@ -93,6 +93,31 @@ export const eventApi = {
       throw new Error(`Failed to delete event: ${response.statusText}`)
     }
   },
+
+  export: async (params?: {
+    startDate?: string
+    endDate?: string
+    eventTypeIds?: string[]
+  }): Promise<Event[]> => {
+    const headers = await getAuthHeaders()
+    const queryParams = new URLSearchParams()
+
+    if (params?.startDate) {
+      queryParams.append('start_date', params.startDate)
+    }
+    if (params?.endDate) {
+      queryParams.append('end_date', params.endDate)
+    }
+    if (params?.eventTypeIds && params.eventTypeIds.length > 0) {
+      queryParams.append('event_type_ids', params.eventTypeIds.join(','))
+    }
+
+    const url = `${API_BASE}/events/export${
+      queryParams.toString() ? `?${queryParams.toString()}` : ''
+    }`
+    const response = await fetch(url, { headers })
+    return handleResponse<Event[]>(response)
+  },
 }
 
 // Event Type API

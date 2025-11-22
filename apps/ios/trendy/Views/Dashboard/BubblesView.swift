@@ -13,7 +13,12 @@ struct BubblesView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var calendarManager: CalendarManager
     @State private var showingAddEventType = false
-    @State private var selectedEventType: EventType?
+    @State private var selectedEventTypeID: UUID?
+    
+    private var selectedEventType: EventType? {
+        guard let id = selectedEventTypeID else { return nil }
+        return eventStore.eventTypes.first { $0.id == id }
+    }
     
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 150), spacing: 20)
@@ -28,7 +33,7 @@ struct BubblesView: View {
                     LazyVGrid(columns: columns, spacing: 20) {
                         ForEach(eventStore.eventTypes) { eventType in
                             EventBubbleView(eventType: eventType) {
-                                selectedEventType = eventType
+                                selectedEventTypeID = eventType.id
                             } onLongPress: {
                                 // Quick record without opening edit view
                                 Task {
@@ -56,10 +61,12 @@ struct BubblesView: View {
                 AddEventTypeView()
                     .environment(eventStore)
             }
-            .sheet(item: $selectedEventType) { eventType in
-                EventEditView(eventType: eventType)
-                    .environment(eventStore)
-                    .environmentObject(calendarManager)
+            .sheet(item: $selectedEventTypeID) { eventTypeID in
+                if let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
+                    EventEditView(eventType: eventType)
+                        .environment(eventStore)
+                        .environmentObject(calendarManager)
+                }
             }
             .task {
                 await eventStore.fetchData()

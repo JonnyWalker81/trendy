@@ -1,0 +1,6 @@
+# Cloudflare Pages SPA Routing Configuration
+# This file ensures all routes are handled by React Router
+
+# Serve index.html for all routes (SPA fallback)
+# The 200 status ensures the URL stays the same in the browser
+/*    /index.html   200

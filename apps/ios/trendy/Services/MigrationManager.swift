@@ -277,6 +277,10 @@ class MigrationManager {
             sourceType: localEvent.sourceType.rawValue,
             externalId: localEvent.externalId,
             originalTitle: localEvent.originalTitle,
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
             properties: apiProperties
         )
 

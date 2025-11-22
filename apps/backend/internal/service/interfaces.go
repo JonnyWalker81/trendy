@@ -12,6 +12,7 @@ type EventService interface {
 	CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, error)
 	GetEvent(ctx context.Context, userID, eventID string) (*models.Event, error)
 	GetUserEvents(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)
+	ExportEvents(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error)
 	UpdateEvent(ctx context.Context, userID, eventID string, req *models.UpdateEventRequest) (*models.Event, error)
 	DeleteEvent(ctx context.Context, userID, eventID string) error
 }
@@ -46,4 +47,14 @@ type PropertyDefinitionService interface {
 	GetPropertyDefinitionsByEventType(ctx context.Context, userID, eventTypeID string) ([]models.PropertyDefinition, error)
 	UpdatePropertyDefinition(ctx context.Context, userID, propertyDefID string, req *models.UpdatePropertyDefinitionRequest) (*models.PropertyDefinition, error)
 	DeletePropertyDefinition(ctx context.Context, userID, propertyDefID string) error
+}
+
+// GeofenceService defines the interface for geofence business logic
+type GeofenceService interface {
+	CreateGeofence(ctx context.Context, userID string, req *models.CreateGeofenceRequest) (*models.Geofence, error)
+	GetGeofence(ctx context.Context, userID, geofenceID string) (*models.Geofence, error)
+	GetUserGeofences(ctx context.Context, userID string) ([]models.Geofence, error)
+	GetActiveGeofences(ctx context.Context, userID string) ([]models.Geofence, error)
+	UpdateGeofence(ctx context.Context, userID, geofenceID string, req *models.UpdateGeofenceRequest) (*models.Geofence, error)
+	DeleteGeofence(ctx context.Context, userID, geofenceID string) error
 }

@@ -39,6 +39,8 @@
 		47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Staging.xcconfig; sourceTree = "<group>"; };
 		47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/TestFlight.xcconfig; sourceTree = "<group>"; };
 		47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
+		DE6E7A3A2ED1651D006CA4DD /* TestGeofence.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = TestGeofence.gpx; path = trendy/Models/TestGeofence.gpx; sourceTree = "<group>"; };
+		DE6E7A3B2ED1651D006CA4DD /* TestGeofence 2.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = "TestGeofence 2.gpx"; path = "trendy/Models/TestGeofence 2.gpx"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -95,6 +97,8 @@
 		47312F232E2B3EC800E7F111 = {
 			isa = PBXGroup;
 			children = (
+				DE6E7A3A2ED1651D006CA4DD /* TestGeofence.gpx */,
+				DE6E7A3B2ED1651D006CA4DD /* TestGeofence 2.gpx */,
 				47312F2E2E2B3EC800E7F111 /* trendy */,
 				47312F3E2E2B3ECA00E7F111 /* trendyTests */,
 				47312F482E2B3ECA00E7F111 /* trendyUITests */,

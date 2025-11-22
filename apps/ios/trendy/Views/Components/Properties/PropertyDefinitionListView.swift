@@ -16,13 +16,18 @@ struct PropertyDefinitionListView: View {
     @Query private var allPropertyDefinitions: [PropertyDefinition]
 
     @State private var showingAddProperty = false
-    @State private var editingProperty: PropertyDefinition?
+    @State private var editingPropertyID: UUID?
 
     // Property definitions for this event type
     private var propertyDefinitions: [PropertyDefinition] {
         allPropertyDefinitions
             .filter { $0.eventTypeId == eventType.id }
             .sorted { $0.displayOrder < $1.displayOrder }
+    }
+    
+    private var editingProperty: PropertyDefinition? {
+        guard let id = editingPropertyID else { return nil }
+        return propertyDefinitions.first { $0.id == id }
     }
 
     var body: some View {
@@ -37,7 +42,7 @@ struct PropertyDefinitionListView: View {
                         PropertyDefinitionRow(definition: definition)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                editingProperty = definition
+                                editingPropertyID = definition.id
                             }
                     }
                     .onDelete(perform: deleteProperties)
@@ -61,8 +66,10 @@ struct PropertyDefinitionListView: View {
         .sheet(isPresented: $showingAddProperty) {
             PropertyDefinitionFormView(eventType: eventType, propertyDefinition: nil)
         }
-        .sheet(item: $editingProperty) { definition in
-            PropertyDefinitionFormView(eventType: eventType, propertyDefinition: definition)
+        .sheet(item: $editingPropertyID) { propertyID in
+            if let definition = propertyDefinitions.first(where: { $0.id == propertyID }) {
+                PropertyDefinitionFormView(eventType: eventType, propertyDefinition: definition)
+            }
         }
     }
 
