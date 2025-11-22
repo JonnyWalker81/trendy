@@ -16,25 +16,44 @@ final class Geofence {
     var latitude: Double
     var longitude: Double
     var radius: Double // in meters
-    var eventTypeEntry: EventType? // Event type to create on entry
-    var eventTypeExit: EventType? // Event type to create on exit (currently unused, for future)
+    
+    // Store EventType IDs instead of direct relationships to avoid invalidation issues
+    // when EventTypes are deleted/recreated during backend sync
+    var eventTypeEntryID: UUID?
+    var eventTypeExitID: UUID?
+    
     var isActive: Bool
     var notifyOnEntry: Bool
     var notifyOnExit: Bool
     var createdAt: Date
 
-    init(name: String, latitude: Double, longitude: Double, radius: Double = 100.0, eventTypeEntry: EventType? = nil, eventTypeExit: EventType? = nil, isActive: Bool = true, notifyOnEntry: Bool = false, notifyOnExit: Bool = false) {
+    init(name: String, latitude: Double, longitude: Double, radius: Double = 100.0, eventTypeEntryID: UUID? = nil, eventTypeExitID: UUID? = nil, isActive: Bool = true, notifyOnEntry: Bool = false, notifyOnExit: Bool = false) {
         self.id = UUID()
         self.name = name
         self.latitude = latitude
         self.longitude = longitude
         self.radius = radius
-        self.eventTypeEntry = eventTypeEntry
-        self.eventTypeExit = eventTypeExit
+        self.eventTypeEntryID = eventTypeEntryID
+        self.eventTypeExitID = eventTypeExitID
         self.isActive = isActive
         self.notifyOnEntry = notifyOnEntry
         self.notifyOnExit = notifyOnExit
         self.createdAt = Date()
+    }
+    
+    // Convenience initializer that takes EventType objects
+    convenience init(name: String, latitude: Double, longitude: Double, radius: Double = 100.0, eventTypeEntry: EventType? = nil, eventTypeExit: EventType? = nil, isActive: Bool = true, notifyOnEntry: Bool = false, notifyOnExit: Bool = false) {
+        self.init(
+            name: name,
+            latitude: latitude,
+            longitude: longitude,
+            radius: radius,
+            eventTypeEntryID: eventTypeEntry?.id,
+            eventTypeExitID: eventTypeExit?.id,
+            isActive: isActive,
+            notifyOnEntry: notifyOnEntry,
+            notifyOnExit: notifyOnExit
+        )
     }
 
     // Computed property for CoreLocation coordinate

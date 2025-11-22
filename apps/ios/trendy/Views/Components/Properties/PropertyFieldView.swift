@@ -84,7 +84,8 @@ struct PropertyFieldView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .keyboardType(.numberPad)
                         .onChange(of: durationMinutes) { _, newValue in
-                            updateValue(type: .duration, value: newValue)
+                            // Store as seconds
+                            updateValue(type: .duration, value: Double(newValue * 60))
                         }
                     Text("minutes")
                         .foregroundColor(.secondary)
@@ -142,7 +143,12 @@ struct PropertyFieldView: View {
         case .select:
             selectValue = currentValue.stringValue ?? ""
         case .duration:
-            durationMinutes = currentValue.intValue ?? 0
+            // Duration is stored in seconds, convert to minutes for display
+            if let seconds = currentValue.doubleValue {
+                durationMinutes = Int(seconds / 60)
+            } else {
+                durationMinutes = 0
+            }
         case .url:
             urlValue = currentValue.stringValue ?? ""
         case .email:
@@ -184,9 +190,13 @@ struct PropertyFieldView: View {
                 updateValue(type: .date, value: date)
             }
         case .duration:
-            if let minutes = defaultValue.value as? Int {
+            // Default value may be in minutes (user input) or seconds (stored value)
+            if let seconds = defaultValue.value as? Double {
+                durationMinutes = Int(seconds / 60)
+                updateValue(type: .duration, value: seconds)
+            } else if let minutes = defaultValue.value as? Int {
                 durationMinutes = minutes
-                updateValue(type: .duration, value: minutes)
+                updateValue(type: .duration, value: Double(minutes * 60))
             }
         }
     }

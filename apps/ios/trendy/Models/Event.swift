@@ -20,7 +20,8 @@ final class Event {
     var timestamp: Date
     var notes: String?
     var eventType: EventType?
-    var sourceType: EventSourceType
+    // Store raw string to avoid SwiftData context detachment issues with enums
+    var sourceTypeRaw: String = EventSourceType.manual.rawValue
     var externalId: String?
     var originalTitle: String?
     var isAllDay: Bool = false
@@ -31,6 +32,12 @@ final class Event {
     var locationLongitude: Double?
     var locationName: String?
     var propertiesData: Data? // Encoded [String: PropertyValue]
+
+    // Computed property for convenient enum access
+    @Transient var sourceType: EventSourceType {
+        get { EventSourceType(rawValue: sourceTypeRaw) ?? .manual }
+        set { sourceTypeRaw = newValue.rawValue }
+    }
 
     // Computed property for convenient access to properties
     var properties: [String: PropertyValue] {
@@ -48,7 +55,7 @@ final class Event {
         self.timestamp = timestamp
         self.eventType = eventType
         self.notes = notes
-        self.sourceType = sourceType
+        self.sourceTypeRaw = sourceType.rawValue
         self.externalId = externalId
         self.originalTitle = originalTitle
         self.isAllDay = isAllDay

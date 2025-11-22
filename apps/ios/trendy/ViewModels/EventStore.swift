@@ -42,8 +42,52 @@ class EventStore {
     @ObservationIgnored private var isOnline = false
 
     // Backend ID mapping (iOS UUID → Backend UUID string)
-    private var eventTypeBackendIds: [UUID: String] = [:]
-    private var eventBackendIds: [UUID: String] = [:]
+    // Persisted to UserDefaults to survive app restarts
+    private var eventTypeBackendIds: [UUID: String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: "eventTypeBackendIds"),
+                  let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            // Convert String keys back to UUID
+            var result: [UUID: String] = [:]
+            for (key, value) in dict {
+                if let uuid = UUID(uuidString: key) {
+                    result[uuid] = value
+                }
+            }
+            return result
+        }
+        set {
+            // Convert UUID keys to String for JSON encoding
+            let stringDict = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.uuidString, $0.value) })
+            if let data = try? JSONEncoder().encode(stringDict) {
+                UserDefaults.standard.set(data, forKey: "eventTypeBackendIds")
+            }
+        }
+    }
+    
+    private var eventBackendIds: [UUID: String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: "eventBackendIds"),
+                  let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+                return [:]
+            }
+            var result: [UUID: String] = [:]
+            for (key, value) in dict {
+                if let uuid = UUID(uuidString: key) {
+                    result[uuid] = value
+                }
+            }
+            return result
+        }
+        set {
+            let stringDict = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.uuidString, $0.value) })
+            if let data = try? JSONEncoder().encode(stringDict) {
+                UserDefaults.standard.set(data, forKey: "eventBackendIds")
+            }
+        }
+    }
 
     /// Initialize EventStore with APIClient
     /// - Parameter apiClient: API client for backend communication
@@ -113,62 +157,162 @@ class EventStore {
         let apiEventTypes = try await apiClient.getEventTypes()
         let apiEvents = try await apiClient.getEvents()
 
-        // Clear local cache and repopulate
-        // (In production, you might want more sophisticated sync logic)
-        let localEventDescriptor = FetchDescriptor<Event>()
+        // CRITICAL: Clear in-memory arrays FIRST to prevent SwiftUI from
+        // accessing invalidated objects while we process
+        events = []
+        eventTypes = []
+
+        // Fetch existing local data
         let localTypeDescriptor = FetchDescriptor<EventType>()
+        let localEventDescriptor = FetchDescriptor<Event>()
+        
+        var existingTypes = try modelContext.fetch(localTypeDescriptor)
+        let existingEvents = try modelContext.fetch(localEventDescriptor)
 
-        let localEvents = try modelContext.fetch(localEventDescriptor)
-        let localTypes = try modelContext.fetch(localTypeDescriptor)
-
-        // Delete all local cached data
-        for event in localEvents {
-            modelContext.delete(event)
+        // Build reverse mapping: backend ID -> local EventType
+        var backendIdToLocalType: [String: EventType] = [:]
+        let currentMappings = eventTypeBackendIds // Get current persisted mappings
+        for (localId, backendId) in currentMappings {
+            if let localType = existingTypes.first(where: { $0.id == localId }) {
+                backendIdToLocalType[backendId] = localType
+            }
         }
-        for type in localTypes {
-            modelContext.delete(type)
-        }
 
-        // Insert backend data as local cache
+        // UPSERT EventTypes - update existing or create new, but preserve local IDs
+        var processedBackendTypeIds = Set<String>()
+        var updatedMappings = currentMappings
+        
         for apiType in apiEventTypes {
-            let localType = EventType(
-                name: apiType.name,
-                colorHex: apiType.color,
-                iconName: apiType.icon
-            )
-            modelContext.insert(localType)
-            eventTypeBackendIds[localType.id] = apiType.id
+            processedBackendTypeIds.insert(apiType.id)
+            
+            if let existingType = backendIdToLocalType[apiType.id] {
+                // UPDATE existing - preserve the local ID!
+                existingType.name = apiType.name
+                existingType.colorHex = apiType.color
+                existingType.iconName = apiType.icon
+                print("📝 Updated existing EventType: \(apiType.name) (local ID: \(existingType.id))")
+            } else {
+                // Check if there's already a local type with the same name (unmapped)
+                if let existingByName = existingTypes.first(where: { 
+                    $0.name == apiType.name && !currentMappings.keys.contains($0.id)
+                }) {
+                    // Map existing local type to backend ID
+                    existingByName.colorHex = apiType.color
+                    existingByName.iconName = apiType.icon
+                    updatedMappings[existingByName.id] = apiType.id
+                    backendIdToLocalType[apiType.id] = existingByName
+                    print("🔗 Linked existing EventType by name: \(apiType.name) (local ID: \(existingByName.id))")
+                } else {
+                    // CREATE new
+                    let newType = EventType(
+                        name: apiType.name,
+                        colorHex: apiType.color,
+                        iconName: apiType.icon
+                    )
+                    modelContext.insert(newType)
+                    updatedMappings[newType.id] = apiType.id
+                    backendIdToLocalType[apiType.id] = newType
+                    print("➕ Created new EventType: \(apiType.name) (local ID: \(newType.id))")
+                }
+            }
+        }
+        
+        // Save the updated mappings
+        eventTypeBackendIds = updatedMappings
+
+        // Delete EventTypes that no longer exist on backend (optional - be careful with this)
+        // For now, we'll keep orphaned types to avoid breaking geofences
+        // for type in existingTypes {
+        //     if let backendId = eventTypeBackendIds[type.id], !processedBackendTypeIds.contains(backendId) {
+        //         modelContext.delete(type)
+        //     }
+        // }
+
+        try modelContext.save()
+        
+        // Refresh the types list
+        existingTypes = try modelContext.fetch(localTypeDescriptor)
+
+        // UPSERT Events - similar approach
+        var backendIdToLocalEvent: [String: Event] = [:]
+        let currentEventMappings = eventBackendIds
+        for (localId, backendId) in currentEventMappings {
+            if let localEvent = existingEvents.first(where: { $0.id == localId }) {
+                backendIdToLocalEvent[backendId] = localEvent
+            }
         }
 
-        // Fetch updated types to build relationship
-        let updatedTypes = try modelContext.fetch(localTypeDescriptor)
-
+        var processedBackendEventIds = Set<String>()
+        var updatedEventMappings = currentEventMappings
+        
         for apiEvent in apiEvents {
+            processedBackendEventIds.insert(apiEvent.id)
+            
             // Find matching local event type by backend ID
-            guard let localType = updatedTypes.first(where: {
-                eventTypeBackendIds[$0.id] == apiEvent.eventTypeId
-            }) else {
+            guard let localType = backendIdToLocalType[apiEvent.eventTypeId] else {
+                print("⚠️ Skipping event - no matching EventType for backend ID: \(apiEvent.eventTypeId)")
                 continue
             }
 
-            let localEvent = Event(
-                timestamp: apiEvent.timestamp,
-                eventType: localType,
-                notes: apiEvent.notes,
-                sourceType: apiEvent.sourceType == "manual" ? .manual : .imported,
-                externalId: apiEvent.externalId,
-                originalTitle: apiEvent.originalTitle,
-                isAllDay: apiEvent.isAllDay,
-                endDate: apiEvent.endDate
-            )
-            modelContext.insert(localEvent)
-            eventBackendIds[localEvent.id] = apiEvent.id
+            if let existingEvent = backendIdToLocalEvent[apiEvent.id] {
+                // UPDATE existing event
+                existingEvent.timestamp = apiEvent.timestamp
+                existingEvent.eventType = localType
+                existingEvent.notes = apiEvent.notes
+                existingEvent.isAllDay = apiEvent.isAllDay
+                existingEvent.endDate = apiEvent.endDate
+            } else {
+                // Check for duplicate by timestamp and event type (unmapped events)
+                let isDuplicate = existingEvents.contains { event in
+                    event.eventType?.id == localType.id &&
+                    abs(event.timestamp.timeIntervalSince(apiEvent.timestamp)) < 1.0 &&
+                    !currentEventMappings.keys.contains(event.id)
+                }
+                
+                if let existingByMatch = existingEvents.first(where: { event in
+                    event.eventType?.id == localType.id &&
+                    abs(event.timestamp.timeIntervalSince(apiEvent.timestamp)) < 1.0 &&
+                    !currentEventMappings.keys.contains(event.id)
+                }) {
+                    // Link existing event to backend
+                    updatedEventMappings[existingByMatch.id] = apiEvent.id
+                    backendIdToLocalEvent[apiEvent.id] = existingByMatch
+                    print("🔗 Linked existing Event by match (local ID: \(existingByMatch.id))")
+                } else {
+                    // CREATE new event
+                    let newEvent = Event(
+                        timestamp: apiEvent.timestamp,
+                        eventType: localType,
+                        notes: apiEvent.notes,
+                        sourceType: apiEvent.sourceType == "manual" ? .manual : .imported,
+                        externalId: apiEvent.externalId,
+                        originalTitle: apiEvent.originalTitle,
+                        isAllDay: apiEvent.isAllDay,
+                        endDate: apiEvent.endDate
+                    )
+                    modelContext.insert(newEvent)
+                    updatedEventMappings[newEvent.id] = apiEvent.id
+                }
+            }
+        }
+        
+        // Save updated event mappings
+        eventBackendIds = updatedEventMappings
+
+        // Delete events that no longer exist on backend
+        for event in existingEvents {
+            if let backendId = eventBackendIds[event.id], !processedBackendEventIds.contains(backendId) {
+                modelContext.delete(event)
+                eventBackendIds.removeValue(forKey: event.id)
+            }
         }
 
         try modelContext.save()
 
-        // Update in-memory arrays
+        // Update in-memory arrays with fresh data
         try await fetchFromLocal()
+        
+        print("✅ Backend sync complete - EventTypes: \(eventTypes.count), Events: \(events.count)")
     }
 
     private func fetchFromLocal() async throws {
@@ -518,6 +662,19 @@ class EventStore {
             print("⚠️ No backend ID for event type: \(eventType.name)")
             return
         }
+        
+        // Map source type for backend compatibility
+        // Backend may not support "geofence" - map it to "manual" for now
+        let backendSourceType: String
+        switch event.sourceType {
+        case .manual:
+            backendSourceType = "manual"
+        case .imported:
+            backendSourceType = "imported"
+        case .geofence:
+            // Backend doesn't support "geofence" yet - use "manual" as fallback
+            backendSourceType = "manual"
+        }
 
         do {
             // Check if this event already exists on the backend
@@ -531,7 +688,7 @@ class EventStore {
                     notes: event.notes,
                     isAllDay: event.isAllDay,
                     endDate: event.endDate,
-                    sourceType: event.sourceType.rawValue,
+                    sourceType: backendSourceType,
                     externalId: event.externalId,
                     originalTitle: event.originalTitle,
                     geofenceId: event.geofenceId?.uuidString,
@@ -558,7 +715,7 @@ class EventStore {
                     notes: event.notes,
                     isAllDay: event.isAllDay,
                     endDate: event.endDate,
-                    sourceType: event.sourceType.rawValue,
+                    sourceType: backendSourceType,
                     externalId: event.externalId,
                     originalTitle: event.originalTitle,
                     geofenceId: event.geofenceId?.uuidString,

@@ -120,7 +120,7 @@ class GeofenceManager: NSObject {
     /// - Parameter geofence: The geofence to monitor
     func startMonitoring(geofence: Geofence) {
         guard hasGeofencingAuthorization else {
-            print("⚠️ Cannot start monitoring geofence: insufficient authorization")
+            print("⚠️ Cannot start monitoring geofence '\(geofence.name)': insufficient authorization (current: \(authorizationStatus.description))")
             return
         }
 
@@ -132,8 +132,13 @@ class GeofenceManager: NSObject {
 
         let region = geofence.circularRegion
         locationManager.startMonitoring(for: region)
+        
+        // Request state for this region to check if we're already inside
+        locationManager.requestState(for: region)
 
-        print("✅ Started monitoring geofence: \(geofence.name)")
+        print("✅ Started monitoring geofence: \(geofence.name) (ID: \(geofence.id), radius: \(geofence.radius)m)")
+        print("   📍 Location: \(geofence.latitude), \(geofence.longitude)")
+        print("   📊 Total monitored regions: \(locationManager.monitoredRegions.count)")
     }
 
     /// Stop monitoring a specific geofence
@@ -160,6 +165,24 @@ class GeofenceManager: NSObject {
         stopMonitoringAllGeofences()
         startMonitoringAllGeofences()
     }
+    
+    // MARK: - Debug/Testing Methods
+    
+    #if DEBUG
+    /// Simulate a geofence entry for testing purposes
+    /// - Parameter geofenceId: The geofence ID to simulate entry for
+    func simulateEntry(geofenceId: UUID) {
+        print("🧪 DEBUG: Simulating geofence entry for ID: \(geofenceId)")
+        handleGeofenceEntry(geofenceId: geofenceId)
+    }
+    
+    /// Simulate a geofence exit for testing purposes
+    /// - Parameter geofenceId: The geofence ID to simulate exit for
+    func simulateExit(geofenceId: UUID) {
+        print("🧪 DEBUG: Simulating geofence exit for ID: \(geofenceId)")
+        handleGeofenceExit(geofenceId: geofenceId)
+    }
+    #endif
 
     // MARK: - Active Geofence Events
 
@@ -189,38 +212,65 @@ class GeofenceManager: NSObject {
 
     /// Handle geofence entry - create a new event
     private func handleGeofenceEntry(geofenceId: UUID) {
+        print("🔍 handleGeofenceEntry called for geofenceId: \(geofenceId)")
+        
         // Fetch the geofence
         let descriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }
         )
 
         guard let geofence = try? modelContext.fetch(descriptor).first else {
-            print("❌ Geofence not found: \(geofenceId)")
+            print("❌ Geofence not found in database for ID: \(geofenceId)")
             return
         }
+        
+        print("✅ Found geofence: \(geofence.name)")
 
         // Check if already has an active event
         if activeGeofenceEvents[geofenceId] != nil {
-            print("⚠️ Geofence \(geofence.name) already has an active event")
+            print("⚠️ Geofence \(geofence.name) already has an active event (ID: \(activeGeofenceEvents[geofenceId]!))")
             return
         }
 
-        // Get the entry event type
-        guard let eventType = geofence.eventTypeEntry else {
-            print("⚠️ Geofence \(geofence.name) has no entry event type configured")
+        // Get the entry event type by ID
+        guard let eventTypeEntryID = geofence.eventTypeEntryID else {
+            print("❌ Geofence '\(geofence.name)' has NO eventTypeEntryID set!")
+            print("   This geofence needs to be edited to select an Event Type.")
             return
         }
+        
+        print("🔍 Looking for EventType with ID: \(eventTypeEntryID)")
+        
+        // Fetch the EventType by ID
+        let eventTypeDescriptor = FetchDescriptor<EventType>(
+            predicate: #Predicate { eventType in eventType.id == eventTypeEntryID }
+        )
+        
+        guard let eventType = try? modelContext.fetch(eventTypeDescriptor).first else {
+            print("❌ EventType not found for ID: \(eventTypeEntryID)")
+            print("   The Event Type may have been deleted. Edit the geofence to select a new one.")
+            return
+        }
+        
+        print("✅ Found EventType: \(eventType.name)")
 
-        // Create the event
+        // Create the event with entry timestamp property
+        print("📝 Creating new Event...")
+        let entryTime = Date()
+        let entryProperties: [String: PropertyValue] = [
+            "Entered At": PropertyValue(type: .date, value: entryTime)
+        ]
+        
         let event = Event(
-            timestamp: Date(),
+            timestamp: entryTime,
             eventType: eventType,
-            notes: nil,
+            notes: "Auto-logged by geofence: \(geofence.name)",
             sourceType: .geofence,
             geofenceId: geofenceId,
             locationLatitude: geofence.latitude,
             locationLongitude: geofence.longitude,
-            locationName: geofence.name
+            locationName: geofence.name,
+            properties: entryProperties
         )
 
         modelContext.insert(event)
@@ -232,7 +282,10 @@ class GeofenceManager: NSObject {
             activeGeofenceEvents[geofenceId] = event.id
             saveActiveGeofenceEvents()
 
-            print("✅ Created geofence entry event: \(geofence.name)")
+            print("✅✅✅ SUCCESS! Created geofence entry event for: \(geofence.name)")
+            print("   Event ID: \(event.id)")
+            print("   Event Type: \(eventType.name)")
+            print("   Timestamp: \(event.timestamp)")
 
             // Send notification if enabled
             if geofence.notifyOnEntry, let notificationManager = notificationManager {
@@ -287,11 +340,21 @@ class GeofenceManager: NSObject {
             return
         }
 
-        // Update the event with end date
-        event.endDate = Date()
+        // Update the event with end date and exit properties
+        let exitTime = Date()
+        event.endDate = exitTime
+        
+        // Calculate duration in seconds
+        let durationSeconds = exitTime.timeIntervalSince(event.timestamp)
+        
+        // Add "Exited At" and "Duration" properties while preserving existing properties
+        var updatedProperties = event.properties
+        updatedProperties["Exited At"] = PropertyValue(type: .date, value: exitTime)
+        updatedProperties["Duration"] = PropertyValue(type: .duration, value: durationSeconds)
+        event.properties = updatedProperties
 
-        // Calculate duration
-        let duration = event.endDate!.timeIntervalSince(event.timestamp)
+        // Use duration for notification
+        let duration = durationSeconds
 
         do {
             try modelContext.save()
@@ -334,9 +397,12 @@ extension GeofenceManager: CLLocationManagerDelegate {
         authorizationStatus = manager.authorizationStatus
 
         print("📍 Location authorization changed: \(authorizationStatus.description)")
+        print("   🔑 Has geofencing authorization: \(hasGeofencingAuthorization)")
+        print("   📍 Location services enabled: \(isLocationServicesEnabled)")
 
         // Start monitoring if we now have authorization
         if hasGeofencingAuthorization && monitoredRegions.isEmpty {
+            print("📍 Starting to monitor all geofences...")
             startMonitoringAllGeofences()
         }
     }
@@ -347,7 +413,8 @@ extension GeofenceManager: CLLocationManagerDelegate {
             return
         }
 
-        print("📍 Entered geofence: \(region.identifier)")
+        print("📍🟢 ENTERED geofence: \(region.identifier)")
+        print("   ⏰ Time: \(Date())")
 
         handleGeofenceEntry(geofenceId: geofenceId)
     }
@@ -358,9 +425,32 @@ extension GeofenceManager: CLLocationManagerDelegate {
             return
         }
 
-        print("📍 Exited geofence: \(region.identifier)")
+        print("📍🔴 EXITED geofence: \(region.identifier)")
+        print("   ⏰ Time: \(Date())")
 
         handleGeofenceExit(geofenceId: geofenceId)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
+        let stateDescription: String
+        switch state {
+        case .inside:
+            stateDescription = "INSIDE"
+        case .outside:
+            stateDescription = "OUTSIDE"
+        case .unknown:
+            stateDescription = "UNKNOWN"
+        }
+        
+        print("📍 Region state determined for \(region.identifier): \(stateDescription)")
+        
+        // If we're already inside when we start monitoring, trigger entry
+        if state == .inside, let geofenceId = UUID(uuidString: region.identifier) {
+            if activeGeofenceEvents[geofenceId] == nil {
+                print("📍 Already inside geofence, triggering entry event...")
+                handleGeofenceEntry(geofenceId: geofenceId)
+            }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {

@@ -15,19 +15,25 @@ struct AddGeofenceView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
 
-    @Environment(GeofenceManager.self) private var geofenceManager
+    @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
+    @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
 
     // Form fields
     @State private var name: String = ""
     @State private var radius: Double = 100
-    @State private var selectedEventTypeEntry: EventType?
+    @State private var selectedEventTypeEntryID: UUID?
     @State private var notifyOnEntry: Bool = false
     @State private var notifyOnExit: Bool = false
+    @State private var showingNotificationPermissionAlert = false
+    
+    private var selectedEventTypeEntry: EventType? {
+        guard let id = selectedEventTypeEntryID else { return nil }
+        return eventTypes.first { $0.id == id }
+    }
 
     // Map state
-    @State private var mapPosition: MapCameraPosition = .automatic
     @State private var selectedCoordinate: CLLocationCoordinate2D?
-    @State private var locationManager = CLLocationManager()
+    @State private var showingMapPicker = false
 
     // Validation
     @State private var showingError = false
@@ -36,34 +42,49 @@ struct AddGeofenceView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Map Section
+                // Location Section
                 Section {
-                    mapView
-                        .frame(height: 300)
+                    // Show mini map preview if location selected
+                    if let coordinate = selectedCoordinate {
+                        Map(initialPosition: .camera(MapCamera(centerCoordinate: coordinate, distance: 2000))) {
+                            MapCircle(center: coordinate, radius: radius)
+                                .foregroundStyle(Color.blue.opacity(0.2))
+                                .stroke(Color.blue, lineWidth: 2)
+                            
+                            Annotation("", coordinate: coordinate) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .frame(height: 150)
                         .listRowInsets(EdgeInsets())
+                        .allowsHitTesting(false) // Disable interactions on preview
+                    }
+                    
+                    Button(action: { showingMapPicker = true }) {
+                        HStack {
+                            Image(systemName: selectedCoordinate == nil ? "map" : "map.fill")
+                                .foregroundStyle(selectedCoordinate == nil ? .blue : .green)
+                            Text(selectedCoordinate == nil ? "Select Location on Map" : "Change Location")
+                            Spacer()
+                            if let coordinate = selectedCoordinate {
+                                Text("\(coordinate.latitude, specifier: "%.4f"), \(coordinate.longitude, specifier: "%.4f")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
 
                     Button(action: useCurrentLocation) {
                         Label("Use Current Location", systemImage: "location.fill")
                     }
-                    .disabled(!geofenceManager.hasGeofencingAuthorization)
-
-                    if let coordinate = selectedCoordinate {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Selected Location")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("Lat: \(coordinate.latitude, specifier: "%.6f")")
-                                .font(.caption)
-                                .monospaced()
-                            Text("Lon: \(coordinate.longitude, specifier: "%.6f")")
-                                .font(.caption)
-                                .monospaced()
-                        }
-                    }
                 } header: {
                     Text("Location")
                 } footer: {
-                    Text("Tap on the map to select a location, or use your current location.")
+                    if selectedCoordinate == nil {
+                        Text("Select a location for your geofence.")
+                    }
                 }
 
                 // Details Section
@@ -87,8 +108,8 @@ struct AddGeofenceView: View {
 
                 // Event Type Section
                 Section {
-                    Picker("Event Type (Entry)", selection: $selectedEventTypeEntry) {
-                        Text("None").tag(nil as EventType?)
+                    Picker("Event Type (Entry)", selection: $selectedEventTypeEntryID) {
+                        Text("None").tag(nil as UUID?)
                         ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
@@ -96,7 +117,7 @@ struct AddGeofenceView: View {
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType as EventType?)
+                            .tag(eventType.id as UUID?)
                         }
                     }
                 } header: {
@@ -108,11 +129,26 @@ struct AddGeofenceView: View {
                 // Notifications Section
                 Section {
                     Toggle("Notify on Entry", isOn: $notifyOnEntry)
+                        .onChange(of: notifyOnEntry) { _, newValue in
+                            if newValue {
+                                requestNotificationPermissionIfNeeded()
+                            }
+                        }
                     Toggle("Notify on Exit", isOn: $notifyOnExit)
+                        .onChange(of: notifyOnExit) { _, newValue in
+                            if newValue {
+                                requestNotificationPermissionIfNeeded()
+                            }
+                        }
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("Receive notifications when entering or exiting this geofence.")
+                    if let manager = notificationManager, manager.authorizationStatus == .denied {
+                        Text("Notifications are disabled. Enable them in Settings to receive geofence alerts.")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Receive notifications when entering or exiting this geofence.")
+                    }
                 }
             }
             .navigationTitle("Add Geofence")
@@ -131,78 +167,38 @@ struct AddGeofenceView: View {
                     .disabled(!isValid)
                 }
             }
+            .sheet(isPresented: $showingMapPicker) {
+                GeofenceMapPickerView(selectedCoordinate: $selectedCoordinate, radius: radius)
+            }
             .alert("Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage)
             }
-            .onAppear {
-                // Default to current location if available
-                if geofenceManager.hasGeofencingAuthorization {
-                    useCurrentLocation()
-                }
-            }
-        }
-    }
-
-    // MARK: - Map View
-
-    private var mapView: some View {
-        Map(position: $mapPosition, interactionModes: .all) {
-            // Show selected location with circle overlay
-            if let coordinate = selectedCoordinate {
-                Annotation("", coordinate: coordinate) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue.opacity(0.2))
-                            .frame(width: radiusInPoints(for: radius), height: radiusInPoints(for: radius))
-
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.title)
-                            .foregroundStyle(.red)
+            .alert("Enable Notifications", isPresented: $showingNotificationPermissionAlert) {
+                Button("Open Settings") {
+                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsURL)
                     }
                 }
-            }
-        }
-        .mapStyle(.standard(elevation: .realistic))
-        .onTapGesture { location in
-            // This doesn't work directly with Map - need to use MapReader
-        }
-        .overlay(alignment: .topTrailing) {
-            // Map controls
-            VStack(spacing: 8) {
-                Button(action: useCurrentLocation) {
-                    Image(systemName: "location.fill")
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+                Button("Cancel", role: .cancel) {
+                    // Turn off the toggle since notifications are denied
+                    notifyOnEntry = false
+                    notifyOnExit = false
                 }
-                .disabled(!geofenceManager.hasGeofencingAuthorization)
+            } message: {
+                Text("Notifications are disabled for this app. Please enable them in Settings to receive geofence alerts.")
             }
-            .padding()
         }
-    }
-
-    // Calculate radius in map points (approximate)
-    private func radiusInPoints(for meters: Double) -> CGFloat {
-        // Very rough approximation: 1 degree ≈ 111km
-        // This should be calculated based on map zoom level
-        return CGFloat(max(20, min(meters / 10, 200)))
     }
 
     // MARK: - Actions
 
     private func useCurrentLocation() {
-        if let location = locationManager.location {
+        let manager = CLLocationManager()
+        if let location = manager.location {
             selectedCoordinate = location.coordinate
-            mapPosition = .camera(
-                MapCamera(
-                    centerCoordinate: location.coordinate,
-                    distance: 500,
-                    heading: 0,
-                    pitch: 0
-                )
-            )
+            print("📍 Using current location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         }
     }
 
@@ -226,8 +222,8 @@ struct AddGeofenceView: View {
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             radius: radius,
-            eventTypeEntry: selectedEventTypeEntry,
-            eventTypeExit: nil,
+            eventTypeEntryID: selectedEventTypeEntryID,
+            eventTypeExitID: nil,
             isActive: true,
             notifyOnEntry: notifyOnEntry,
             notifyOnExit: notifyOnExit
@@ -239,7 +235,7 @@ struct AddGeofenceView: View {
             try modelContext.save()
 
             // Start monitoring
-            geofenceManager.startMonitoring(geofence: geofence)
+            geofenceManager?.startMonitoring(geofence: geofence)
 
             print("✅ Created geofence: \(geofence.name)")
             dismiss()
@@ -247,6 +243,145 @@ struct AddGeofenceView: View {
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
             showingError = true
+        }
+    }
+
+    private func requestNotificationPermissionIfNeeded() {
+        guard let manager = notificationManager else { return }
+        
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            // Request permission
+            Task {
+                do {
+                    try await manager.requestAuthorization()
+                } catch {
+                    print("Failed to request notification permission: \(error)")
+                }
+            }
+        case .denied:
+            // Show alert to open settings
+            showingNotificationPermissionAlert = true
+        default:
+            // Already authorized or provisional
+            break
+        }
+    }
+}
+
+// MARK: - Full Screen Map Picker
+
+struct GeofenceMapPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedCoordinate: CLLocationCoordinate2D?
+    let radius: Double
+    
+    @State private var mapPosition: MapCameraPosition
+    @State private var tempCoordinate: CLLocationCoordinate2D?
+    @State private var searchText = ""
+    
+    init(selectedCoordinate: Binding<CLLocationCoordinate2D?>, radius: Double) {
+        self._selectedCoordinate = selectedCoordinate
+        self.radius = radius
+        
+        // Initialize map position based on existing selection or default
+        if let coord = selectedCoordinate.wrappedValue {
+            self._mapPosition = State(initialValue: .camera(MapCamera(centerCoordinate: coord, distance: 2000)))
+            self._tempCoordinate = State(initialValue: coord)
+        } else {
+            // Default to a reasonable location (will be updated by location manager)
+            self._mapPosition = State(initialValue: .automatic)
+            self._tempCoordinate = State(initialValue: nil)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                // Full screen map
+                MapReader { proxy in
+                    Map(position: $mapPosition) {
+                        if let coordinate = tempCoordinate {
+                            MapCircle(center: coordinate, radius: radius)
+                                .foregroundStyle(Color.blue.opacity(0.2))
+                                .stroke(Color.blue, lineWidth: 2)
+                            
+                            Annotation("", coordinate: coordinate) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+                    .mapStyle(.standard(elevation: .realistic))
+                    .ignoresSafeArea(edges: .bottom)
+                    .onTapGesture { screenPosition in
+                        if let coordinate = proxy.convert(screenPosition, from: .local) {
+                            tempCoordinate = coordinate
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred()
+                        }
+                    }
+                }
+                
+                // Center crosshair (alternative selection method)
+                VStack {
+                    Spacer()
+                    
+                    // Bottom info panel
+                    VStack(spacing: 12) {
+                        if let coord = tempCoordinate {
+                            HStack {
+                                Image(systemName: "mappin.circle.fill")
+                                    .foregroundStyle(.red)
+                                Text("\(coord.latitude, specifier: "%.6f"), \(coord.longitude, specifier: "%.6f")")
+                                    .font(.caption.monospaced())
+                            }
+                        } else {
+                            Text("Tap on the map to select a location")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        HStack(spacing: 16) {
+                            Button("Use Current Location") {
+                                useCurrentLocation()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding()
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(16)
+                    .padding()
+                }
+            }
+            .navigationTitle("Select Location")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        selectedCoordinate = tempCoordinate
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(tempCoordinate == nil)
+                }
+            }
+        }
+    }
+    
+    private func useCurrentLocation() {
+        let manager = CLLocationManager()
+        if let location = manager.location {
+            tempCoordinate = location.coordinate
+            mapPosition = .camera(MapCamera(centerCoordinate: location.coordinate, distance: 2000))
         }
     }
 }
@@ -259,14 +394,21 @@ struct AddGeofenceViewWithMapReader: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
 
-    @Environment(GeofenceManager.self) private var geofenceManager
+    @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
+    @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
 
     // Form fields
     @State private var name: String = ""
     @State private var radius: Double = 100
-    @State private var selectedEventTypeEntry: EventType?
+    @State private var selectedEventTypeEntryID: UUID?
     @State private var notifyOnEntry: Bool = false
     @State private var notifyOnExit: Bool = false
+    @State private var showingNotificationPermissionAlert = false
+    
+    private var selectedEventTypeEntry: EventType? {
+        guard let id = selectedEventTypeEntryID else { return nil }
+        return eventTypes.first { $0.id == id }
+    }
 
     // Map state
     @State private var mapPosition: MapCameraPosition = .automatic
@@ -317,7 +459,7 @@ struct AddGeofenceViewWithMapReader: View {
                     Button(action: useCurrentLocation) {
                         Label("Use Current Location", systemImage: "location.fill")
                     }
-                    .disabled(!geofenceManager.hasGeofencingAuthorization)
+                    .disabled(!(geofenceManager?.hasGeofencingAuthorization ?? false))
                 } header: {
                     Text("Location")
                 }
@@ -343,8 +485,8 @@ struct AddGeofenceViewWithMapReader: View {
 
                 // Event Type Section
                 Section {
-                    Picker("Event Type (Entry)", selection: $selectedEventTypeEntry) {
-                        Text("None").tag(nil as EventType?)
+                    Picker("Event Type (Entry)", selection: $selectedEventTypeEntryID) {
+                        Text("None").tag(nil as UUID?)
                         ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
@@ -352,7 +494,7 @@ struct AddGeofenceViewWithMapReader: View {
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType as EventType?)
+                            .tag(eventType.id as UUID?)
                         }
                     }
                 } header: {
@@ -364,9 +506,24 @@ struct AddGeofenceViewWithMapReader: View {
                 // Notifications Section
                 Section {
                     Toggle("Notify on Entry", isOn: $notifyOnEntry)
+                        .onChange(of: notifyOnEntry) { _, newValue in
+                            if newValue {
+                                requestNotificationPermissionIfNeeded()
+                            }
+                        }
                     Toggle("Notify on Exit", isOn: $notifyOnExit)
+                        .onChange(of: notifyOnExit) { _, newValue in
+                            if newValue {
+                                requestNotificationPermissionIfNeeded()
+                            }
+                        }
                 } header: {
                     Text("Notifications")
+                } footer: {
+                    if let manager = notificationManager, manager.authorizationStatus == .denied {
+                        Text("Notifications are disabled. Enable them in Settings to receive geofence alerts.")
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .navigationTitle("Add Geofence")
@@ -392,6 +549,19 @@ struct AddGeofenceViewWithMapReader: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage)
+            }
+            .alert("Enable Notifications", isPresented: $showingNotificationPermissionAlert) {
+                Button("Open Settings") {
+                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsURL)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    notifyOnEntry = false
+                    notifyOnExit = false
+                }
+            } message: {
+                Text("Notifications are disabled for this app. Please enable them in Settings to receive geofence alerts.")
             }
         }
     }
@@ -423,8 +593,8 @@ struct AddGeofenceViewWithMapReader: View {
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             radius: radius,
-            eventTypeEntry: selectedEventTypeEntry,
-            eventTypeExit: nil,
+            eventTypeEntryID: selectedEventTypeEntryID,
+            eventTypeExitID: nil,
             isActive: true,
             notifyOnEntry: notifyOnEntry,
             notifyOnExit: notifyOnExit
@@ -434,12 +604,31 @@ struct AddGeofenceViewWithMapReader: View {
 
         do {
             try modelContext.save()
-            geofenceManager.startMonitoring(geofence: geofence)
+            geofenceManager?.startMonitoring(geofence: geofence)
             print("✅ Created geofence: \(geofence.name)")
             dismiss()
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
             showingError = true
+        }
+    }
+
+    private func requestNotificationPermissionIfNeeded() {
+        guard let manager = notificationManager else { return }
+        
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            Task {
+                do {
+                    try await manager.requestAuthorization()
+                } catch {
+                    print("Failed to request notification permission: \(error)")
+                }
+            }
+        case .denied:
+            showingNotificationPermissionAlert = true
+        default:
+            break
         }
     }
 }

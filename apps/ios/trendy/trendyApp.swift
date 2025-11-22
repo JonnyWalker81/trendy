@@ -33,7 +33,8 @@ struct trendyApp: App {
             Event.self,
             EventType.self,
             QueuedOperation.self,
-            Geofence.self
+            Geofence.self,
+            PropertyDefinition.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
