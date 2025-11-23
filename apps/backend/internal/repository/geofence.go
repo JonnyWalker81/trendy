@@ -20,14 +20,14 @@ func NewGeofenceRepository(client *supabase.Client) GeofenceRepository {
 
 func (r *geofenceRepository) Create(ctx context.Context, geofence *models.Geofence) (*models.Geofence, error) {
 	data := map[string]interface{}{
-		"user_id":               geofence.UserID,
-		"name":                  geofence.Name,
-		"latitude":              geofence.Latitude,
-		"longitude":             geofence.Longitude,
-		"radius":                geofence.Radius,
-		"is_active":             geofence.IsActive,
-		"notify_on_entry":       geofence.NotifyOnEntry,
-		"notify_on_exit":        geofence.NotifyOnExit,
+		"user_id":         geofence.UserID,
+		"name":            geofence.Name,
+		"latitude":        geofence.Latitude,
+		"longitude":       geofence.Longitude,
+		"radius":          geofence.Radius,
+		"is_active":       geofence.IsActive,
+		"notify_on_entry": geofence.NotifyOnEntry,
+		"notify_on_exit":  geofence.NotifyOnExit,
 	}
 
 	if geofence.EventTypeEntryID != nil {
