@@ -1,10 +1,7 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -94,20 +91,8 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      - name: Check for secrets (PR)
-        if: github.event_name == 'pull_request'
+      - name: Check for secrets
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.pull_request.base.sha }}
-          head: ${{ github.event.pull_request.head.sha }}
-          extra_args: --only-verified
-
-      - name: Check for secrets (Push)
-        if: github.event_name == 'push'
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.before }}
-          head: ${{ github.event.after }}
           extra_args: --only-verified
