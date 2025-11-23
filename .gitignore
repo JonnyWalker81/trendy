@@ -67,3 +67,4 @@ apps/ios/*.mobileprovision
 apps/ios/*.cer
 /.wrangler/
 /apps/backend/trendy-api
+/apps/backend/coverage.out
