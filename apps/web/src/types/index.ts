@@ -111,7 +111,7 @@ export interface PropertyDefinition {
   label: string
   property_type: PropertyType
   options?: string[]
-  default_value?: any
+  default_value?: string | number | boolean | Date
   display_order: number
   created_at: string
   updated_at: string
@@ -123,7 +123,7 @@ export interface CreatePropertyDefinitionRequest {
   label: string
   property_type: PropertyType
   options?: string[]
-  default_value?: any
+  default_value?: string | number | boolean | Date
   display_order?: number
 }
 
@@ -132,6 +132,6 @@ export interface UpdatePropertyDefinitionRequest {
   label?: string
   property_type?: PropertyType
   options?: string[]
-  default_value?: any
+  default_value?: string | number | boolean | Date
   display_order?: number
 }

@@ -93,7 +93,14 @@ export function EventForm({
     }
 
     // Build the request data
-    const data: any = {
+    const data: {
+      event_type_id: string
+      timestamp: string
+      notes?: string
+      is_all_day: boolean
+      end_date?: string
+      properties?: Record<string, PropertyValue>
+    } = {
       event_type_id: eventTypeId,
       timestamp,
       notes: notes.trim() || undefined,

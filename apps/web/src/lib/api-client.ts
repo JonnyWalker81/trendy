@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { apiLogger, errorContext } from './logger'
+import { apiLogger } from './logger'
 import type {
   Event,
   EventType,

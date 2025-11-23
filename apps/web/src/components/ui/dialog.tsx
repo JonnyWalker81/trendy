@@ -41,7 +41,7 @@ const DialogTrigger = ({ children, asChild, ...props }: {
   onClick?: () => void
 }) => {
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children, props as any)
+    return React.cloneElement(children, props as React.Attributes)
   }
   return <div {...props}>{children}</div>
 }

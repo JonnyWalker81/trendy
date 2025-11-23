@@ -95,7 +95,7 @@ export function DynamicPropertyField({
           </select>
         )
 
-      case 'duration':
+      case 'duration': {
         // Duration in seconds, display as HH:MM:SS
         const seconds = (inputValue as number) || 0
         const hours = Math.floor(seconds / 3600)
@@ -114,6 +114,7 @@ export function DynamicPropertyField({
             }}
           />
         )
+      }
 
       case 'url':
         return (

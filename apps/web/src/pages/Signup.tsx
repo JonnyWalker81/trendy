@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -27,14 +27,7 @@ export function Signup() {
   const [error, setError] = useState('')
   const [inviteData, setInviteData] = useState<InviteCodeVerification | null>(null)
 
-  // Verify invite code on mount if present
-  useEffect(() => {
-    if (inviteCode) {
-      verifyInviteCode()
-    }
-  }, [inviteCode])
-
-  const verifyInviteCode = async () => {
+  const verifyInviteCode = useCallback(async () => {
     if (!inviteCode) return
 
     setVerifying(true)
@@ -60,7 +53,14 @@ export function Signup() {
     } finally {
       setVerifying(false)
     }
-  }
+  }, [inviteCode])
+
+  // Verify invite code on mount if present
+  useEffect(() => {
+    if (inviteCode) {
+      verifyInviteCode()
+    }
+  }, [inviteCode, verifyInviteCode])
 
   const linkInviteCode = async (userId: string) => {
     if (!inviteCode) return
