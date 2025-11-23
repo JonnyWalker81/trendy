@@ -71,7 +71,7 @@ export function DynamicPropertyField({
             value={
               inputValue instanceof Date
                 ? inputValue.toISOString().split('T')[0]
-                : inputValue
+                : inputValue && typeof inputValue !== 'boolean'
                 ? new Date(inputValue).toISOString().split('T')[0]
                 : ''
             }
