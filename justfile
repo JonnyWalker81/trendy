@@ -355,6 +355,16 @@ gcp-deploy-backend ENV="dev":
         echo "→ Deploying to Cloud Run..."
         # Note: Using --no-allow-unauthenticated for security
         # For dev environment, we'll add public access automatically
+
+        # Check for CORS_ALLOWED_ORIGINS env var or use default for dev
+        DEV_CORS_ORIGINS="${CORS_ALLOWED_ORIGINS:-https://*.trendy-app.pages.dev}"
+        echo "   CORS origins: $DEV_CORS_ORIGINS"
+
+        # Create temporary env vars file to handle special characters
+        ENV_FILE=$(mktemp)
+        echo "TRENDY_SERVER_ENV: development" > "$ENV_FILE"
+        echo "CORS_ALLOWED_ORIGINS: $DEV_CORS_ORIGINS" >> "$ENV_FILE"
+
         gcloud run deploy trendy-api-{{ENV}} \
             --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
             --platform=managed \
@@ -366,9 +376,12 @@ gcp-deploy-backend ENV="dev":
             --min-instances=0 \
             --max-instances=10 \
             --timeout=60 \
-            --set-env-vars="TRENDY_SERVER_ENV=development" \
+            --env-vars-file="$ENV_FILE" \
             --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
             --project=$PROJECT_ID
+
+        # Clean up temp file
+        rm -f "$ENV_FILE"
 
         # For dev environment, allow public access after deployment
         echo "→ Enabling public access for dev environment..."
