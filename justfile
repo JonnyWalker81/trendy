@@ -278,8 +278,7 @@ gcp-push-backend ENV="dev":
     cd apps/backend && gcloud builds submit \
         --tag={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
         --project=$PROJECT_ID \
-        --machine-type=e2-highcpu-8 \
-        --no-cache
+        --machine-type=e2-highcpu-8
     echo "→ Tagging as latest..."
     gcloud artifacts docker tags add \
         {{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
@@ -325,39 +324,60 @@ gcp-deploy-backend ENV="dev":
         echo "CORS_ALLOWED_ORIGINS: $CORS_ORIGINS" >> "$ENV_FILE"
 
         echo "→ Deploying to Cloud Run..."
+        # Note: Using --no-allow-unauthenticated for security
+        # The API uses JWT authentication - Cloud Run IAM is a defense-in-depth measure
+        # For public API access, consider using a load balancer with IAP instead
         gcloud run deploy trendy-api-{{ENV}} \
             --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
             --platform=managed \
             --region={{GCP_REGION}} \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
             --port=8888 \
-            --memory=256Mi \
+            --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
             --max-instances=10 \
-            --timeout=300 \
+            --timeout=60 \
             --env-vars-file="$ENV_FILE" \
             --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
             --project=$PROJECT_ID
 
         # Clean up temp file
         rm -f "$ENV_FILE"
+
+        echo ""
+        echo "⚠️  NOTE: Service requires IAM authentication."
+        echo "   To allow public access (for web/mobile clients), run:"
+        echo "   gcloud run services add-iam-policy-binding trendy-api-{{ENV}} \\"
+        echo "       --region={{GCP_REGION}} --member='allUsers' --role='roles/run.invoker' \\"
+        echo "       --project=$PROJECT_ID"
     else
         echo "→ Deploying to Cloud Run..."
+        # Note: Using --no-allow-unauthenticated for security
+        # For dev environment, we'll add public access automatically
         gcloud run deploy trendy-api-{{ENV}} \
             --image={{GCP_REGION}}-docker.pkg.dev/$PROJECT_ID/{{ARTIFACT_REGISTRY_REPO}}/{{IMAGE_NAME}}:{{ENV}} \
             --platform=managed \
             --region={{GCP_REGION}} \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
             --port=8888 \
-            --memory=256Mi \
+            --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
             --max-instances=10 \
-            --timeout=300 \
-            --set-env-vars="TRENDY_SERVER_ENV=production" \
+            --timeout=60 \
+            --set-env-vars="TRENDY_SERVER_ENV=development" \
             --set-secrets="SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest" \
             --project=$PROJECT_ID
+
+        # For dev environment, allow public access after deployment
+        echo "→ Enabling public access for dev environment..."
+        gcloud run services add-iam-policy-binding trendy-api-{{ENV}} \
+            --region={{GCP_REGION}} \
+            --member="allUsers" \
+            --role="roles/run.invoker" \
+            --project=$PROJECT_ID \
+            --quiet 2>/dev/null || echo "   ✓ Public access already configured"
     fi
     echo ""
     echo "✅ Deployment complete!"

@@ -142,7 +142,9 @@ class EventStore {
             }
         } catch {
             // On error, fall back to local cache
+            #if DEBUG
             print("Fetch error: \(error.localizedDescription)")
+            #endif
             errorMessage = "Failed to sync. Showing cached data."
             try? await fetchFromLocal()
         }
@@ -190,10 +192,12 @@ class EventStore {
                 existingType.name = apiType.name
                 existingType.colorHex = apiType.color
                 existingType.iconName = apiType.icon
+                #if DEBUG
                 print("📝 Updated existing EventType: \(apiType.name) (local ID: \(existingType.id))")
+                #endif
             } else {
                 // Check if there's already a local type with the same name (unmapped)
-                if let existingByName = existingTypes.first(where: { 
+                if let existingByName = existingTypes.first(where: {
                     $0.name == apiType.name && !currentMappings.keys.contains($0.id)
                 }) {
                     // Map existing local type to backend ID
@@ -201,7 +205,9 @@ class EventStore {
                     existingByName.iconName = apiType.icon
                     updatedMappings[existingByName.id] = apiType.id
                     backendIdToLocalType[apiType.id] = existingByName
+                    #if DEBUG
                     print("🔗 Linked existing EventType by name: \(apiType.name) (local ID: \(existingByName.id))")
+                    #endif
                 } else {
                     // CREATE new
                     let newType = EventType(
@@ -212,7 +218,9 @@ class EventStore {
                     modelContext.insert(newType)
                     updatedMappings[newType.id] = apiType.id
                     backendIdToLocalType[apiType.id] = newType
+                    #if DEBUG
                     print("➕ Created new EventType: \(apiType.name) (local ID: \(newType.id))")
+                    #endif
                 }
             }
         }
@@ -250,7 +258,9 @@ class EventStore {
             
             // Find matching local event type by backend ID
             guard let localType = backendIdToLocalType[apiEvent.eventTypeId] else {
+                #if DEBUG
                 print("⚠️ Skipping event - no matching EventType for backend ID: \(apiEvent.eventTypeId)")
+                #endif
                 continue
             }
 
@@ -277,7 +287,9 @@ class EventStore {
                     // Link existing event to backend
                     updatedEventMappings[existingByMatch.id] = apiEvent.id
                     backendIdToLocalEvent[apiEvent.id] = existingByMatch
+                    #if DEBUG
                     print("🔗 Linked existing Event by match (local ID: \(existingByMatch.id))")
+                    #endif
                 } else {
                     // CREATE new event
                     let newEvent = Event(
@@ -311,8 +323,10 @@ class EventStore {
 
         // Update in-memory arrays with fresh data
         try await fetchFromLocal()
-        
+
+        #if DEBUG
         print("✅ Backend sync complete - EventTypes: \(eventTypes.count), Events: \(events.count)")
+        #endif
     }
 
     private func fetchFromLocal() async throws {
@@ -344,7 +358,9 @@ class EventStore {
                     notes: notes
                 )
             } catch {
+                #if DEBUG
                 print("Failed to add event to calendar: \(error)")
+                #endif
                 // Continue even if calendar sync fails
             }
         }
@@ -463,11 +479,13 @@ class EventStore {
                     notes: event.notes
                 )
             } catch {
+                #if DEBUG
                 print("Failed to update calendar event: \(error)")
+                #endif
                 // Continue even if calendar sync fails
             }
         }
-        
+
         do {
             try modelContext.save()
             await fetchData()
@@ -475,7 +493,7 @@ class EventStore {
             errorMessage = EventError.saveFailed.localizedDescription
         }
     }
-    
+
     func deleteEvent(_ event: Event) async {
         guard let modelContext else { return }
 
@@ -487,7 +505,9 @@ class EventStore {
             do {
                 try await calendarManager.deleteCalendarEvent(identifier: calendarEventId)
             } catch {
+                #if DEBUG
                 print("Failed to delete calendar event: \(error)")
+                #endif
                 // Continue even if calendar sync fails
             }
         }
@@ -659,7 +679,9 @@ class EventStore {
         guard useBackend else { return }
         guard let eventType = event.eventType else { return }
         guard let backendTypeId = eventTypeBackendIds[eventType.id] else {
+            #if DEBUG
             print("⚠️ No backend ID for event type: \(eventType.name)")
+            #endif
             return
         }
         
@@ -700,11 +722,15 @@ class EventStore {
 
                 if isOnline {
                     _ = try await apiClient.updateEvent(id: existingBackendId!, request)
+                    #if DEBUG
                     print("✅ Updated event on backend: \(event.id)")
+                    #endif
                 } else {
                     // Queue for sync when online
                     try? syncQueue?.enqueue(type: .updateEvent, entityId: event.id, payload: request)
+                    #if DEBUG
                     print("📦 Queued event update for sync: \(event.id)")
+                    #endif
                 }
 
             } else {
@@ -728,16 +754,22 @@ class EventStore {
                 if isOnline {
                     let apiEvent = try await apiClient.createEvent(request)
                     eventBackendIds[event.id] = apiEvent.id
+                    #if DEBUG
                     print("✅ Created event on backend: \(event.id)")
+                    #endif
                 } else {
                     // Queue for sync when online
                     try? syncQueue?.enqueue(type: .createEvent, entityId: event.id, payload: request)
+                    #if DEBUG
                     print("📦 Queued event creation for sync: \(event.id)")
+                    #endif
                 }
             }
 
         } catch {
+            #if DEBUG
             print("❌ Failed to sync event to backend: \(error.localizedDescription)")
+            #endif
         }
     }
 }

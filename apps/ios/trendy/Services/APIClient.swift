@@ -62,8 +62,11 @@ class APIClient {
         body: Encodable? = nil,
         requiresAuth: Bool = true
     ) async throws -> T {
+        let startTime = Date()
         var urlRequest = URLRequest(url: url(for: endpoint))
         urlRequest.httpMethod = method
+
+        Log.api.request(method, path: endpoint)
 
         // Add headers
         if requiresAuth {
@@ -80,15 +83,27 @@ class APIClient {
 
         // Perform request
         let (data, response) = try await session.data(for: urlRequest)
+        let duration = Date().timeIntervalSince(startTime)
 
         // Check HTTP status
         guard let httpResponse = response as? HTTPURLResponse else {
+            Log.api.error("Invalid response", context: .with { ctx in
+                ctx.add("method", method)
+                ctx.add("endpoint", endpoint)
+            })
             throw APIError.invalidResponse
         }
+
+        Log.api.response(method, path: endpoint, statusCode: httpResponse.statusCode, duration: duration)
 
         // Handle error responses
         guard (200...299).contains(httpResponse.statusCode) else {
             if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                Log.api.warning("Server error response", context: .with { ctx in
+                    ctx.add("endpoint", endpoint)
+                    ctx.add("status", httpResponse.statusCode)
+                    ctx.add("error_message", errorResponse.error)
+                })
                 throw APIError.serverError(errorResponse.error, httpResponse.statusCode)
             }
             throw APIError.httpError(httpResponse.statusCode)
@@ -98,8 +113,16 @@ class APIClient {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            print("Decoding error: \(error)")
-            print("Response data: \(String(data: data, encoding: .utf8) ?? "nil")")
+            Log.api.error("Decoding error", error: error, context: .with { ctx in
+                ctx.add("endpoint", endpoint)
+                ctx.add("response_size", data.count)
+            })
+            #if DEBUG
+            // Only log response data in debug builds to prevent PII leakage
+            Log.api.debug("Response data for debugging", context: .with { ctx in
+                ctx.add("data", String(data: data, encoding: .utf8) ?? "nil")
+            })
+            #endif
             throw APIError.decodingError(error)
         }
     }

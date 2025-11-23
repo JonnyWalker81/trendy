@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { apiLogger, errorContext } from './logger'
 import type {
   Event,
   EventType,
@@ -16,17 +17,11 @@ import type {
 // Use environment variable for production, fallback to proxy path for local dev
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
-// Debug: Log API base URL in development
-if (import.meta.env.DEV) {
-  console.log('🔧 API Configuration:', {
-    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-    API_BASE,
-    isDev: import.meta.env.DEV,
-    mode: import.meta.env.MODE,
-  })
-} else {
-  console.log('🚀 Production API Base:', API_BASE)
-}
+// Log API configuration on initialization
+apiLogger.info('API client initialized', {
+  api_base: API_BASE,
+  mode: import.meta.env.MODE,
+})
 
 async function getAuthHeaders() {
   const { data } = await supabase.auth.getSession()
@@ -38,11 +33,26 @@ async function getAuthHeaders() {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
+async function handleResponse<T>(response: Response, operation: string): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-    throw new Error(error.error || `HTTP ${response.status}`)
+    const errorMessage = error.error || `HTTP ${response.status}`
+
+    apiLogger.warn('API request failed', {
+      operation,
+      status: response.status,
+      error: errorMessage,
+      url: response.url,
+    })
+
+    throw new Error(errorMessage)
   }
+
+  apiLogger.debug('API request successful', {
+    operation,
+    status: response.status,
+  })
+
   return response.json()
 }
 
@@ -54,13 +64,13 @@ export const eventApi = {
       `${API_BASE}/events?limit=${limit}&offset=${offset}`,
       { headers }
     )
-    return handleResponse<Event[]>(response)
+    return handleResponse<Event[]>(response, 'events.getAll')
   },
 
   getById: async (id: string): Promise<Event> => {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/events/${id}`, { headers })
-    return handleResponse<Event>(response)
+    return handleResponse<Event>(response, 'events.getById')
   },
 
   create: async (data: CreateEventRequest): Promise<Event> => {
@@ -70,7 +80,7 @@ export const eventApi = {
       headers,
       body: JSON.stringify(data),
     })
-    return handleResponse<Event>(response)
+    return handleResponse<Event>(response, 'events.create')
   },
 
   update: async (id: string, data: UpdateEventRequest): Promise<Event> => {
@@ -80,7 +90,7 @@ export const eventApi = {
       headers,
       body: JSON.stringify(data),
     })
-    return handleResponse<Event>(response)
+    return handleResponse<Event>(response, 'events.update')
   },
 
   delete: async (id: string): Promise<void> => {
@@ -90,8 +100,10 @@ export const eventApi = {
       headers,
     })
     if (!response.ok) {
+      apiLogger.warn('Failed to delete event', { id, status: response.status })
       throw new Error(`Failed to delete event: ${response.statusText}`)
     }
+    apiLogger.debug('Event deleted', { id })
   },
 
   export: async (params?: {
@@ -116,7 +128,7 @@ export const eventApi = {
       queryParams.toString() ? `?${queryParams.toString()}` : ''
     }`
     const response = await fetch(url, { headers })
-    return handleResponse<Event[]>(response)
+    return handleResponse<Event[]>(response, 'events.export')
   },
 }
 
@@ -125,13 +137,13 @@ export const eventTypeApi = {
   getAll: async (): Promise<EventType[]> => {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/event-types`, { headers })
-    return handleResponse<EventType[]>(response)
+    return handleResponse<EventType[]>(response, 'eventTypes.getAll')
   },
 
   getById: async (id: string): Promise<EventType> => {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/event-types/${id}`, { headers })
-    return handleResponse<EventType>(response)
+    return handleResponse<EventType>(response, 'eventTypes.getById')
   },
 
   create: async (data: CreateEventTypeRequest): Promise<EventType> => {
@@ -141,7 +153,7 @@ export const eventTypeApi = {
       headers,
       body: JSON.stringify(data),
     })
-    return handleResponse<EventType>(response)
+    return handleResponse<EventType>(response, 'eventTypes.create')
   },
 
   update: async (id: string, data: UpdateEventTypeRequest): Promise<EventType> => {
@@ -151,7 +163,7 @@ export const eventTypeApi = {
       headers,
       body: JSON.stringify(data),
     })
-    return handleResponse<EventType>(response)
+    return handleResponse<EventType>(response, 'eventTypes.update')
   },
 
   delete: async (id: string): Promise<void> => {
@@ -161,8 +173,10 @@ export const eventTypeApi = {
       headers,
     })
     if (!response.ok) {
+      apiLogger.warn('Failed to delete event type', { id, status: response.status })
       throw new Error(`Failed to delete event type: ${response.statusText}`)
     }
+    apiLogger.debug('Event type deleted', { id })
   },
 }
 
@@ -171,7 +185,7 @@ export const analyticsApi = {
   getSummary: async (): Promise<AnalyticsSummary> => {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE}/analytics/summary`, { headers })
-    return handleResponse<AnalyticsSummary>(response)
+    return handleResponse<AnalyticsSummary>(response, 'analytics.getSummary')
   },
 
   getTrends: async (
@@ -188,7 +202,7 @@ export const analyticsApi = {
       `${API_BASE}/analytics/trends?${params.toString()}`,
       { headers }
     )
-    return handleResponse<TrendData>(response)
+    return handleResponse<TrendData>(response, 'analytics.getTrends')
   },
 
   getEventTypeTrends: async (
@@ -200,7 +214,7 @@ export const analyticsApi = {
       `${API_BASE}/analytics/event-type/${eventTypeId}?period=${period}`,
       { headers }
     )
-    return handleResponse<TrendData>(response)
+    return handleResponse<TrendData>(response, 'analytics.getEventTypeTrends')
   },
 }
 
@@ -212,7 +226,7 @@ export const propertyDefinitionApi = {
       `${API_BASE}/event-types/${eventTypeId}/properties`,
       { headers }
     )
-    return handleResponse<PropertyDefinition[]>(response)
+    return handleResponse<PropertyDefinition[]>(response, 'propertyDefinitions.getByEventType')
   },
 
   getById: async (id: string): Promise<PropertyDefinition> => {
@@ -220,7 +234,7 @@ export const propertyDefinitionApi = {
     const response = await fetch(`${API_BASE}/property-definitions/${id}`, {
       headers,
     })
-    return handleResponse<PropertyDefinition>(response)
+    return handleResponse<PropertyDefinition>(response, 'propertyDefinitions.getById')
   },
 
   create: async (
@@ -236,7 +250,7 @@ export const propertyDefinitionApi = {
         body: JSON.stringify(data),
       }
     )
-    return handleResponse<PropertyDefinition>(response)
+    return handleResponse<PropertyDefinition>(response, 'propertyDefinitions.create')
   },
 
   update: async (
@@ -249,7 +263,7 @@ export const propertyDefinitionApi = {
       headers,
       body: JSON.stringify(data),
     })
-    return handleResponse<PropertyDefinition>(response)
+    return handleResponse<PropertyDefinition>(response, 'propertyDefinitions.update')
   },
 
   delete: async (id: string): Promise<void> => {
@@ -259,9 +273,11 @@ export const propertyDefinitionApi = {
       headers,
     })
     if (!response.ok) {
+      apiLogger.warn('Failed to delete property definition', { id, status: response.status })
       throw new Error(
         `Failed to delete property definition: ${response.statusText}`
       )
     }
+    apiLogger.debug('Property definition deleted', { id })
   },
 }

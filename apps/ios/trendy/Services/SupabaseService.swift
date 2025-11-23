@@ -42,9 +42,12 @@ class SupabaseService {
             let session = try await client.auth.session
             self.currentSession = session
             self.isAuthenticated = true
-            print("Session restored for user: \(session.user.email ?? "unknown")")
+            Log.auth.info("Session restored", context: .with { ctx in
+                ctx.add("user_email", session.user.email)
+                ctx.add("user_id", session.user.id)
+            })
         } catch {
-            print("No existing session found: \(error.localizedDescription)")
+            Log.auth.debug("No existing session found", error: error)
             self.isAuthenticated = false
         }
     }
@@ -71,13 +74,19 @@ class SupabaseService {
         )
 
         guard let session = response.session else {
+            Log.auth.warning("Signup completed but no session returned", context: .with { ctx in
+                ctx.add("email", email)
+            })
             throw AuthError.noSession
         }
 
         self.currentSession = session
         self.isAuthenticated = true
 
-        print("User signed up successfully: \(email)")
+        Log.auth.info("User signed up successfully", context: .with { ctx in
+            ctx.add("email", email)
+            ctx.add("user_id", session.user.id)
+        })
         return session
     }
 
@@ -91,7 +100,10 @@ class SupabaseService {
         self.currentSession = session
         self.isAuthenticated = true
 
-        print("User signed in successfully: \(email)")
+        Log.auth.info("User signed in successfully", context: .with { ctx in
+            ctx.add("email", email)
+            ctx.add("user_id", session.user.id)
+        })
         return session
     }
 
@@ -102,7 +114,7 @@ class SupabaseService {
         self.currentSession = nil
         self.isAuthenticated = false
 
-        print("User signed out successfully")
+        Log.auth.info("User signed out successfully")
     }
 
     /// Refresh the current session token

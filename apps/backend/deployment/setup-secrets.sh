@@ -19,12 +19,19 @@ echo "⚠️  You will need your Supabase credentials:"
 echo "  - Supabase URL (https://your-project.supabase.co)"
 echo "  - Supabase Service Role Key (from Project Settings → API)"
 echo ""
+echo "⚠️  SECURITY: The service key will be entered silently (no echo)."
+echo ""
 echo "Press Ctrl+C to cancel at any time."
 echo ""
 
 # Create/update supabase-url secret
 echo "→ Creating/updating supabase-url secret..."
 read -p "Enter Supabase URL: " supabase_url
+
+# Validate URL format
+if [[ ! "$supabase_url" =~ ^https:// ]]; then
+    echo "⚠️  Warning: Supabase URL should start with https://"
+fi
 
 echo -n "$supabase_url" | gcloud secrets create supabase-url \
     --data-file=- \
@@ -36,7 +43,16 @@ echo -n "$supabase_url" | gcloud secrets versions add supabase-url \
 
 # Create/update supabase-service-key secret
 echo "→ Creating/updating supabase-service-key secret..."
-read -p "Enter Supabase Service Role Key: " service_key
+# Use -s flag for silent input (doesn't echo to terminal)
+# This prevents the secret from appearing in terminal history or being visible on screen
+read -sp "Enter Supabase Service Role Key: " service_key
+echo "" # Add newline after silent input
+
+# Validate key is not empty
+if [ -z "$service_key" ]; then
+    echo "❌ Error: Service key cannot be empty"
+    exit 1
+fi
 
 echo -n "$service_key" | gcloud secrets create supabase-service-key \
     --data-file=- \
@@ -45,6 +61,9 @@ echo -n "$service_key" | gcloud secrets create supabase-service-key \
 echo -n "$service_key" | gcloud secrets versions add supabase-service-key \
     --data-file=- \
     --project="$PROJECT_ID"
+
+# Clear the variable from memory
+unset service_key
 
 echo ""
 echo "→ Granting Cloud Run access to secrets..."

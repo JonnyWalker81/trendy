@@ -4,13 +4,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 	"github.com/JonnyWalker81/trendy/backend/pkg/supabase"
+)
+
+// Auth-specific errors (generic messages for client, detailed logging internally)
+var (
+	ErrLoginFailed  = errors.New("authentication failed")
+	ErrSignupFailed = errors.New("account creation failed")
 )
 
 type authService struct {
@@ -27,6 +35,8 @@ func NewAuthService(client *supabase.Client, userRepo repository.UserRepository)
 }
 
 func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*models.AuthResponse, error) {
+	log := logger.Ctx(ctx)
+
 	// Use Supabase Auth API to login
 	url := fmt.Sprintf("%s/auth/v1/token?grant_type=password", s.client.URL)
 
@@ -37,11 +47,13 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
+		log.Error("failed to marshal login request", logger.Err(err))
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Error("failed to create login http request", logger.Err(err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -50,17 +62,25 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 
 	resp, err := s.client.HTTPClient.Do(httpReq)
 	if err != nil {
+		log.Error("failed to execute login request", logger.Err(err))
 		return nil, fmt.Errorf("failed to login: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Error("failed to read login response", logger.Err(err))
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("login failed: %s", string(body))
+		// Log the detailed error for debugging, but return generic error to client
+		// to prevent information disclosure (e.g., "email not found" vs "wrong password")
+		log.Warn("login failed",
+			logger.String("email", req.Email),
+			logger.Int("status_code", resp.StatusCode),
+		)
+		return nil, ErrLoginFailed
 	}
 
 	var authResp struct {
@@ -73,8 +93,14 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 	}
 
 	if err := json.Unmarshal(body, &authResp); err != nil {
+		log.Error("failed to unmarshal login response", logger.Err(err))
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
+
+	log.Info("login successful",
+		logger.String("user_id", authResp.User.ID),
+		logger.String("email", authResp.User.Email),
+	)
 
 	return &models.AuthResponse{
 		AccessToken:  authResp.AccessToken,
@@ -87,6 +113,8 @@ func (s *authService) Login(ctx context.Context, req *models.LoginRequest) (*mod
 }
 
 func (s *authService) Signup(ctx context.Context, req *models.SignupRequest) (*models.AuthResponse, error) {
+	log := logger.Ctx(ctx)
+
 	// Use Supabase Auth API to signup
 	url := fmt.Sprintf("%s/auth/v1/signup", s.client.URL)
 
@@ -97,11 +125,13 @@ func (s *authService) Signup(ctx context.Context, req *models.SignupRequest) (*m
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
+		log.Error("failed to marshal signup request", logger.Err(err))
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Error("failed to create signup http request", logger.Err(err))
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -110,17 +140,25 @@ func (s *authService) Signup(ctx context.Context, req *models.SignupRequest) (*m
 
 	resp, err := s.client.HTTPClient.Do(httpReq)
 	if err != nil {
+		log.Error("failed to execute signup request", logger.Err(err))
 		return nil, fmt.Errorf("failed to signup: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Error("failed to read signup response", logger.Err(err))
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("signup failed: %s", string(body))
+		// Log the detailed error for debugging, but return generic error to client
+		// to prevent account enumeration (e.g., "email already exists")
+		log.Warn("signup failed",
+			logger.String("email", req.Email),
+			logger.Int("status_code", resp.StatusCode),
+		)
+		return nil, ErrSignupFailed
 	}
 
 	var authResp struct {
@@ -133,6 +171,7 @@ func (s *authService) Signup(ctx context.Context, req *models.SignupRequest) (*m
 	}
 
 	if err := json.Unmarshal(body, &authResp); err != nil {
+		log.Error("failed to unmarshal signup response", logger.Err(err))
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -146,7 +185,16 @@ func (s *authService) Signup(ctx context.Context, req *models.SignupRequest) (*m
 	if err != nil {
 		// User creation might fail if already exists, but that's okay
 		// as Supabase already created the auth user
+		log.Debug("user record creation failed (may already exist)",
+			logger.String("user_id", user.ID),
+			logger.Err(err),
+		)
 	}
+
+	log.Info("signup successful",
+		logger.String("user_id", authResp.User.ID),
+		logger.String("email", authResp.User.Email),
+	)
 
 	return &models.AuthResponse{
 		AccessToken:  authResp.AccessToken,

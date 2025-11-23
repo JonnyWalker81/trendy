@@ -23,12 +23,15 @@ func NewAuthHandler(authService service.AuthService) *AuthHandler {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 
 	authResp, err := h.authService.Login(c.Request.Context(), &req)
 	if err != nil {
+		// Log the actual error for debugging, but return a generic message
+		// to prevent account enumeration (don't reveal if email exists or not)
+		c.Error(err) // This logs the error internally
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
@@ -40,13 +43,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Signup(c *gin.Context) {
 	var req models.SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request format"})
 		return
 	}
 
 	authResp, err := h.authService.Signup(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// Log the actual error for debugging, but return a generic message
+		// to prevent account enumeration and information disclosure
+		c.Error(err) // This logs the error internally
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unable to create account"})
 		return
 	}
 

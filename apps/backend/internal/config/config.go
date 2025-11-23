@@ -11,6 +11,19 @@ import (
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Supabase SupabaseConfig `mapstructure:"supabase"`
+	Logging  LoggingConfig  `mapstructure:"logging"`
+}
+
+// LoggingConfig holds logging-specific configuration
+type LoggingConfig struct {
+	// Level is the minimum log level: debug, info, warn, error
+	Level string `mapstructure:"level"`
+	// Format is the output format: json or text
+	Format string `mapstructure:"format"`
+	// LogBodies enables request/response body logging (security risk in production)
+	LogBodies bool `mapstructure:"log_bodies"`
+	// AddSource adds source file:line to log entries
+	AddSource bool `mapstructure:"add_source"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -32,6 +45,10 @@ func Load() (*Config, error) {
 	// Set default values
 	v.SetDefault("server.port", "8080")
 	v.SetDefault("server.env", "development")
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("logging.format", "json")
+	v.SetDefault("logging.log_bodies", false)
+	v.SetDefault("logging.add_source", false)
 
 	// Read from environment variables
 	v.SetEnvPrefix("TRENDY")
@@ -42,6 +59,14 @@ func Load() (*Config, error) {
 	v.BindEnv("server.port", "PORT")
 	v.BindEnv("supabase.url", "SUPABASE_URL")
 	v.BindEnv("supabase.service_key", "SUPABASE_SERVICE_KEY")
+
+	// Logging environment variables (TRENDY_ prefix via AutomaticEnv)
+	// TRENDY_LOGGING_LEVEL, TRENDY_LOGGING_FORMAT, TRENDY_LOGGING_LOG_BODIES, TRENDY_LOGGING_ADD_SOURCE
+	// Or use short names:
+	v.BindEnv("logging.level", "LOG_LEVEL")
+	v.BindEnv("logging.format", "LOG_FORMAT")
+	v.BindEnv("logging.log_bodies", "LOG_BODIES")
+	v.BindEnv("logging.add_source", "LOG_ADD_SOURCE")
 
 	// Read from config file if it exists
 	v.SetConfigName("config")
@@ -78,4 +103,30 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("SUPABASE_SERVICE_KEY is required")
 	}
 	return nil
+}
+
+// LogLevelForEnv returns the appropriate log level based on the server environment
+// if no explicit level is configured
+func (c *Config) LogLevelForEnv() string {
+	// If explicitly set, use that
+	if c.Logging.Level != "" && c.Logging.Level != "info" {
+		return c.Logging.Level
+	}
+
+	// Environment-based defaults
+	switch c.Server.Env {
+	case "development":
+		return "debug"
+	case "staging":
+		return "info"
+	case "production":
+		return "warn"
+	default:
+		return "info"
+	}
+}
+
+// IsProduction returns true if the server is running in production mode
+func (c *Config) IsProduction() bool {
+	return c.Server.Env == "production"
 }

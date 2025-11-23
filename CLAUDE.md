@@ -544,3 +544,142 @@ apps/ios/trendy/
 - Push notifications for server-side changes
 - Optimistic UI updates
 - Differential sync (only changed data)
+
+## Structured Logging
+
+The project uses structured logging across all platforms with consistent patterns and environment-based verbosity.
+
+### Log Levels
+
+| Level | When to Use |
+|-------|-------------|
+| **debug** | Development debugging, request/response details, verbose tracing |
+| **info** | Significant events: startup, auth success, sync completion |
+| **warn** | Recoverable issues: rate limits, auth failures, validation errors |
+| **error** | Unrecoverable errors: crashes, connection failures, data corruption |
+
+### Environment-Based Defaults
+
+| Environment | Default Level |
+|-------------|---------------|
+| Development | debug |
+| Staging | info |
+| Production | warn |
+
+### Backend (Go) - `internal/logger/`
+
+**Abstraction Pattern:** Interface-based logger that can swap implementations.
+
+```go
+// Using the logger in handlers/services
+log := logger.Ctx(ctx)  // Gets logger with request_id and user_id
+log.Info("operation completed",
+    logger.String("event_id", id),
+    logger.Duration("duration", elapsed),
+)
+
+// Available field helpers
+logger.String(key, value)
+logger.Int(key, value)
+logger.Duration(key, value)
+logger.Err(err)
+```
+
+**Configuration (environment variables):**
+- `LOG_LEVEL` or `TRENDY_LOGGING_LEVEL`: debug, info, warn, error
+- `LOG_FORMAT` or `TRENDY_LOGGING_FORMAT`: json, text
+- `LOG_BODIES` or `TRENDY_LOGGING_LOG_BODIES`: true/false (request/response bodies)
+
+**Key Files:**
+- `internal/logger/logger.go` - Interface and field helpers
+- `internal/logger/slog.go` - slog implementation
+- `internal/logger/context.go` - Request ID and user ID propagation
+
+### Web App (TypeScript) - `src/lib/logger.ts`
+
+**Pattern:** Lightweight structured logger with environment-aware output.
+
+```typescript
+import { apiLogger, errorContext } from './logger'
+
+// Using named loggers
+apiLogger.info('Request completed', { operation: 'getEvents', status: 200 })
+apiLogger.error('Request failed', { ...errorContext(error), endpoint: '/events' })
+
+// Available loggers
+logger      // General purpose
+apiLogger   // API/network operations
+authLogger  // Authentication
+uiLogger    // UI operations
+```
+
+**Configuration:**
+- `VITE_LOG_LEVEL`: debug, info, warn, error
+- Development: Pretty console output with colors
+- Production: JSON output for aggregation
+
+### iOS (Swift) - `Utilities/Logger.swift`
+
+**Pattern:** Apple's unified logging (os.Logger) with categories.
+
+```swift
+// Using category-specific loggers
+Log.api.info("Request completed", context: .with { ctx in
+    ctx.add("endpoint", "/events")
+    ctx.add("status", 200)
+    ctx.add(duration: elapsed)
+})
+
+Log.auth.error("Login failed", error: error)
+
+// Available categories
+Log.api        // API/network
+Log.auth       // Authentication
+Log.sync       // Data synchronization
+Log.migration  // Data migration
+Log.geofence   // Location
+Log.calendar   // Calendar integration
+Log.ui         // UI operations
+Log.data       // Storage operations
+```
+
+**Context Builder:**
+```swift
+Log.api.debug("API call", context: .with { ctx in
+    ctx.add("method", "GET")
+    ctx.add("path", endpoint)
+    ctx.add("user_id", userId)
+    ctx.add(error: error)       // Automatically extracts message
+    ctx.add(duration: elapsed)  // Converts to milliseconds
+})
+```
+
+### Common Field Names
+
+Use consistent field names across platforms:
+
+| Field | Description |
+|-------|-------------|
+| `request_id` | Unique ID for request tracing |
+| `user_id` | Authenticated user ID |
+| `operation` | Name of the operation being performed |
+| `duration` / `duration_ms` | Time elapsed |
+| `status` / `status_code` | HTTP status code |
+| `error` / `error_message` | Error description |
+| `endpoint` / `path` | API endpoint |
+| `method` | HTTP method |
+
+### Security Guidelines
+
+1. **Never log sensitive data:**
+   - Passwords, tokens, API keys
+   - Personal information (full names, addresses)
+   - Request/response bodies in production
+
+2. **Sanitize user input:**
+   - Truncate long values
+   - Redact authorization headers
+
+3. **Environment awareness:**
+   - Debug output only in development
+   - JSON format in production for aggregation

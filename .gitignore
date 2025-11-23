@@ -66,3 +66,4 @@ apps/ios/*.p12
 apps/ios/*.mobileprovision
 apps/ios/*.cer
 /.wrangler/
+/apps/backend/trendy-api

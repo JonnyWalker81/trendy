@@ -61,12 +61,15 @@ class MigrationManager {
 
     /// Perform full migration from local to backend
     func performMigration() async throws {
+        Log.migration.info("Starting migration")
+
         do {
             // Check if there's any data to migrate
             try await checkDataToMigrate()
 
             guard totalEventTypes > 0 || totalEvents > 0 else {
                 // No data to migrate, mark as complete
+                Log.migration.info("No data to migrate")
                 isComplete = true
                 return
             }
@@ -85,7 +88,14 @@ class MigrationManager {
                 self.isComplete = true
                 self.currentOperation = "Migration completed successfully!"
             }
+
+            Log.migration.info("Migration completed successfully", context: .with { ctx in
+                ctx.add("event_types", migratedEventTypes)
+                ctx.add("property_definitions", migratedPropertyDefinitions)
+                ctx.add("events", migratedEvents)
+            })
         } catch {
+            Log.migration.error("Migration failed", error: error)
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.currentOperation = "Migration failed"
@@ -136,7 +146,10 @@ class MigrationManager {
             }) {
                 // Use existing backend event type
                 eventTypeMapping[localType.id] = existingType.id
-                print("EventType '\(localType.name)' already exists on backend, using ID: \(existingType.id)")
+                Log.migration.debug("EventType already exists on backend", context: .with { ctx in
+                    ctx.add("name", localType.name)
+                    ctx.add("backend_id", existingType.id)
+                })
             } else {
                 // Create new event type on backend
                 let request = CreateEventTypeRequest(
@@ -147,7 +160,10 @@ class MigrationManager {
 
                 let created = try await apiClient.createEventType(request)
                 eventTypeMapping[localType.id] = created.id
-                print("Created EventType '\(localType.name)' with backend ID: \(created.id)")
+                Log.migration.debug("Created EventType on backend", context: .with { ctx in
+                    ctx.add("name", localType.name)
+                    ctx.add("backend_id", created.id)
+                })
             }
 
             await MainActor.run {
@@ -170,7 +186,9 @@ class MigrationManager {
         for (index, localPropDef) in localPropertyDefs.enumerated() {
             // Get backend event type ID for this property definition
             guard let backendEventTypeId = eventTypeMapping[localPropDef.eventTypeId] else {
-                print("Skipping property definition without mapped event type: \(localPropDef.id)")
+                Log.migration.debug("Skipping property definition without mapped event type", context: .with { ctx in
+                    ctx.add("property_id", localPropDef.id)
+                })
                 await MainActor.run {
                     self.migratedPropertyDefinitions = index + 1
                 }
@@ -197,7 +215,10 @@ class MigrationManager {
                 request
             )
             propertyDefinitionMapping[localPropDef.id] = created.id
-            print("Created PropertyDefinition '\(localPropDef.label)' with backend ID: \(created.id)")
+            Log.migration.debug("Created PropertyDefinition on backend", context: .with { ctx in
+                ctx.add("label", localPropDef.label)
+                ctx.add("backend_id", created.id)
+            })
 
             await MainActor.run {
                 self.migratedPropertyDefinitions = index + 1
@@ -246,7 +267,9 @@ class MigrationManager {
         // Skip events without event type
         guard let eventType = localEvent.eventType,
               let backendEventTypeId = eventTypeMapping[eventType.id] else {
-            print("Skipping event without event type: \(localEvent.id)")
+            Log.migration.debug("Skipping event without event type", context: .with { ctx in
+                ctx.add("event_id", localEvent.id)
+            })
             return
         }
 
@@ -254,7 +277,9 @@ class MigrationManager {
         if let externalId = localEvent.externalId {
             let existing = try? await apiClient.getEventByExternalId(externalId)
             if existing != nil {
-                print("Event with externalId '\(externalId)' already exists, skipping")
+                Log.migration.debug("Event with externalId already exists, skipping", context: .with { ctx in
+                    ctx.add("external_id", externalId)
+                })
                 return
             }
         }

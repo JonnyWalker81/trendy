@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/JonnyWalker81/trendy/backend/internal/config"
 	"github.com/JonnyWalker81/trendy/backend/internal/handlers"
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/middleware"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 	"github.com/JonnyWalker81/trendy/backend/internal/service"
@@ -41,8 +41,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 		cfg.Server.Port = port
 	}
 
-	log.Printf("Starting Trendy API server in %s mode", cfg.Server.Env)
-	log.Printf("Supabase URL: %s", cfg.Supabase.URL)
+	// Initialize structured logger
+	log := logger.NewSlogLogger(logger.Config{
+		Level:     logger.ParseLevel(cfg.LogLevelForEnv()),
+		Format:    cfg.Logging.Format,
+		LogBodies: cfg.Logging.LogBodies,
+		AddSource: cfg.Logging.AddSource,
+	})
+	logger.SetDefault(log)
+
+	log.Info("starting Trendy API server",
+		logger.String("env", cfg.Server.Env),
+		logger.String("log_level", cfg.LogLevelForEnv()),
+		logger.String("log_format", cfg.Logging.Format),
+	)
+	log.Debug("supabase configuration",
+		logger.String("url", cfg.Supabase.URL),
+	)
 
 	// Initialize Supabase client
 	supabaseClient := supabase.NewClient(cfg.Supabase.URL, cfg.Supabase.ServiceKey)
@@ -78,11 +93,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Initialize Gin router
 	router := gin.Default()
 
-	// Middleware
+	// Global middleware
+	router.Use(middleware.SecurityHeaders()) // Security headers on all responses
 	router.Use(middleware.CORS())
 	router.Use(middleware.Logger())
+	router.Use(middleware.RateLimit()) // General rate limit: 100 req/min
 
-	// Health check
+	// Health check (no rate limit needed)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "ok",
@@ -93,8 +110,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
-		// Auth routes
+		// Auth routes - stricter rate limiting to prevent brute force
 		auth := v1.Group("/auth")
+		auth.Use(middleware.RateLimitAuth()) // Auth rate limit: 10 req/min
 		{
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/signup", authHandler.Signup)
@@ -142,7 +160,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	log.Printf("Server listening on port %s", cfg.Server.Port)
+	log.Info("server listening",
+		logger.String("port", cfg.Server.Port),
+		logger.String("address", ":"+cfg.Server.Port),
+	)
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
