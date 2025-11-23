@@ -1,7 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { getIconByName } from '@/components/ui/icon-picker'
+import { getIconByName } from '@/components/ui/icon-constants'
 import type { EventType } from '@/types'
 import { cn } from '@/lib/utils'
 

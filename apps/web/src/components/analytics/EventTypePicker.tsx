@@ -1,5 +1,5 @@
 import { EventType } from '@/types'
-import { getIconByName } from '@/components/ui/icon-picker'
+import { getIconByName } from '@/components/ui/icon-constants'
 
 interface EventTypePickerProps {
   eventTypes: EventType[]

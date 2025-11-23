@@ -9,8 +9,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ColorPicker, PRESET_COLORS } from '@/components/ui/color-picker'
-import { IconPicker, PRESET_ICONS } from '@/components/ui/icon-picker'
+import { ColorPicker } from '@/components/ui/color-picker'
+import { PRESET_COLORS } from '@/components/ui/color-constants'
+import { IconPicker } from '@/components/ui/icon-picker'
+import { PRESET_ICONS } from '@/components/ui/icon-constants'
 import type { EventType } from '@/types'
 
 interface EventTypeFormProps {
