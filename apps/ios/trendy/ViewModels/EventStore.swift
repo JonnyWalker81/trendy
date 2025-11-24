@@ -116,10 +116,7 @@ class EventStore {
         if migrationCompleted {
             useBackend = true
         }
-
-        Task {
-            await fetchData()
-        }
+        // Note: fetchData() is called by MainTabView, not here
     }
 
     func setCalendarManager(_ manager: CalendarManager) {
@@ -264,6 +261,16 @@ class EventStore {
                 continue
             }
 
+            // Convert API properties to local PropertyValue format
+            let localProperties = convertAPIPropertiesToLocal(apiEvent.properties)
+
+            #if DEBUG
+            if let apiProps = apiEvent.properties {
+                print("📥 Event \(apiEvent.id) has \(apiProps.count) properties from API: \(apiProps.keys.joined(separator: ", "))")
+            }
+            print("📥 Converted to \(localProperties.count) local properties: \(localProperties.keys.joined(separator: ", "))")
+            #endif
+
             if let existingEvent = backendIdToLocalEvent[apiEvent.id] {
                 // UPDATE existing event
                 existingEvent.timestamp = apiEvent.timestamp
@@ -271,6 +278,7 @@ class EventStore {
                 existingEvent.notes = apiEvent.notes
                 existingEvent.isAllDay = apiEvent.isAllDay
                 existingEvent.endDate = apiEvent.endDate
+                existingEvent.properties = localProperties
             } else {
                 // Check for duplicate by timestamp and event type (unmapped events)
                 let isDuplicate = existingEvents.contains { event in
@@ -284,9 +292,10 @@ class EventStore {
                     abs(event.timestamp.timeIntervalSince(apiEvent.timestamp)) < 1.0 &&
                     !currentEventMappings.keys.contains(event.id)
                 }) {
-                    // Link existing event to backend
+                    // Link existing event to backend and sync properties
                     updatedEventMappings[existingByMatch.id] = apiEvent.id
                     backendIdToLocalEvent[apiEvent.id] = existingByMatch
+                    existingByMatch.properties = localProperties
                     #if DEBUG
                     print("🔗 Linked existing Event by match (local ID: \(existingByMatch.id))")
                     #endif
@@ -300,7 +309,8 @@ class EventStore {
                         externalId: apiEvent.externalId,
                         originalTitle: apiEvent.originalTitle,
                         isAllDay: apiEvent.isAllDay,
-                        endDate: apiEvent.endDate
+                        endDate: apiEvent.endDate,
+                        properties: localProperties
                     )
                     modelContext.insert(newEvent)
                     updatedEventMappings[newEvent.id] = apiEvent.id
@@ -379,6 +389,10 @@ class EventStore {
                         value: propValue.value
                     )
                 }
+
+                #if DEBUG
+                print("📝 Creating event with \(properties.count) properties: \(properties.keys.joined(separator: ", "))")
+                #endif
 
                 let request = CreateEventRequest(
                     eventTypeId: backendTypeId,
@@ -463,9 +477,9 @@ class EventStore {
     
     func updateEvent(_ event: Event) async {
         guard let modelContext else { return }
-        
+
         // Update system calendar if synced
-        if syncWithCalendar, 
+        if syncWithCalendar,
            let calendarManager = calendarManager,
            calendarManager.isAuthorized,
            let calendarEventId = event.calendarEventId {
@@ -483,6 +497,57 @@ class EventStore {
                 print("Failed to update calendar event: \(error)")
                 #endif
                 // Continue even if calendar sync fails
+            }
+        }
+
+        if useBackend {
+            // Backend mode: update on backend
+            if let backendId = eventBackendIds[event.id],
+               let eventType = event.eventType,
+               let backendTypeId = eventTypeBackendIds[eventType.id] {
+
+                // Convert properties to API format
+                let apiProperties: [String: APIPropertyValue]? = event.properties.isEmpty ? nil : event.properties.mapValues { propValue in
+                    APIPropertyValue(
+                        type: propValue.type.rawValue,
+                        value: propValue.value
+                    )
+                }
+
+                #if DEBUG
+                print("📝 Updating event with \(event.properties.count) properties: \(event.properties.keys.joined(separator: ", "))")
+                if let apiProps = apiProperties {
+                    print("📝 API properties: \(apiProps.keys.joined(separator: ", "))")
+                }
+                #endif
+
+                let request = UpdateEventRequest(
+                    eventTypeId: backendTypeId,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId?.uuidString,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    properties: apiProperties
+                )
+
+                do {
+                    if isOnline {
+                        _ = try await apiClient.updateEvent(id: backendId, request)
+                    } else {
+                        // Queue for sync when online
+                        try? syncQueue?.enqueue(type: .updateEvent, entityId: event.id, payload: request)
+                    }
+                } catch {
+                    errorMessage = "Failed to update event: \(error.localizedDescription)"
+                    return
+                }
             }
         }
 
@@ -702,6 +767,9 @@ class EventStore {
             // Check if this event already exists on the backend
             let existingBackendId = eventBackendIds[event.id]
 
+            // Convert properties to API format
+            let apiProperties = convertLocalPropertiesToAPI(event.properties)
+
             if existingBackendId != nil {
                 // Update existing backend event
                 let request = UpdateEventRequest(
@@ -717,7 +785,7 @@ class EventStore {
                     locationLatitude: event.locationLatitude,
                     locationLongitude: event.locationLongitude,
                     locationName: event.locationName,
-                    properties: nil // Properties support can be added later
+                    properties: apiProperties
                 )
 
                 if isOnline {
@@ -748,7 +816,7 @@ class EventStore {
                     locationLatitude: event.locationLatitude,
                     locationLongitude: event.locationLongitude,
                     locationName: event.locationName,
-                    properties: nil // Properties support can be added later
+                    properties: apiProperties
                 )
 
                 if isOnline {
@@ -770,6 +838,31 @@ class EventStore {
             #if DEBUG
             print("❌ Failed to sync event to backend: \(error.localizedDescription)")
             #endif
+        }
+    }
+
+    // MARK: - Property Conversion Helpers
+
+    /// Convert API properties to local PropertyValue format
+    private func convertAPIPropertiesToLocal(_ apiProperties: [String: APIPropertyValue]?) -> [String: PropertyValue] {
+        guard let apiProperties = apiProperties else { return [:] }
+
+        var localProperties: [String: PropertyValue] = [:]
+        for (key, apiValue) in apiProperties {
+            guard let propType = PropertyType(rawValue: apiValue.type) else { continue }
+            localProperties[key] = PropertyValue(type: propType, value: apiValue.value.value)
+        }
+        return localProperties
+    }
+
+    /// Convert local properties to API format
+    private func convertLocalPropertiesToAPI(_ properties: [String: PropertyValue]) -> [String: APIPropertyValue]? {
+        if properties.isEmpty { return nil }
+        return properties.mapValues { propValue in
+            APIPropertyValue(
+                type: propValue.type.rawValue,
+                value: propValue.value
+            )
         }
     }
 }

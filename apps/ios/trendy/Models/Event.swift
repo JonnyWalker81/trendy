@@ -42,11 +42,49 @@ final class Event {
     // Computed property for convenient access to properties
     var properties: [String: PropertyValue] {
         get {
-            guard let data = propertiesData else { return [:] }
-            return (try? JSONDecoder().decode([String: PropertyValue].self, from: data)) ?? [:]
+            guard let data = propertiesData else {
+                #if DEBUG
+                print("📖 Event.properties GET: propertiesData is nil, returning empty dict")
+                #endif
+                return [:]
+            }
+            do {
+                let decoded = try JSONDecoder().decode([String: PropertyValue].self, from: data)
+                #if DEBUG
+                print("📖 Event.properties GET: Decoded \(decoded.count) properties: \(decoded.keys.joined(separator: ", "))")
+                #endif
+                return decoded
+            } catch {
+                #if DEBUG
+                print("❌ Event.properties GET: Failed to decode - \(error)")
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    print("❌ Raw JSON was: \(jsonString)")
+                }
+                #endif
+                return [:]
+            }
         }
         set {
-            propertiesData = try? JSONEncoder().encode(newValue)
+            #if DEBUG
+            print("📝 Event.properties SET: Setting \(newValue.count) properties: \(newValue.keys.joined(separator: ", "))")
+            for (key, value) in newValue {
+                print("   - \(key): type=\(value.type.rawValue), value=\(value.value.value)")
+            }
+            #endif
+            do {
+                let encoded = try JSONEncoder().encode(newValue)
+                #if DEBUG
+                if let jsonString = String(data: encoded, encoding: .utf8) {
+                    print("📝 Event.properties SET: Encoded JSON: \(jsonString)")
+                }
+                #endif
+                propertiesData = encoded
+            } catch {
+                #if DEBUG
+                print("❌ Event.properties SET: Failed to encode - \(error)")
+                #endif
+                propertiesData = nil
+            }
         }
     }
 
@@ -65,6 +103,24 @@ final class Event {
         self.locationLatitude = locationLatitude
         self.locationLongitude = locationLongitude
         self.locationName = locationName
-        self.propertiesData = try? JSONEncoder().encode(properties)
+
+        #if DEBUG
+        print("🆕 Event.init() with \(properties.count) properties: \(properties.keys.joined(separator: ", "))")
+        #endif
+
+        do {
+            let encoded = try JSONEncoder().encode(properties)
+            self.propertiesData = encoded
+            #if DEBUG
+            if let jsonString = String(data: encoded, encoding: .utf8) {
+                print("🆕 Event.init() encoded JSON: \(jsonString)")
+            }
+            #endif
+        } catch {
+            #if DEBUG
+            print("❌ Event.init() failed to encode properties: \(error)")
+            #endif
+            self.propertiesData = nil
+        }
     }
 }

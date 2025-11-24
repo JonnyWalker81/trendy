@@ -153,10 +153,34 @@ func (h *EventHandler) UpdateEvent(c *gin.Context) {
 		return
 	}
 
+	// Debug logging for properties
+	if req.Properties != nil {
+		propCount := len(*req.Properties)
+		propKeys := make([]string, 0, propCount)
+		for k := range *req.Properties {
+			propKeys = append(propKeys, k)
+		}
+		c.Request.Context().Value("logger") // placeholder - actual log below
+		// Using fmt for now since logger might not be in context
+		println("📝 UpdateEvent received", propCount, "properties:", strings.Join(propKeys, ", "))
+	} else {
+		println("📝 UpdateEvent received nil properties")
+	}
+
 	event, err := h.eventService.UpdateEvent(c.Request.Context(), userID.(string), eventID, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Log what's being returned
+	if event.Properties != nil {
+		propCount := len(event.Properties)
+		propKeys := make([]string, 0, propCount)
+		for k := range event.Properties {
+			propKeys = append(propKeys, k)
+		}
+		println("📝 UpdateEvent returning", propCount, "properties:", strings.Join(propKeys, ", "))
 	}
 
 	c.JSON(http.StatusOK, event)

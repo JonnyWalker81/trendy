@@ -109,32 +109,38 @@ extension Logger {
 
     /// Log at debug level with optional context
     func debug(_ message: String, context: Log.Context = Log.Context()) {
-        self.debug("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .debug, "\(fullMessage, privacy: .public)")
     }
 
     /// Log at info level with optional context
     func info(_ message: String, context: Log.Context = Log.Context()) {
-        self.info("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .info, "\(fullMessage, privacy: .public)")
     }
 
     /// Log at notice level with optional context (default level)
     func notice(_ message: String, context: Log.Context = Log.Context()) {
-        self.notice("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .default, "\(fullMessage, privacy: .public)")
     }
 
     /// Log at warning level with optional context
     func warning(_ message: String, context: Log.Context = Log.Context()) {
-        self.warning("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .error, "\(fullMessage, privacy: .public)")
     }
 
     /// Log at error level with optional context
     func error(_ message: String, context: Log.Context = Log.Context()) {
-        self.error("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .error, "\(fullMessage, privacy: .public)")
     }
 
     /// Log at fault level with optional context (critical errors)
     func fault(_ message: String, context: Log.Context = Log.Context()) {
-        self.fault("\(message)\(context.description)")
+        let fullMessage = "\(message)\(context.description)"
+        self.log(level: .fault, "\(fullMessage, privacy: .public)")
     }
 
     // MARK: - Convenience Methods
@@ -169,6 +175,20 @@ extension Logger {
         var ctx = context
         ctx.add(error: error)
         self.error("\(message)", context: ctx)
+    }
+
+    /// Log at debug level with error context
+    func debug(_ message: String, error: Error, context: Log.Context = Log.Context()) {
+        var ctx = context
+        ctx.add(error: error)
+        self.debug("\(message)", context: ctx)
+    }
+
+    /// Log at warning level with error context
+    func warning(_ message: String, error: Error, context: Log.Context = Log.Context()) {
+        var ctx = context
+        ctx.add(error: error)
+        self.warning("\(message)", context: ctx)
     }
 
     /// Log operation timing

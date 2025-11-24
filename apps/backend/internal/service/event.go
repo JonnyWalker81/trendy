@@ -49,6 +49,7 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 		SourceType:    sourceType,
 		ExternalID:    req.ExternalID,
 		OriginalTitle: req.OriginalTitle,
+		Properties:    req.Properties,
 	}
 
 	return s.eventRepo.Create(ctx, event)
@@ -132,6 +133,9 @@ func (s *eventService) UpdateEvent(ctx context.Context, userID, eventID string, 
 	}
 	if req.OriginalTitle != nil {
 		update.OriginalTitle = req.OriginalTitle
+	}
+	if req.Properties != nil {
+		update.Properties = *req.Properties
 	}
 
 	return s.eventRepo.Update(ctx, eventID, update)

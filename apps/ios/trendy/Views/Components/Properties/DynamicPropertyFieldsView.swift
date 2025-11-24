@@ -8,31 +8,26 @@
 import SwiftUI
 import SwiftData
 
-/// View for managing all properties of an event (schema-based + custom)
-struct DynamicPropertyFieldsView: View {
-    let eventTypeId: UUID?
-    @Binding var properties: [String: PropertyValue]
+/// Protocol for property storage - allows different backing stores
+protocol PropertyStorage: AnyObject {
+    var properties: [String: PropertyValue] { get set }
+}
 
-    @Query private var allPropertyDefinitions: [PropertyDefinition]
+/// View for managing all properties of an event (schema-based + custom)
+/// NOTE: We use a plain class reference, NOT @ObservedObject, because @ObservedObject
+/// was causing issues where the same object would return different values
+struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
+    let eventTypeId: UUID?
+    let storage: Storage  // Plain reference - parent handles observation
+    let propertyDefinitions: [PropertyDefinition]
 
     @State private var showingAddCustomProperty = false
-    @State private var newPropertyKey = ""
-    @State private var newPropertyLabel = ""
-    @State private var newPropertyType: PropertyType = .text
-    @State private var tempPropertyValue: PropertyValue?
-
-    // Computed property definitions for this event type
-    private var propertyDefinitions: [PropertyDefinition] {
-        guard let eventTypeId = eventTypeId else { return [] }
-        return allPropertyDefinitions
-            .filter { $0.eventTypeId == eventTypeId }
-            .sorted { $0.displayOrder < $1.displayOrder }
-    }
+    @State private var refreshTrigger = UUID()  // Force view refresh when properties change
 
     // Custom properties (not in schema)
     private var customPropertyKeys: [String] {
         let schemaKeys = Set(propertyDefinitions.map { $0.key })
-        return properties.keys.filter { !schemaKeys.contains($0) }.sorted()
+        return storage.properties.keys.filter { !schemaKeys.contains($0) }.sorted()
     }
 
     var body: some View {
@@ -48,13 +43,18 @@ struct DynamicPropertyFieldsView: View {
                         PropertyFieldView(
                             definition: definition,
                             value: Binding(
-                                get: { properties[definition.key] },
+                                get: { storage.properties[definition.key] },
                                 set: { newValue in
+                                    // Directly update storage.properties
                                     if let newValue = newValue {
-                                        properties[definition.key] = newValue
+                                        storage.properties[definition.key] = newValue
                                     } else {
-                                        properties.removeValue(forKey: definition.key)
+                                        storage.properties.removeValue(forKey: definition.key)
                                     }
+
+                                    #if DEBUG
+                                    print("🔄 Schema property '\(definition.key)' updated - total: \(storage.properties.count), keys: \(storage.properties.keys.joined(separator: ", "))")
+                                    #endif
                                 }
                             )
                         )
@@ -70,23 +70,22 @@ struct DynamicPropertyFieldsView: View {
                         .foregroundColor(.primary)
 
                     ForEach(customPropertyKeys, id: \.self) { key in
-                        if let propValue = properties[key] {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(formatCustomPropertyLabel(key))
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-
-                                    customPropertyValueField(key: key, propertyValue: propValue)
+                        if let propValue = storage.properties[key] {
+                            CustomPropertyRow(
+                                key: key,
+                                propertyValue: propValue,
+                                onUpdate: { newValue in
+                                    storage.properties[key] = newValue
+                                    refreshTrigger = UUID()
+                                },
+                                onRemove: {
+                                    storage.properties.removeValue(forKey: key)
+                                    refreshTrigger = UUID()
+                                    #if DEBUG
+                                    print("➖ Removed property '\(key)' - remaining: \(storage.properties.count)")
+                                    #endif
                                 }
-
-                                Button(action: {
-                                    removeCustomProperty(key: key)
-                                }) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(.red)
-                                }
-                            }
+                            )
                         }
                     }
                 }
@@ -94,28 +93,87 @@ struct DynamicPropertyFieldsView: View {
 
             // Add custom property button
             Button(action: {
+                print("🟡 OPENING ADD SHEET - storage object: \(ObjectIdentifier(storage)), properties count: \(storage.properties.count), keys: \(storage.properties.keys.joined(separator: ", "))")
                 showingAddCustomProperty = true
             }) {
                 Label("Add Custom Property", systemImage: "plus.circle.fill")
                     .font(.subheadline)
             }
             .sheet(isPresented: $showingAddCustomProperty) {
-                addCustomPropertySheet
+                // Capture storage reference directly
+                let storageRef = storage
+                AddCustomPropertySheet(
+                    eventTypeId: eventTypeId,
+                    onAdd: { key, value in
+                        print("🟢 onAdd callback - storage.properties count: \(storageRef.properties.count), adding key: \(key)")
+                        storageRef.properties[key] = value
+                        print("🟢 After add - storage.properties count: \(storageRef.properties.count), keys: \(storageRef.properties.keys.joined(separator: ", "))")
+                        // Trigger view refresh
+                        refreshTrigger = UUID()
+                    },
+                    onCancel: {
+                        showingAddCustomProperty = false
+                    }
+                )
             }
+
+            // Debug: show current property count (also uses refreshTrigger to force updates)
+            Text("DEBUG: \(storage.properties.count) properties [\(refreshTrigger.uuidString.prefix(4))]")
+                .font(.caption)
+                .foregroundColor(.gray)
         }
     }
 
-    // MARK: - Custom Property Value Field
+}
 
-    @ViewBuilder
-    private func customPropertyValueField(key: String, propertyValue: PropertyValue) -> some View {
+// MARK: - Custom Property Row (Separate view to isolate button actions from SwiftUI confusion)
+
+/// Separate view for each custom property row to prevent SwiftUI from mixing up button actions
+struct CustomPropertyRow: View {
+    let key: String
+    let propertyValue: PropertyValue
+    let onUpdate: (PropertyValue) -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(formatLabel(key))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                CustomPropertyValueEditor(
+                    propertyValue: propertyValue,
+                    onUpdate: onUpdate
+                )
+            }
+
+            Button(action: onRemove) {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(.plain)  // Use plain style to avoid SwiftUI list button interference
+        }
+    }
+
+    private func formatLabel(_ key: String) -> String {
+        key.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+}
+
+/// Separate view for editing custom property values
+struct CustomPropertyValueEditor: View {
+    let propertyValue: PropertyValue
+    let onUpdate: (PropertyValue) -> Void
+
+    var body: some View {
         let propertyType = PropertyType(rawValue: propertyValue.type.rawValue) ?? .text
 
         switch propertyType {
         case .text, .url, .email:
             TextField("Enter value", text: Binding(
                 get: { propertyValue.stringValue ?? "" },
-                set: { properties[key] = PropertyValue(type: propertyType, value: $0) }
+                set: { onUpdate(PropertyValue(type: propertyType, value: $0)) }
             ))
             .textFieldStyle(RoundedBorderTextFieldStyle())
 
@@ -131,7 +189,7 @@ struct DynamicPropertyFieldsView: View {
                 },
                 set: { newValue in
                     if let doubleValue = Double(newValue) {
-                        properties[key] = PropertyValue(type: .number, value: doubleValue)
+                        onUpdate(PropertyValue(type: .number, value: doubleValue))
                     }
                 }
             ))
@@ -141,28 +199,26 @@ struct DynamicPropertyFieldsView: View {
         case .boolean:
             Toggle("", isOn: Binding(
                 get: { propertyValue.boolValue ?? false },
-                set: { properties[key] = PropertyValue(type: .boolean, value: $0) }
+                set: { onUpdate(PropertyValue(type: .boolean, value: $0)) }
             ))
 
         case .date:
             DatePicker("", selection: Binding(
                 get: { propertyValue.dateValue ?? Date() },
-                set: { properties[key] = PropertyValue(type: .date, value: $0) }
+                set: { onUpdate(PropertyValue(type: .date, value: $0)) }
             ), displayedComponents: [.date, .hourAndMinute])
             .datePickerStyle(.compact)
 
         case .duration:
-            // Duration is stored in seconds, display as minutes
             let durationSeconds = propertyValue.doubleValue ?? 0
             let durationMinutes = Int(durationSeconds / 60)
-            
+
             HStack {
                 TextField("Minutes", text: Binding(
                     get: { String(durationMinutes) },
                     set: { newValue in
                         if let minutes = Int(newValue) {
-                            // Store as seconds
-                            properties[key] = PropertyValue(type: .duration, value: Double(minutes * 60))
+                            onUpdate(PropertyValue(type: .duration, value: Double(minutes * 60)))
                         }
                     }
                 ))
@@ -181,19 +237,33 @@ struct DynamicPropertyFieldsView: View {
                 .cornerRadius(6)
         }
     }
+}
 
-    // MARK: - Add Custom Property Sheet
+// MARK: - Add Custom Property Sheet (Separate View to fix SwiftUI binding issue)
 
-    private var addCustomPropertySheet: some View {
+/// Separate sheet view to avoid SwiftUI's stale binding capture issue
+struct AddCustomPropertySheet: View {
+    let eventTypeId: UUID?
+    let onAdd: (String, PropertyValue) -> Void
+    let onCancel: () -> Void
+
+    @State private var propertyKey = ""
+    @State private var propertyLabel = ""
+    @State private var propertyType: PropertyType = .text
+    @State private var tempValue: PropertyValue?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Property Details")) {
-                    TextField("Key (e.g., custom_field)", text: $newPropertyKey)
+                    TextField("Key (e.g., custom_field)", text: $propertyKey)
                         .autocapitalization(.none)
 
-                    TextField("Label", text: $newPropertyLabel)
+                    TextField("Label", text: $propertyLabel)
 
-                    Picker("Type", selection: $newPropertyType) {
+                    Picker("Type", selection: $propertyType) {
                         ForEach(PropertyType.allCases, id: \.self) { type in
                             Text(type.displayName).tag(type)
                         }
@@ -204,11 +274,11 @@ struct DynamicPropertyFieldsView: View {
                     PropertyFieldView(
                         definition: PropertyDefinition(
                             eventTypeId: eventTypeId ?? UUID(),
-                            key: newPropertyKey,
-                            label: newPropertyLabel.isEmpty ? "Value" : newPropertyLabel,
-                            propertyType: newPropertyType
+                            key: propertyKey,
+                            label: propertyLabel.isEmpty ? "Value" : propertyLabel,
+                            propertyType: propertyType
                         ),
-                        value: $tempPropertyValue
+                        value: $tempValue
                     )
                 }
             }
@@ -217,63 +287,55 @@ struct DynamicPropertyFieldsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        resetCustomPropertyForm()
-                        showingAddCustomProperty = false
+                        onCancel()
+                        dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        addCustomProperty()
+                        addProperty()
                     }
-                    .disabled(newPropertyKey.isEmpty)
+                    .disabled(propertyKey.isEmpty)
                 }
             }
         }
     }
 
-    // MARK: - Helper Methods
+    private func addProperty() {
+        guard !propertyKey.isEmpty else { return }
 
-    /// Format custom property key as readable label
-    private func formatCustomPropertyLabel(_ key: String) -> String {
-        return key.replacingOccurrences(of: "_", with: " ")
-            .capitalized
-    }
-
-    /// Add a custom property
-    private func addCustomProperty() {
-        guard !newPropertyKey.isEmpty else { return }
-
-        // Use temp value if set, otherwise create default value
-        if let value = tempPropertyValue {
-            properties[newPropertyKey] = value
+        let value: PropertyValue
+        if let temp = tempValue {
+            value = temp
         } else {
             // Create default value based on type
             let defaultValue: Any
-            switch newPropertyType {
+            switch propertyType {
             case .text, .url, .email, .select: defaultValue = ""
             case .number: defaultValue = 0.0
             case .boolean: defaultValue = false
             case .date: defaultValue = Date()
             case .duration: defaultValue = 0
             }
-            properties[newPropertyKey] = PropertyValue(type: newPropertyType, value: defaultValue)
+            value = PropertyValue(type: propertyType, value: defaultValue)
         }
 
-        resetCustomPropertyForm()
-        showingAddCustomProperty = false
-    }
+        print("🔵 AddCustomPropertySheet.addProperty() - key: \(propertyKey)")
 
-    /// Remove a custom property
-    private func removeCustomProperty(key: String) {
-        properties.removeValue(forKey: key)
+        // Call the callback which runs in the parent's context with fresh binding
+        onAdd(propertyKey, value)
+        dismiss()
     }
+}
 
-    /// Reset the custom property form
-    private func resetCustomPropertyForm() {
-        newPropertyKey = ""
-        newPropertyLabel = ""
-        newPropertyType = .text
-        tempPropertyValue = nil
+// MARK: - Preview Storage
+
+/// Simple storage class for previews
+class PreviewPropertyStorage: PropertyStorage {
+    var properties: [String: PropertyValue]
+
+    init(properties: [String: PropertyValue] = [:]) {
+        self.properties = properties
     }
 }
 
@@ -306,12 +368,15 @@ struct DynamicPropertyFieldsView: View {
     container.mainContext.insert(textProp)
     container.mainContext.insert(numberProp)
 
+    let storage = PreviewPropertyStorage(properties: [
+        "notes": PropertyValue(type: .text, value: "Test note"),
+        "custom_field": PropertyValue(type: .number, value: 42)
+    ])
+
     return DynamicPropertyFieldsView(
         eventTypeId: eventType.id,
-        properties: .constant([
-            "notes": PropertyValue(type: .text, value: "Test note"),
-            "custom_field": PropertyValue(type: .number, value: 42)
-        ])
+        storage: storage,
+        propertyDefinitions: [textProp, numberProp]
     )
     .modelContainer(container)
     .padding()

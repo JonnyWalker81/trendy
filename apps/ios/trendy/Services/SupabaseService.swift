@@ -40,15 +40,20 @@ class SupabaseService {
     func restoreSession() async {
         do {
             let session = try await client.auth.session
-            self.currentSession = session
-            self.isAuthenticated = true
-            Log.auth.info("Session restored", context: .with { ctx in
-                ctx.add("user_email", session.user.email)
-                ctx.add("user_id", session.user.id)
-            })
+            await MainActor.run {
+                self.currentSession = session
+                self.isAuthenticated = true
+            }
+            #if DEBUG
+            print("✅ Session restored for user: \(session.user.email ?? "unknown")")
+            #endif
         } catch {
-            Log.auth.debug("No existing session found", error: error)
-            self.isAuthenticated = false
+            #if DEBUG
+            print("ℹ️ No existing session found: \(error.localizedDescription)")
+            #endif
+            await MainActor.run {
+                self.isAuthenticated = false
+            }
         }
     }
 
@@ -74,19 +79,20 @@ class SupabaseService {
         )
 
         guard let session = response.session else {
-            Log.auth.warning("Signup completed but no session returned", context: .with { ctx in
-                ctx.add("email", email)
-            })
+            #if DEBUG
+            print("⚠️ Signup completed but no session returned for: \(email)")
+            #endif
             throw AuthError.noSession
         }
 
-        self.currentSession = session
-        self.isAuthenticated = true
+        await MainActor.run {
+            self.currentSession = session
+            self.isAuthenticated = true
+        }
 
-        Log.auth.info("User signed up successfully", context: .with { ctx in
-            ctx.add("email", email)
-            ctx.add("user_id", session.user.id)
-        })
+        #if DEBUG
+        print("✅ User signed up: \(email)")
+        #endif
         return session
     }
 
@@ -97,13 +103,14 @@ class SupabaseService {
             password: password
         )
 
-        self.currentSession = session
-        self.isAuthenticated = true
+        await MainActor.run {
+            self.currentSession = session
+            self.isAuthenticated = true
+        }
 
-        Log.auth.info("User signed in successfully", context: .with { ctx in
-            ctx.add("email", email)
-            ctx.add("user_id", session.user.id)
-        })
+        #if DEBUG
+        print("✅ User signed in: \(email)")
+        #endif
         return session
     }
 
@@ -111,18 +118,24 @@ class SupabaseService {
     func signOut() async throws {
         try await client.auth.signOut()
 
-        self.currentSession = nil
-        self.isAuthenticated = false
+        await MainActor.run {
+            self.currentSession = nil
+            self.isAuthenticated = false
+        }
 
-        Log.auth.info("User signed out successfully")
+        #if DEBUG
+        print("✅ User signed out")
+        #endif
     }
 
     /// Refresh the current session token
     func refreshSession() async throws -> Session {
         let session = try await client.auth.refreshSession()
 
-        self.currentSession = session
-        self.isAuthenticated = true
+        await MainActor.run {
+            self.currentSession = session
+            self.isAuthenticated = true
+        }
 
         return session
     }
