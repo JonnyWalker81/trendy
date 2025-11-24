@@ -81,14 +81,14 @@ class APIClient {
             let encodedBody = try encoder.encode(body)
             urlRequest.httpBody = encodedBody
 
-            #if DEBUG
-            // Log request body for debugging event updates
+            // Log request body for event updates (works in all builds for debugging)
             if endpoint.contains("/events/") && method == "PUT" {
                 if let bodyString = String(data: encodedBody, encoding: .utf8) {
-                    print("📤 PUT /events request body: \(bodyString)")
+                    Log.api.info("PUT /events request body", context: .with { ctx in
+                        ctx.add("body", bodyString)
+                    })
                 }
             }
-            #endif
         }
 
         // Perform request
@@ -106,16 +106,16 @@ class APIClient {
 
         Log.api.response(method, path: endpoint, statusCode: httpResponse.statusCode, duration: duration)
 
-        #if DEBUG
-        // Log response body for debugging event updates
-        if endpoint.contains("/events") && (method == "PUT" || method == "GET") {
+        // Log response body for event updates (works in all builds for debugging)
+        if endpoint.contains("/events") && method == "PUT" {
             if let responseString = String(data: data, encoding: .utf8) {
                 // Truncate long responses
-                let truncated = responseString.count > 1000 ? String(responseString.prefix(1000)) + "..." : responseString
-                print("📥 \(method) \(endpoint) response: \(truncated)")
+                let truncated = responseString.count > 500 ? String(responseString.prefix(500)) + "..." : responseString
+                Log.api.info("PUT /events response", context: .with { ctx in
+                    ctx.add("response", truncated)
+                })
             }
         }
-        #endif
 
         // Handle error responses
         guard (200...299).contains(httpResponse.statusCode) else {

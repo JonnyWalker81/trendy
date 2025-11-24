@@ -210,36 +210,27 @@ struct EventEditView: View {
     
     private func saveEvent() {
         Task {
-            #if DEBUG
-            print("💾 EventEditView.saveEvent() called")
-            print("   Properties count: \(formState.properties.count)")
-            print("   Properties keys: \(formState.properties.keys.joined(separator: ", "))")
+            // Log for debugging property issues (works in all builds)
+            Log.data.info("EventEditView.saveEvent() - formState.properties count: \(formState.properties.count)")
             for (key, value) in formState.properties {
-                print("   - \(key): type=\(value.type.rawValue), value=\(value.value.value)")
+                Log.data.info("  formState property '\(key)': type=\(value.type.rawValue), value=\(String(describing: value.value.value))")
             }
-            #endif
 
             if let existingEvent {
                 // Update existing event
-                #if DEBUG
-                print("💾 Updating existing event: \(existingEvent.id)")
-                #endif
+                Log.data.info("Updating existing event: \(existingEvent.id)")
                 existingEvent.timestamp = formState.selectedDate
                 existingEvent.isAllDay = formState.isAllDay
                 existingEvent.notes = formState.notes.isEmpty ? nil : formState.notes
                 existingEvent.endDate = (formState.isAllDay && formState.showEndDate) ? formState.endDate : nil
                 existingEvent.properties = formState.properties
 
-                #if DEBUG
-                print("💾 After assignment, existingEvent.properties count: \(existingEvent.properties.count)")
-                #endif
+                Log.data.info("After assignment, existingEvent.properties count: \(existingEvent.properties.count)")
 
                 await eventStore.updateEvent(existingEvent)
             } else {
                 // Create new event
-                #if DEBUG
-                print("💾 Creating new event")
-                #endif
+                Log.data.info("Creating new event with \(formState.properties.count) properties")
                 await eventStore.recordEvent(
                     type: eventType,
                     timestamp: formState.selectedDate,

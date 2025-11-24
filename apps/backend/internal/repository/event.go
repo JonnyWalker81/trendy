@@ -154,14 +154,34 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 	if event.OriginalTitle != nil {
 		data["original_title"] = *event.OriginalTitle
 	}
+
+	// Debug logging for properties
+	println("📦 Repository.Update - event.Properties is nil:", event.Properties == nil)
+	if event.Properties != nil {
+		println("📦 Repository.Update - event.Properties length:", len(event.Properties))
+		for k, v := range event.Properties {
+			println("📦   Property:", k, "type:", string(v.Type), "value:", fmt.Sprintf("%v", v.Value))
+		}
+	}
+
 	if event.Properties != nil && len(event.Properties) > 0 {
 		data["properties"] = event.Properties
+		println("📦 Repository.Update - Added properties to data map")
+	} else {
+		println("📦 Repository.Update - NOT adding properties (nil or empty)")
 	}
+
+	// Log the data being sent
+	jsonData, _ := json.Marshal(data)
+	println("📦 Repository.Update - Sending to Supabase:", string(jsonData))
 
 	body, err := r.client.Update("events", id, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update event: %w", err)
 	}
+
+	// Log the raw response from Supabase
+	println("📦 Repository.Update - Supabase response:", string(body))
 
 	var events []models.Event
 	if err := json.Unmarshal(body, &events); err != nil {
@@ -170,6 +190,13 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 
 	if len(events) == 0 {
 		return nil, fmt.Errorf("event not found")
+	}
+
+	// Log the parsed properties
+	if events[0].Properties != nil {
+		println("📦 Repository.Update - Parsed response has", len(events[0].Properties), "properties")
+	} else {
+		println("📦 Repository.Update - Parsed response has nil properties")
 	}
 
 	return &events[0], nil

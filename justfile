@@ -432,6 +432,31 @@ gcp-secrets-setup ENV="dev":
     PROJECT_ID=$(just gcp_project_id {{ENV}})
     ./apps/backend/deployment/setup-secrets.sh $PROJECT_ID {{ENV}}
 
+# Deploy backend to both dev and prod environments
+gcp-deploy-backend-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🚀 Deploying backend to ALL environments (dev + prod)..."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📦 Step 1/2: Deploying to DEV environment..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    just gcp-deploy-backend dev
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "📦 Step 2/2: Deploying to PROD environment..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    just gcp-deploy-backend prod
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "✅ All deployments complete!"
+    echo ""
+    echo "DEV service URL:"
+    gcloud run services describe trendy-api-dev --region={{GCP_REGION}} --project={{GCP_PROJECT_ID_DEV}} --format='value(status.url)' 2>/dev/null || echo "  (run 'gcloud run services describe trendy-api-dev ...' to get URL)"
+    echo ""
+    echo "PROD service URL:"
+    gcloud run services describe trendy-api-prod --region={{GCP_REGION}} --project={{GCP_PROJECT_ID_PROD}} --format='value(status.url)' 2>/dev/null || echo "  (run 'gcloud run services describe trendy-api-prod ...' to get URL)"
+
 # Development helpers
 
 # Watch shared types for changes
