@@ -164,11 +164,14 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 		}
 	}
 
-	if event.Properties != nil && len(event.Properties) > 0 {
+	// IMPORTANT: Always include properties if not nil, even if empty
+	// This allows clearing all properties by sending an empty object {}
+	// nil means "don't update", empty map means "clear all properties"
+	if event.Properties != nil {
 		data["properties"] = event.Properties
-		println("📦 Repository.Update - Added properties to data map")
+		println("📦 Repository.Update - Added properties to data map (count:", len(event.Properties), ")")
 	} else {
-		println("📦 Repository.Update - NOT adding properties (nil or empty)")
+		println("📦 Repository.Update - NOT adding properties (nil - no update requested)")
 	}
 
 	// Log the data being sent

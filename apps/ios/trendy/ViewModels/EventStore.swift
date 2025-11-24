@@ -507,20 +507,21 @@ class EventStore {
                let backendTypeId = eventTypeBackendIds[eventType.id] {
 
                 // Convert properties to API format
-                // IMPORTANT: Log property count for debugging production issues
+                // IMPORTANT: Always send properties (even if empty) to support deletion
+                // Sending nil means "don't update", sending {} means "clear all properties"
                 Log.api.info("EventStore.updateEvent - event.properties count: \(event.properties.count)")
                 for (key, propValue) in event.properties {
                     Log.api.info("  Property '\(key)': type=\(propValue.type.rawValue), value=\(String(describing: propValue.value.value))")
                 }
 
-                let apiProperties: [String: APIPropertyValue]? = event.properties.isEmpty ? nil : event.properties.mapValues { propValue in
+                let apiProperties: [String: APIPropertyValue] = event.properties.mapValues { propValue in
                     APIPropertyValue(
                         type: propValue.type.rawValue,
                         value: propValue.value
                     )
                 }
 
-                Log.api.info("EventStore.updateEvent - apiProperties is \(apiProperties == nil ? "nil" : "not nil, count: \(apiProperties!.count)")")
+                Log.api.info("EventStore.updateEvent - apiProperties count: \(apiProperties.count)")
 
                 let request = UpdateEventRequest(
                     eventTypeId: backendTypeId,
