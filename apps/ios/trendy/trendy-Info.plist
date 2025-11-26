@@ -26,9 +26,14 @@
 	<string>This app needs access to your location even when in the background to automatically track events when you enter or exit geofenced locations.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>This app sends notifications when you enter or exit a geofenced location to keep you informed of automatic event tracking.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Trendy reads your health data to automatically log events when workouts, sleep, and other health activities are detected.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Trendy does not write health data.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>processing</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>

@@ -75,6 +75,12 @@ struct EventTypeSettingsView: View {
                     } label: {
                         Label("Geofences", systemImage: "location.circle.fill")
                     }
+
+                    NavigationLink {
+                        HealthKitSettingsView()
+                    } label: {
+                        Label("Health Tracking", systemImage: "heart.circle.fill")
+                    }
                 }
             }
             .navigationTitle("Settings")

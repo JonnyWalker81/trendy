@@ -12,6 +12,7 @@ enum EventSourceType: String, Codable, CaseIterable {
     case manual = "manual"
     case imported = "imported"
     case geofence = "geofence"
+    case healthKit = "healthkit"
 }
 
 @Model
@@ -31,6 +32,8 @@ final class Event {
     var locationLatitude: Double?
     var locationLongitude: Double?
     var locationName: String?
+    var healthKitSampleId: String?    // HealthKit sample UUID for deduplication
+    var healthKitCategory: String?     // e.g., "workout", "sleep", "steps"
     var propertiesData: Data? // Encoded [String: PropertyValue]
 
     // Computed property for convenient enum access
@@ -88,7 +91,7 @@ final class Event {
         }
     }
 
-    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, geofenceId: UUID? = nil, locationLatitude: Double? = nil, locationLongitude: Double? = nil, locationName: String? = nil, properties: [String: PropertyValue] = [:]) {
+    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, geofenceId: UUID? = nil, locationLatitude: Double? = nil, locationLongitude: Double? = nil, locationName: String? = nil, healthKitSampleId: String? = nil, healthKitCategory: String? = nil, properties: [String: PropertyValue] = [:]) {
         self.id = UUID()
         self.timestamp = timestamp
         self.eventType = eventType
@@ -103,6 +106,8 @@ final class Event {
         self.locationLatitude = locationLatitude
         self.locationLongitude = locationLongitude
         self.locationName = locationName
+        self.healthKitSampleId = healthKitSampleId
+        self.healthKitCategory = healthKitCategory
 
         #if DEBUG
         print("🆕 Event.init() with \(properties.count) properties: \(properties.keys.joined(separator: ", "))")

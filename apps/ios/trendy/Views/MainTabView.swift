@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import HealthKit
 
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
@@ -15,6 +16,7 @@ struct MainTabView: View {
     @StateObject private var calendarManager = CalendarManager()
     @State private var notificationManager = NotificationManager()
     @State private var geofenceManager: GeofenceManager?
+    @State private var healthKitService: HealthKitService?
     @State private var selectedTab = 0
     @State private var isLoading = true
     
@@ -59,6 +61,7 @@ struct MainTabView: View {
                 .environmentObject(calendarManager)
                 .environment(notificationManager)
                 .environment(geofenceManager)
+                .environment(healthKitService)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isLoading)
@@ -86,6 +89,21 @@ struct MainTabView: View {
             // Start monitoring active geofences if authorized
             if geoManager.hasGeofencingAuthorization {
                 geoManager.startMonitoringAllGeofences()
+            }
+
+            // Initialize HealthKitService if available
+            if HKHealthStore.isHealthDataAvailable() {
+                let hkService = HealthKitService(
+                    modelContext: modelContext,
+                    eventStore: store,
+                    notificationManager: notificationManager
+                )
+                healthKitService = hkService
+
+                // Start monitoring if authorized
+                if hkService.hasHealthKitAuthorization {
+                    hkService.startMonitoringAllConfigurations()
+                }
             }
 
             // Load initial data

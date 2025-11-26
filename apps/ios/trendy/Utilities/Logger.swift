@@ -32,6 +32,9 @@ enum Log {
     /// Logger for geofence operations
     static let geofence = Logger(subsystem: subsystem, category: "geofence")
 
+    /// Logger for HealthKit integration
+    static let healthKit = Logger(subsystem: subsystem, category: "healthkit")
+
     /// Logger for calendar integration
     static let calendar = Logger(subsystem: subsystem, category: "calendar")
 

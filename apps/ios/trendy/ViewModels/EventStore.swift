@@ -753,7 +753,7 @@ class EventStore {
         }
         
         // Map source type for backend compatibility
-        // Backend may not support "geofence" - map it to "manual" for now
+        // Backend may not support all source types - map to "manual" as fallback
         let backendSourceType: String
         switch event.sourceType {
         case .manual:
@@ -762,6 +762,9 @@ class EventStore {
             backendSourceType = "imported"
         case .geofence:
             // Backend doesn't support "geofence" yet - use "manual" as fallback
+            backendSourceType = "manual"
+        case .healthKit:
+            // Backend doesn't support "healthkit" yet - use "manual" as fallback
             backendSourceType = "manual"
         }
 
@@ -839,6 +842,46 @@ class EventStore {
         } catch {
             #if DEBUG
             print("❌ Failed to sync event to backend: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    /// Sync an auto-created EventType to the backend (used by HealthKitService)
+    /// - Parameter eventType: The EventType to sync
+    func syncEventTypeToBackend(_ eventType: EventType) async {
+        guard useBackend else { return }
+
+        // Check if already synced
+        if eventTypeBackendIds[eventType.id] != nil {
+            #if DEBUG
+            print("ℹ️ EventType already synced: \(eventType.name)")
+            #endif
+            return
+        }
+
+        let request = CreateEventTypeRequest(
+            name: eventType.name,
+            color: eventType.colorHex,
+            icon: eventType.iconName
+        )
+
+        do {
+            if isOnline {
+                let apiEventType = try await apiClient.createEventType(request)
+                eventTypeBackendIds[eventType.id] = apiEventType.id
+                #if DEBUG
+                print("✅ Synced EventType to backend: \(eventType.name)")
+                #endif
+            } else {
+                // Queue for sync when online
+                try? syncQueue?.enqueue(type: .createEventType, entityId: eventType.id, payload: request)
+                #if DEBUG
+                print("📦 Queued EventType for sync: \(eventType.name)")
+                #endif
+            }
+        } catch {
+            #if DEBUG
+            print("❌ Failed to sync EventType to backend: \(error.localizedDescription)")
             #endif
         }
     }

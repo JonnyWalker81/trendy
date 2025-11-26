@@ -34,7 +34,8 @@ struct trendyApp: App {
             EventType.self,
             QueuedOperation.self,
             Geofence.self,
-            PropertyDefinition.self
+            PropertyDefinition.self,
+            HealthKitConfiguration.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
