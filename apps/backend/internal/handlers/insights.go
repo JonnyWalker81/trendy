@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -28,8 +29,11 @@ func (h *InsightsHandler) GetInsights(c *gin.Context) {
 		return
 	}
 
+	log := logger.Ctx(c.Request.Context())
+
 	insights, err := h.intelligenceService.GetInsights(c.Request.Context(), userID.(string))
 	if err != nil {
+		log.Error("failed to get insights", logger.Err(err), logger.String("user_id", userID.(string)))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -37,6 +41,7 @@ func (h *InsightsHandler) GetInsights(c *gin.Context) {
 	// Also get weekly summary
 	weeklySummary, err := h.intelligenceService.GetWeeklySummary(c.Request.Context(), userID.(string))
 	if err != nil {
+		log.Error("failed to get weekly summary", logger.Err(err), logger.String("user_id", userID.(string)))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -116,7 +121,10 @@ func (h *InsightsHandler) RefreshInsights(c *gin.Context) {
 		return
 	}
 
+	log := logger.Ctx(c.Request.Context())
+
 	if err := h.intelligenceService.ComputeInsights(c.Request.Context(), userID.(string)); err != nil {
+		log.Error("failed to compute insights", logger.Err(err), logger.String("user_id", userID.(string)))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

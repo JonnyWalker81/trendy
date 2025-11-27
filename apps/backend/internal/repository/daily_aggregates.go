@@ -90,9 +90,10 @@ func (r *dailyAggregateRepository) BulkUpsert(ctx context.Context, aggs []models
 }
 
 func (r *dailyAggregateRepository) GetByUserID(ctx context.Context, userID string) ([]models.DailyAggregate, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),
-		"select":  "*,event_type:event_types(*)",
+		"select":  "*",
 		"order":   "date.desc",
 	}
 
@@ -110,10 +111,11 @@ func (r *dailyAggregateRepository) GetByUserID(ctx context.Context, userID strin
 }
 
 func (r *dailyAggregateRepository) GetByUserIDAndDateRange(ctx context.Context, userID string, startDate, endDate time.Time) ([]models.DailyAggregate, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),
 		"and":     fmt.Sprintf("(date.gte.%s,date.lte.%s)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02")),
-		"select":  "*,event_type:event_types(*)",
+		"select":  "*",
 		"order":   "date.asc",
 	}
 
@@ -131,11 +133,12 @@ func (r *dailyAggregateRepository) GetByUserIDAndDateRange(ctx context.Context, 
 }
 
 func (r *dailyAggregateRepository) GetByUserIDAndEventType(ctx context.Context, userID, eventTypeID string, startDate, endDate time.Time) ([]models.DailyAggregate, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id":       fmt.Sprintf("eq.%s", userID),
 		"event_type_id": fmt.Sprintf("eq.%s", eventTypeID),
 		"and":           fmt.Sprintf("(date.gte.%s,date.lte.%s)", startDate.Format("2006-01-02"), endDate.Format("2006-01-02")),
-		"select":        "*,event_type:event_types(*)",
+		"select":        "*",
 		"order":         "date.asc",
 	}
 

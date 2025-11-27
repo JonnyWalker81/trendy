@@ -50,9 +50,10 @@ func (r *streakRepository) Upsert(ctx context.Context, streak *models.Streak) (*
 }
 
 func (r *streakRepository) GetByUserID(ctx context.Context, userID string) ([]models.Streak, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),
-		"select":  "*,event_type:event_types(*)",
+		"select":  "*",
 		"order":   "length.desc",
 	}
 
@@ -70,10 +71,11 @@ func (r *streakRepository) GetByUserID(ctx context.Context, userID string) ([]mo
 }
 
 func (r *streakRepository) GetByUserIDAndEventType(ctx context.Context, userID, eventTypeID string) ([]models.Streak, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id":       fmt.Sprintf("eq.%s", userID),
 		"event_type_id": fmt.Sprintf("eq.%s", eventTypeID),
-		"select":        "*,event_type:event_types(*)",
+		"select":        "*",
 		"order":         "streak_type.asc",
 	}
 
@@ -91,10 +93,11 @@ func (r *streakRepository) GetByUserIDAndEventType(ctx context.Context, userID, 
 }
 
 func (r *streakRepository) GetActiveByUserID(ctx context.Context, userID string) ([]models.Streak, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id":   fmt.Sprintf("eq.%s", userID),
 		"is_active": "eq.true",
-		"select":    "*,event_type:event_types(*)",
+		"select":    "*",
 		"order":     "length.desc",
 	}
 

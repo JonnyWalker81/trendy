@@ -74,20 +74,28 @@ func (r *insightRepository) BulkCreate(ctx context.Context, insights []models.In
 
 	data := make([]map[string]interface{}, len(insights))
 	for i, insight := range insights {
+		// PostgREST requires all objects to have the same keys for bulk insert
+		// Use nil for optional fields that are not set
 		item := map[string]interface{}{
-			"user_id":      insight.UserID,
-			"insight_type": insight.InsightType,
-			"category":     insight.Category,
-			"title":        insight.Title,
-			"description":  insight.Description,
-			"metric_value": insight.MetricValue,
-			"sample_size":  insight.SampleSize,
-			"confidence":   insight.Confidence,
-			"direction":    insight.Direction,
-			"computed_at":  insight.ComputedAt,
-			"valid_until":  insight.ValidUntil,
+			"user_id":         insight.UserID,
+			"insight_type":    insight.InsightType,
+			"category":        insight.Category,
+			"title":           insight.Title,
+			"description":     insight.Description,
+			"metric_value":    insight.MetricValue,
+			"sample_size":     insight.SampleSize,
+			"confidence":      insight.Confidence,
+			"direction":       insight.Direction,
+			"computed_at":     insight.ComputedAt,
+			"valid_until":     insight.ValidUntil,
+			"event_type_a_id": nil,
+			"event_type_b_id": nil,
+			"property_key":    nil,
+			"p_value":         nil,
+			"metadata":        map[string]interface{}{},
 		}
 
+		// Override with actual values if present
 		if insight.EventTypeAID != nil {
 			item["event_type_a_id"] = *insight.EventTypeAID
 		}
@@ -116,9 +124,10 @@ func (r *insightRepository) BulkCreate(ctx context.Context, insights []models.In
 }
 
 func (r *insightRepository) GetByUserID(ctx context.Context, userID string) ([]models.Insight, error) {
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),
-		"select":  "*,event_type_a:event_types!event_type_a_id(*),event_type_b:event_types!event_type_b_id(*)",
+		"select":  "*",
 		"order":   "computed_at.desc",
 	}
 
@@ -137,10 +146,11 @@ func (r *insightRepository) GetByUserID(ctx context.Context, userID string) ([]m
 
 func (r *insightRepository) GetValidByUserID(ctx context.Context, userID string) ([]models.Insight, error) {
 	now := time.Now().Format(time.RFC3339)
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id":     fmt.Sprintf("eq.%s", userID),
 		"valid_until": fmt.Sprintf("gt.%s", now),
-		"select":      "*,event_type_a:event_types!event_type_a_id(*),event_type_b:event_types!event_type_b_id(*)",
+		"select":      "*",
 		"order":       "computed_at.desc",
 	}
 
@@ -159,11 +169,12 @@ func (r *insightRepository) GetValidByUserID(ctx context.Context, userID string)
 
 func (r *insightRepository) GetByType(ctx context.Context, userID string, insightType models.InsightType) ([]models.Insight, error) {
 	now := time.Now().Format(time.RFC3339)
+	// Use simple select without embedded resources to avoid schema cache issues
 	query := map[string]interface{}{
 		"user_id":      fmt.Sprintf("eq.%s", userID),
 		"insight_type": fmt.Sprintf("eq.%s", insightType),
 		"valid_until":  fmt.Sprintf("gt.%s", now),
-		"select":       "*,event_type_a:event_types!event_type_a_id(*),event_type_b:event_types!event_type_b_id(*)",
+		"select":       "*",
 		"order":        "metric_value.desc",
 	}
 
