@@ -247,3 +247,159 @@ type User struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 }
+
+// Upsert inserts or updates a record in a Supabase table
+// onConflict specifies the columns to detect conflicts (e.g., "user_id,date,event_type_id")
+func (c *Client) Upsert(table string, data interface{}, onConflict string) ([]byte, error) {
+	return c.UpsertWithToken(table, data, onConflict, "")
+}
+
+// UpsertWithToken inserts or updates with an optional user JWT token for RLS
+func (c *Client) UpsertWithToken(table string, data interface{}, onConflict string, userToken string) ([]byte, error) {
+	url := fmt.Sprintf("%s/rest/v1/%s", c.URL, table)
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("apikey", c.ServiceKey)
+
+	// Use user token if provided, otherwise use service key
+	if userToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", userToken))
+	} else {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.ServiceKey))
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	// Prefer header for upsert - resolution=merge-duplicates will update existing rows
+	req.Header.Set("Prefer", "return=representation,resolution=merge-duplicates")
+
+	// Set on_conflict query parameter
+	q := req.URL.Query()
+	q.Add("on_conflict", onConflict)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("supabase error: %s", string(body))
+	}
+
+	return body, nil
+}
+
+// DeleteWhere deletes records matching a query
+func (c *Client) DeleteWhere(table string, query map[string]interface{}) error {
+	return c.DeleteWhereWithToken(table, query, "")
+}
+
+// DeleteWhereWithToken deletes records matching a query with an optional user JWT token
+func (c *Client) DeleteWhereWithToken(table string, query map[string]interface{}, userToken string) error {
+	url := fmt.Sprintf("%s/rest/v1/%s", c.URL, table)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	// Build query parameters
+	q := req.URL.Query()
+	for key, value := range query {
+		q.Add(key, fmt.Sprintf("%v", value))
+	}
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("apikey", c.ServiceKey)
+
+	// Use user token if provided, otherwise use service key
+	if userToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", userToken))
+	} else {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.ServiceKey))
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("supabase error: %s", string(body))
+	}
+
+	return nil
+}
+
+// UpdateWhere updates records matching a query
+func (c *Client) UpdateWhere(table string, query map[string]interface{}, data interface{}) ([]byte, error) {
+	return c.UpdateWhereWithToken(table, query, data, "")
+}
+
+// UpdateWhereWithToken updates records matching a query with an optional user JWT token
+func (c *Client) UpdateWhereWithToken(table string, query map[string]interface{}, data interface{}, userToken string) ([]byte, error) {
+	url := fmt.Sprintf("%s/rest/v1/%s", c.URL, table)
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	// Build query parameters
+	q := req.URL.Query()
+	for key, value := range query {
+		q.Add(key, fmt.Sprintf("%v", value))
+	}
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("apikey", c.ServiceKey)
+
+	// Use user token if provided, otherwise use service key
+	if userToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", userToken))
+	} else {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.ServiceKey))
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=representation")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("supabase error: %s", string(body))
+	}
+
+	return body, nil
+}

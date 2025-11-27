@@ -342,6 +342,33 @@ class APIClient {
 
         return (200...299).contains(httpResponse.statusCode)
     }
+
+    // MARK: - Insights Endpoints
+
+    /// Get all insights (correlations, patterns, streaks, weekly summary)
+    func getInsights() async throws -> APIInsightsResponse {
+        return try await request("GET", endpoint: "/insights")
+    }
+
+    /// Get correlations only
+    func getCorrelations() async throws -> APICorrelationsResponse {
+        return try await request("GET", endpoint: "/insights/correlations")
+    }
+
+    /// Get streaks only
+    func getStreaks() async throws -> APIStreaksResponse {
+        return try await request("GET", endpoint: "/insights/streaks")
+    }
+
+    /// Get weekly summary only
+    func getWeeklySummary() async throws -> APIWeeklySummaryResponse {
+        return try await request("GET", endpoint: "/insights/weekly-summary")
+    }
+
+    /// Force refresh all insights
+    func refreshInsights() async throws {
+        try await requestWithoutResponse("POST", endpoint: "/insights/refresh")
+    }
 }
 
 // MARK: - Error Types

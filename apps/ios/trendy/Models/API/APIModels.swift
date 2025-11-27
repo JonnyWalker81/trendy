@@ -475,3 +475,185 @@ struct UpdateGeofenceRequest: Codable {
         case notifyOnExit = "notify_on_exit"
     }
 }
+
+// MARK: - Insights Models
+
+/// Insight type enumeration
+enum APIInsightType: String, Codable {
+    case correlation
+    case pattern
+    case streak
+    case summary
+}
+
+/// Insight category enumeration
+enum APIInsightCategory: String, Codable {
+    case crossEvent = "cross_event"
+    case property
+    case timeOfDay = "time_of_day"
+    case dayOfWeek = "day_of_week"
+    case weekly
+    case streak
+}
+
+/// Confidence level for insights
+enum APIConfidence: String, Codable {
+    case high
+    case medium
+    case low
+}
+
+/// Direction for correlations and trends
+enum APIDirection: String, Codable {
+    case positive
+    case negative
+    case neutral
+}
+
+/// Single insight from the backend
+struct APIInsight: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let insightType: APIInsightType
+    let category: APIInsightCategory
+    let title: String
+    let description: String
+    let eventTypeAId: String?
+    let eventTypeBId: String?
+    let propertyKey: String?
+    let metricValue: Double
+    let pValue: Double?
+    let sampleSize: Int
+    let confidence: APIConfidence
+    let direction: APIDirection
+    let metadata: [String: AnyCodable]?
+    let computedAt: Date
+    let validUntil: Date
+    let createdAt: Date
+    let eventTypeA: APIEventType?
+    let eventTypeB: APIEventType?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case insightType = "insight_type"
+        case category
+        case title
+        case description
+        case eventTypeAId = "event_type_a_id"
+        case eventTypeBId = "event_type_b_id"
+        case propertyKey = "property_key"
+        case metricValue = "metric_value"
+        case pValue = "p_value"
+        case sampleSize = "sample_size"
+        case confidence
+        case direction
+        case metadata
+        case computedAt = "computed_at"
+        case validUntil = "valid_until"
+        case createdAt = "created_at"
+        case eventTypeA = "event_type_a"
+        case eventTypeB = "event_type_b"
+    }
+}
+
+/// Weekly summary for a single event type
+struct APIWeeklySummary: Codable, Identifiable {
+    var id: String { eventTypeId }
+    let eventTypeId: String
+    let eventTypeName: String
+    let eventTypeColor: String
+    let eventTypeIcon: String
+    let thisWeekCount: Int
+    let lastWeekCount: Int
+    let changePercent: Double
+    let direction: String  // "up", "down", "same"
+
+    enum CodingKeys: String, CodingKey {
+        case eventTypeId = "event_type_id"
+        case eventTypeName = "event_type_name"
+        case eventTypeColor = "event_type_color"
+        case eventTypeIcon = "event_type_icon"
+        case thisWeekCount = "this_week_count"
+        case lastWeekCount = "last_week_count"
+        case changePercent = "change_percent"
+        case direction
+    }
+}
+
+/// Streak data from backend
+struct APIStreak: Codable, Identifiable {
+    let id: String
+    let userId: String
+    let eventTypeId: String
+    let streakType: String  // "current" or "longest"
+    let startDate: Date
+    let endDate: Date?
+    let length: Int
+    let isActive: Bool
+    let createdAt: Date
+    let updatedAt: Date
+    let eventType: APIEventType?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case eventTypeId = "event_type_id"
+        case streakType = "streak_type"
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case length
+        case isActive = "is_active"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case eventType = "event_type"
+    }
+}
+
+/// Full insights response from backend
+struct APIInsightsResponse: Codable {
+    let correlations: [APIInsight]
+    let patterns: [APIInsight]
+    let streaks: [APIInsight]
+    let weeklySummary: [APIWeeklySummary]
+    let computedAt: Date
+    let dataSufficient: Bool
+    let minDaysNeeded: Int?
+    let totalDays: Int
+
+    enum CodingKeys: String, CodingKey {
+        case correlations
+        case patterns
+        case streaks
+        case weeklySummary = "weekly_summary"
+        case computedAt = "computed_at"
+        case dataSufficient = "data_sufficient"
+        case minDaysNeeded = "min_days_needed"
+        case totalDays = "total_days"
+    }
+}
+
+/// Response wrapper for streaks endpoint
+struct APIStreaksResponse: Codable {
+    let streaks: [APIStreak]
+}
+
+/// Response wrapper for weekly summary endpoint
+struct APIWeeklySummaryResponse: Codable {
+    let weeklySummary: [APIWeeklySummary]
+
+    enum CodingKeys: String, CodingKey {
+        case weeklySummary = "weekly_summary"
+    }
+}
+
+/// Response wrapper for correlations endpoint
+struct APICorrelationsResponse: Codable {
+    let correlations: [APIInsight]
+    let computedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case correlations
+        case computedAt = "computed_at"
+    }
+}

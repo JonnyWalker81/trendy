@@ -69,7 +69,7 @@ struct CircularQuickLogWidget: Widget {
             provider: QuickLogProvider()
         ) { entry in
             CircularWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) { }
         }
         .configurationDisplayName("Quick Log")
         .description("Tap to log an event from Lock Screen")

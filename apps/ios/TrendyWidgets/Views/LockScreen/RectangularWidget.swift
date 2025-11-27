@@ -87,7 +87,7 @@ struct RectangularStreakWidget: Widget {
             provider: QuickLogProvider()
         ) { entry in
             RectangularWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) { }
         }
         .configurationDisplayName("Streak & Stats")
         .description("Show streak, count, and tap to log")

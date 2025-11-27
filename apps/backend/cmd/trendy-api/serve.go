@@ -68,6 +68,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	userRepo := repository.NewUserRepository(supabaseClient)
 	propertyDefRepo := repository.NewPropertyDefinitionRepository(supabaseClient)
 	geofenceRepo := repository.NewGeofenceRepository(supabaseClient)
+	insightRepo := repository.NewInsightRepository(supabaseClient)
+	aggregateRepo := repository.NewDailyAggregateRepository(supabaseClient)
+	streakRepo := repository.NewStreakRepository(supabaseClient)
 
 	// Initialize services
 	eventService := service.NewEventService(eventRepo, eventTypeRepo)
@@ -76,6 +79,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	authService := service.NewAuthService(supabaseClient, userRepo)
 	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo)
 	geofenceService := service.NewGeofenceService(geofenceRepo)
+	intelligenceService := service.NewIntelligenceService(eventRepo, eventTypeRepo, insightRepo, aggregateRepo, streakRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
@@ -84,6 +88,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	authHandler := handlers.NewAuthHandler(authService)
 	propertyDefHandler := handlers.NewPropertyDefinitionHandler(propertyDefService)
 	geofenceHandler := handlers.NewGeofenceHandler(geofenceService)
+	insightsHandler := handlers.NewInsightsHandler(intelligenceService)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -157,6 +162,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/geofences/:id", geofenceHandler.GetGeofence)
 			protected.PUT("/geofences/:id", geofenceHandler.UpdateGeofence)
 			protected.DELETE("/geofences/:id", geofenceHandler.DeleteGeofence)
+
+			// Insights/Intelligence routes
+			protected.GET("/insights", insightsHandler.GetInsights)
+			protected.GET("/insights/correlations", insightsHandler.GetCorrelations)
+			protected.GET("/insights/streaks", insightsHandler.GetStreaks)
+			protected.GET("/insights/weekly-summary", insightsHandler.GetWeeklySummary)
+			protected.POST("/insights/refresh", insightsHandler.RefreshInsights)
 		}
 	}
 

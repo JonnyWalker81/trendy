@@ -10,10 +10,12 @@ import SwiftData
 
 struct BubblesView: View {
     @Environment(EventStore.self) private var eventStore
+    @Environment(InsightsViewModel.self) private var insightsViewModel
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var calendarManager: CalendarManager
     @State private var showingAddEventType = false
     @State private var selectedEventTypeID: UUID?
+    @State private var showingInsightDetail: APIInsight?
     
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
@@ -27,24 +29,33 @@ struct BubblesView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                if eventStore.eventTypes.isEmpty {
-                    emptyStateView
-                } else {
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(eventStore.eventTypes) { eventType in
-                            EventBubbleView(eventType: eventType) {
-                                selectedEventTypeID = eventType.id
-                            } onLongPress: {
-                                // Quick record without opening edit view
-                                Task {
-                                    await recordEvent(eventType)
+                VStack(spacing: 16) {
+                    // Insights banner (only show when there are events and insights)
+                    if !eventStore.eventTypes.isEmpty {
+                        InsightsBannerView(viewModel: insightsViewModel) { insight in
+                            showingInsightDetail = insight
+                        }
+                    }
+
+                    if eventStore.eventTypes.isEmpty {
+                        emptyStateView
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            ForEach(eventStore.eventTypes) { eventType in
+                                EventBubbleView(eventType: eventType) {
+                                    selectedEventTypeID = eventType.id
+                                } onLongPress: {
+                                    // Quick record without opening edit view
+                                    Task {
+                                        await recordEvent(eventType)
+                                    }
                                 }
                             }
+
+                            addBubbleButton
                         }
-                        
-                        addBubbleButton
+                        .padding(.horizontal)
                     }
-                    .padding()
                 }
             }
             .navigationTitle("Trendy")
@@ -68,8 +79,15 @@ struct BubblesView: View {
                         .environmentObject(calendarManager)
                 }
             }
+            .sheet(item: $showingInsightDetail) { insight in
+                InsightDetailSheet(insight: insight, viewModel: insightsViewModel)
+            }
             .task {
                 await eventStore.fetchData()
+                // Fetch insights if needed
+                if insightsViewModel.needsRefresh {
+                    await insightsViewModel.fetchInsights()
+                }
             }
         }
     }

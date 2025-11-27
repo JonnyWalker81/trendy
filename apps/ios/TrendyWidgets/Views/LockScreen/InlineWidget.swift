@@ -64,7 +64,7 @@ struct InlineStatWidget: Widget {
             provider: QuickLogProvider()
         ) { entry in
             InlineWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) { }
         }
         .configurationDisplayName("Quick Stat")
         .description("Show event count above the time")

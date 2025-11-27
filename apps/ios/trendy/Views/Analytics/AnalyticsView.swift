@@ -10,6 +10,7 @@ import Charts
 
 struct AnalyticsView: View {
     @Environment(EventStore.self) private var eventStore
+    @Environment(InsightsViewModel.self) private var insightsViewModel
     @State private var analyticsViewModel = AnalyticsViewModel()
     @State private var selectedEventTypeID: UUID?
     @State private var timeRange: TimeRange = .month
@@ -41,7 +42,7 @@ struct AnalyticsView: View {
                                     .padding(.vertical, 50)
                             } else {
                                 statisticsCard
-                                
+
                                 frequencyChart
                             }
                         } else {
@@ -51,6 +52,9 @@ struct AnalyticsView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 50)
                         }
+
+                        // Insights section (always visible when there are event types)
+                        InsightsSectionView(viewModel: insightsViewModel)
                     }
                 }
                 .padding()
@@ -58,7 +62,7 @@ struct AnalyticsView: View {
             .navigationTitle("Analytics")
             .task {
                 await eventStore.fetchData()
-                
+
                 // Restore saved state
                 if !savedEventTypeId.isEmpty,
                    let savedType = eventStore.eventTypes.first(where: { $0.id.uuidString == savedEventTypeId }) {
@@ -66,10 +70,15 @@ struct AnalyticsView: View {
                 } else if let firstType = eventStore.eventTypes.first {
                     selectedEventTypeID = firstType.id
                 }
-                
+
                 // Restore time range
                 if let savedRange = TimeRange(rawValue: savedTimeRangeRaw) {
                     timeRange = savedRange
+                }
+
+                // Fetch insights if needed
+                if insightsViewModel.needsRefresh {
+                    await insightsViewModel.fetchInsights()
                 }
             }
             .task(id: selectedEventTypeID) {

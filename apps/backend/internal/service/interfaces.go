@@ -58,3 +58,13 @@ type GeofenceService interface {
 	UpdateGeofence(ctx context.Context, userID, geofenceID string, req *models.UpdateGeofenceRequest) (*models.Geofence, error)
 	DeleteGeofence(ctx context.Context, userID, geofenceID string) error
 }
+
+// IntelligenceService defines the interface for insights and correlation analysis
+type IntelligenceService interface {
+	GetInsights(ctx context.Context, userID string) (*models.InsightsResponse, error)
+	ComputeInsights(ctx context.Context, userID string) error
+	RefreshIfStale(ctx context.Context, userID string) error
+	InvalidateInsights(ctx context.Context, userID string) error
+	GetWeeklySummary(ctx context.Context, userID string) ([]models.WeeklySummary, error)
+	GetStreaks(ctx context.Context, userID string) ([]models.Streak, error)
+}

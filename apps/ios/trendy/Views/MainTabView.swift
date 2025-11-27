@@ -13,6 +13,7 @@ struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.apiClient) private var apiClient
     @State private var eventStore: EventStore?
+    @State private var insightsViewModel = InsightsViewModel()
     @StateObject private var calendarManager = CalendarManager()
     @State private var notificationManager = NotificationManager()
     @State private var geofenceManager: GeofenceManager?
@@ -58,6 +59,7 @@ struct MainTabView: View {
                         .tag(4)
                 }
                 .environment(eventStore)
+                .environment(insightsViewModel)
                 .environmentObject(calendarManager)
                 .environment(notificationManager)
                 .environment(geofenceManager)
@@ -77,6 +79,9 @@ struct MainTabView: View {
 
             store.setModelContext(modelContext)
             store.setCalendarManager(calendarManager)
+
+            // Configure InsightsViewModel with API client
+            insightsViewModel.configure(with: apiClient)
 
             // Initialize GeofenceManager with dependencies
             let geoManager = GeofenceManager(
