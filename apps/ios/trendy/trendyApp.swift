@@ -7,6 +7,10 @@
 
 import SwiftUI
 import SwiftData
+import WidgetKit
+
+/// App Group identifier for sharing data with widgets
+let appGroupIdentifier = "group.com.memento.trendy"
 
 @main
 struct trendyApp: App {
@@ -37,7 +41,13 @@ struct trendyApp: App {
             PropertyDefinition.self,
             HealthKitConfiguration.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+
+        // Use App Group container for widget sharing
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            groupContainer: .identifier(appGroupIdentifier)
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])

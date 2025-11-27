@@ -106,6 +106,9 @@ struct MainTabView: View {
                 }
             }
 
+            // Set up widget notification observer to sync widget-created events
+            store.setupWidgetNotificationObserver()
+
             // Load initial data
             await store.fetchData()
 
@@ -113,6 +116,10 @@ struct MainTabView: View {
             withAnimation {
                 isLoading = false
             }
+        }
+        .onDisappear {
+            // Clean up widget notification observer
+            eventStore?.removeWidgetNotificationObserver()
         }
     }
 }

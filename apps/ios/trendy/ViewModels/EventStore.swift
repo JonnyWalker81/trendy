@@ -9,6 +9,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 import Network
+import WidgetKit
 
 @Observable
 @MainActor
@@ -106,6 +107,45 @@ class EventStore {
 
     deinit {
         monitor.cancel()
+    }
+
+    // MARK: - Widget Integration
+
+    /// Reloads all widget timelines to reflect data changes
+    private func reloadWidgets() {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Sets up Darwin notification observer to receive updates from widgets
+    /// Call this from the main app view (e.g., MainTabView) on appear
+    func setupWidgetNotificationObserver() {
+        let notificationName = "com.memento.trendy.widgetDataChanged" as CFString
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer = observer else { return }
+                let eventStore = Unmanaged<EventStore>.fromOpaque(observer).takeUnretainedValue()
+                // Fetch data to sync any widget-created events to backend
+                Task { @MainActor in
+                    await eventStore.fetchData()
+                }
+            },
+            notificationName,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    /// Removes Darwin notification observer
+    func removeWidgetNotificationObserver() {
+        let notificationName = "com.memento.trendy.widgetDataChanged" as CFString
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(notificationName),
+            nil
+        )
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -429,6 +469,7 @@ class EventStore {
                     eventBackendIds[newEvent.id] = apiEvent.id
 
                     try modelContext.save()
+                    reloadWidgets()
                 } else {
                     // Offline: create locally and queue for sync
                     let newEvent = Event(
@@ -443,6 +484,7 @@ class EventStore {
                     newEvent.calendarEventId = calendarEventId
                     modelContext.insert(newEvent)
                     try modelContext.save()
+                    reloadWidgets()
 
                     // Queue for backend sync
                     try? syncQueue?.enqueue(type: .createEvent, entityId: newEvent.id, payload: request)
@@ -468,13 +510,14 @@ class EventStore {
 
             do {
                 try modelContext.save()
+                reloadWidgets()
                 await fetchData()
             } catch {
                 errorMessage = EventError.saveFailed.localizedDescription
             }
         }
     }
-    
+
     func updateEvent(_ event: Event) async {
         guard let modelContext else { return }
 
@@ -555,6 +598,7 @@ class EventStore {
 
         do {
             try modelContext.save()
+            reloadWidgets()
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -605,12 +649,13 @@ class EventStore {
 
         do {
             try modelContext.save()
+            reloadWidgets()
             await fetchData()
         } catch {
             errorMessage = EventError.deleteFailed.localizedDescription
         }
     }
-    
+
     func createEventType(name: String, colorHex: String, iconName: String) async {
         guard let modelContext else { return }
 
@@ -633,11 +678,13 @@ class EventStore {
                     eventTypeBackendIds[newType.id] = apiEventType.id
 
                     try modelContext.save()
+                    reloadWidgets()
                 } else {
                     // Offline: create locally and queue for sync
                     let newType = EventType(name: name, colorHex: colorHex, iconName: iconName)
                     modelContext.insert(newType)
                     try modelContext.save()
+                    reloadWidgets()
 
                     // Queue for backend sync
                     try? syncQueue?.enqueue(type: .createEventType, entityId: newType.id, payload: request)
@@ -654,26 +701,28 @@ class EventStore {
 
             do {
                 try modelContext.save()
+                reloadWidgets()
                 await fetchData()
             } catch {
                 errorMessage = EventError.saveFailed.localizedDescription
             }
         }
     }
-    
+
     func updateEventType(_ eventType: EventType, name: String, colorHex: String, iconName: String) async {
         eventType.name = name
         eventType.colorHex = colorHex
         eventType.iconName = iconName
-        
+
         do {
             try modelContext?.save()
+            reloadWidgets()
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
         }
     }
-    
+
     func deleteEventType(_ eventType: EventType) async {
         guard let modelContext else { return }
 
@@ -703,12 +752,13 @@ class EventStore {
 
         do {
             try modelContext.save()
+            reloadWidgets()
             await fetchData()
         } catch {
             errorMessage = EventError.deleteFailed.localizedDescription
         }
     }
-    
+
     func events(for eventType: EventType) -> [Event] {
         events.filter { $0.eventType?.id == eventType.id }
     }
@@ -827,12 +877,14 @@ class EventStore {
                 if isOnline {
                     let apiEvent = try await apiClient.createEvent(request)
                     eventBackendIds[event.id] = apiEvent.id
+                    reloadWidgets()
                     #if DEBUG
                     print("✅ Created event on backend: \(event.id)")
                     #endif
                 } else {
                     // Queue for sync when online
                     try? syncQueue?.enqueue(type: .createEvent, entityId: event.id, payload: request)
+                    reloadWidgets()
                     #if DEBUG
                     print("📦 Queued event creation for sync: \(event.id)")
                     #endif
