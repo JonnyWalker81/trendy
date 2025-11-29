@@ -39,9 +39,10 @@ platform :ios do
 
   desc "Deploy staging build for internal testing"
   lane :staging do
-    # Increment build number
+    # Increment build number (using xcodeproj to avoid agvtool dependency)
     increment_build_number(
-      build_number: latest_testflight_build_number + 1
+      build_number: latest_testflight_build_number + 1,
+      xcodeproj: PROJECT_PATH
     )
 
     # Build the app
@@ -63,9 +64,10 @@ platform :ios do
     # Ensure we're on a clean git state
     ensure_git_status_clean unless ENV["SKIP_GIT_CHECK"]
 
-    # Increment build number
+    # Increment build number (using xcodeproj to avoid agvtool dependency)
     increment_build_number(
-      build_number: latest_testflight_build_number + 1
+      build_number: latest_testflight_build_number + 1,
+      xcodeproj: PROJECT_PATH
     )
 
     # Build the app
@@ -95,7 +97,7 @@ platform :ios do
 
     # Tag release
     add_git_tag(
-      tag: "testflight/#{get_version_number}-#{get_build_number}"
+      tag: "testflight/#{get_version_number(xcodeproj: PROJECT_PATH)}-#{get_build_number(xcodeproj: PROJECT_PATH)}"
     )
   end
 
@@ -113,11 +115,15 @@ platform :ios do
 
     # Increment version number
     increment_version_number(
-      bump_type: version_bump_type
+      bump_type: version_bump_type,
+      xcodeproj: PROJECT_PATH
     )
 
     # Reset build number for new version
-    increment_build_number(build_number: 1)
+    increment_build_number(
+      build_number: 1,
+      xcodeproj: PROJECT_PATH
+    )
 
     # Build the app
     build_app(
@@ -137,7 +143,7 @@ platform :ios do
     )
 
     # Commit and tag
-    version = get_version_number
+    version = get_version_number(xcodeproj: PROJECT_PATH)
     commit_version_bump(
       message: "chore: release v#{version}",
       xcodeproj: PROJECT_PATH,
