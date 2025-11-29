@@ -2,34 +2,40 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(PRODUCT_DISPLAY_NAME)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundleDisplayName</key>
-	<string>$(PRODUCT_DISPLAY_NAME)</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>This app needs access to your calendar to import events for tracking and visualization.</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>This app needs full access to your calendar to import events for tracking and visualization.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs access to your location to set up geofences for automatic event tracking.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>This app needs access to your location even when in the background to automatically track events when you enter or exit geofenced locations.</string>
-	<key>NSUserNotificationsUsageDescription</key>
-	<string>This app sends notifications when you enter or exit a geofenced location to keep you informed of automatic event tracking.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs access to your calendar to import events for tracking and visualization.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Trendy reads your health data to automatically log events when workouts, sleep, and other health activities are detected.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Trendy does not write health data.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs access to your location even when in the background to automatically track events when you enter or exit geofenced locations.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to set up geofences for automatic event tracking.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>This app sends notifications when you enter or exit a geofenced location to keep you informed of automatic event tracking.</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
@@ -40,16 +46,7 @@
 		<key>UIColorName</key>
 		<string>AccentColor</string>
 		<key>UIImageName</key>
-		<string></string>
+		<string/>
 	</dict>
-	<!-- Environment Configuration -->
-	<!-- These values are populated from xcconfig files based on the selected build configuration -->
-	<!-- See apps/ios/Config/ directory for environment-specific settings -->
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>API_BASE_URL</key>
-	<string>$(API_BASE_URL)</string>
 </dict>
 </plist>

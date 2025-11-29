@@ -54,6 +54,9 @@
             export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
             export PATH="$(/opt/homebrew/opt/ruby/bin/gem environment gemdir 2>/dev/null)/bin:$PATH"
 
+            # Set Xcode path for fastlane/xcodebuild
+            export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
             # Unset nix SDK variables that conflict with Xcode toolchain for Ruby gem compilation
             unset DEVELOPER_DIR_arm64_apple_darwin
             unset DEVELOPER_DIR_FOR_TARGET
