@@ -1,0 +1,237 @@
+# frozen_string_literal: true
+
+# Fastfile - define build lanes
+# For more information: https://docs.fastlane.tools
+
+default_platform(:ios)
+
+# Constants
+PROJECT_PATH = "trendy.xcodeproj"
+MAIN_TARGET = "trendy"
+
+platform :ios do
+  before_all do
+    setup_ci if ENV["CI"]
+  end
+
+  desc "Run tests"
+  lane :test do
+    run_tests(
+      project: PROJECT_PATH,
+      scheme: "trendy",
+      devices: ["iPhone 15"],
+      clean: true,
+      code_coverage: true,
+      result_bundle: true
+    )
+  end
+
+  desc "Build for development (local debugging)"
+  lane :build_debug do
+    build_app(
+      project: PROJECT_PATH,
+      scheme: "trendy (local)",
+      configuration: "Debug",
+      skip_archive: true,
+      skip_codesigning: true
+    )
+  end
+
+  desc "Deploy staging build for internal testing"
+  lane :staging do
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number(
+        app_identifier: "com.memento.trendy.staging"
+      ) + 1
+    )
+
+    # Build the app
+    build_app(
+      project: PROJECT_PATH,
+      scheme: "trendy (staging)",
+      configuration: "Staging",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          "com.memento.trendy.staging" => "match AppStore com.memento.trendy.staging"
+        }
+      }
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      app_identifier: "com.memento.trendy.staging",
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Deploy beta build to TestFlight"
+  lane :beta do
+    # Ensure we're on a clean git state
+    ensure_git_status_clean unless ENV["SKIP_GIT_CHECK"]
+
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number(
+        app_identifier: "com.memento.trendy.testflight"
+      ) + 1
+    )
+
+    # Build the app
+    build_app(
+      project: PROJECT_PATH,
+      scheme: "trendy (TestFlight)",
+      configuration: "TestFlight",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          "com.memento.trendy.testflight" => "match AppStore com.memento.trendy.testflight"
+        }
+      }
+    )
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      app_identifier: "com.memento.trendy.testflight",
+      skip_waiting_for_build_processing: false,
+      distribute_external: false,
+      changelog: changelog_from_git_commits(
+        commits_count: 10,
+        pretty: "- %s"
+      )
+    )
+
+    # Commit version bump
+    commit_version_bump(
+      message: "chore: bump build number for TestFlight",
+      xcodeproj: PROJECT_PATH,
+      force: true
+    )
+
+    # Tag release
+    add_git_tag(
+      tag: "testflight/#{get_version_number}-#{get_build_number}"
+    )
+  end
+
+  desc "Deploy to App Store"
+  lane :release do
+    # Ensure we're on main branch
+    ensure_git_branch(branch: "main")
+    ensure_git_status_clean
+
+    # Get version bump type from environment or prompt
+    version_bump_type = ENV["VERSION_BUMP"] || UI.select(
+      "Select version bump type:",
+      ["patch", "minor", "major"]
+    )
+
+    # Increment version number
+    increment_version_number(
+      bump_type: version_bump_type
+    )
+
+    # Reset build number for new version
+    increment_build_number(build_number: 1)
+
+    # Build the app
+    build_app(
+      project: PROJECT_PATH,
+      scheme: "trendy (production)",
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        provisioningProfiles: {
+          "com.memento.trendy" => "match AppStore com.memento.trendy"
+        }
+      }
+    )
+
+    # Upload to App Store Connect
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: false,
+      submit_for_review: false,  # Set to true for auto-submit
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+
+    # Commit and tag
+    version = get_version_number
+    commit_version_bump(
+      message: "chore: release v#{version}",
+      xcodeproj: PROJECT_PATH,
+      force: true
+    )
+
+    add_git_tag(tag: "v#{version}")
+
+    push_to_git_remote(tags: true)
+  end
+
+  desc "Sync code signing certificates and profiles using match"
+  lane :sync_certs do
+    match(
+      type: "development",
+      app_identifier: [
+        "com.memento.trendy",
+        "com.memento.trendy.staging",
+        "com.memento.trendy.testflight"
+      ],
+      readonly: running_on_ci
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: [
+        "com.memento.trendy",
+        "com.memento.trendy.staging",
+        "com.memento.trendy.testflight"
+      ],
+      readonly: running_on_ci
+    )
+  end
+
+  desc "Register new devices from a file"
+  lane :register_devices_from_file do
+    register_devices(devices_file: "./fastlane/devices.txt")
+    match(type: "development", force_for_new_devices: true)
+  end
+
+  desc "Take screenshots for all device sizes"
+  lane :screenshots do
+    capture_screenshots(
+      project: PROJECT_PATH,
+      scheme: "trendyUITests",
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      devices: [
+        "iPhone 15 Pro Max",
+        "iPhone 15 Pro",
+        "iPhone SE (3rd generation)",
+        "iPad Pro (12.9-inch) (6th generation)"
+      ]
+    )
+  end
+
+  # Private helper lanes
+  private_lane :running_on_ci do
+    ENV["CI"] == "true"
+  end
+
+  error do |lane, exception|
+    # Notify on failure (customize as needed)
+    UI.error("Lane #{lane} failed with: #{exception.message}")
+
+    # Clean up on error
+    clean_build_artifacts
+
+    # Could add Slack/Discord notification here
+    # slack(
+    #   message: "Fastlane #{lane} failed!",
+    #   success: false,
+    #   payload: { "Error" => exception.message }
+    # )
+  end
+end

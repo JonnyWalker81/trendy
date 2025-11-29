@@ -15,6 +15,7 @@ struct AddGeofenceView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
 
+    @Environment(EventStore.self) private var eventStore: EventStore?
     @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
     @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
 
@@ -229,20 +230,40 @@ struct AddGeofenceView: View {
             notifyOnExit: notifyOnExit
         )
 
-        modelContext.insert(geofence)
-
-        do {
-            try modelContext.save()
-
-            // Start monitoring
-            geofenceManager?.startMonitoring(geofence: geofence)
-
-            print("✅ Created geofence: \(geofence.name)")
-            dismiss()
-
-        } catch {
-            errorMessage = "Failed to save geofence: \(error.localizedDescription)"
-            showingError = true
+        Task {
+            // Use EventStore for backend sync if available
+            if let eventStore = eventStore {
+                let success = await eventStore.createGeofence(geofence)
+                if success {
+                    // Start monitoring
+                    geofenceManager?.startMonitoring(geofence: geofence)
+                    print("✅ Created geofence: \(geofence.name)")
+                    await MainActor.run {
+                        dismiss()
+                    }
+                } else {
+                    await MainActor.run {
+                        errorMessage = "Failed to save geofence"
+                        showingError = true
+                    }
+                }
+            } else {
+                // Fallback to direct insert if EventStore not available
+                modelContext.insert(geofence)
+                do {
+                    try modelContext.save()
+                    geofenceManager?.startMonitoring(geofence: geofence)
+                    print("✅ Created geofence: \(geofence.name)")
+                    await MainActor.run {
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        errorMessage = "Failed to save geofence: \(error.localizedDescription)"
+                        showingError = true
+                    }
+                }
+            }
         }
     }
 
@@ -394,6 +415,7 @@ struct AddGeofenceViewWithMapReader: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
 
+    @Environment(EventStore.self) private var eventStore: EventStore?
     @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
     @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
 
@@ -600,22 +622,45 @@ struct AddGeofenceViewWithMapReader: View {
             notifyOnExit: notifyOnExit
         )
 
-        modelContext.insert(geofence)
-
-        do {
-            try modelContext.save()
-            geofenceManager?.startMonitoring(geofence: geofence)
-            print("✅ Created geofence: \(geofence.name)")
-            dismiss()
-        } catch {
-            errorMessage = "Failed to save geofence: \(error.localizedDescription)"
-            showingError = true
+        Task {
+            // Use EventStore for backend sync if available
+            if let eventStore = eventStore {
+                let success = await eventStore.createGeofence(geofence)
+                if success {
+                    geofenceManager?.startMonitoring(geofence: geofence)
+                    print("✅ Created geofence: \(geofence.name)")
+                    await MainActor.run {
+                        dismiss()
+                    }
+                } else {
+                    await MainActor.run {
+                        errorMessage = "Failed to save geofence"
+                        showingError = true
+                    }
+                }
+            } else {
+                // Fallback to direct insert if EventStore not available
+                modelContext.insert(geofence)
+                do {
+                    try modelContext.save()
+                    geofenceManager?.startMonitoring(geofence: geofence)
+                    print("✅ Created geofence: \(geofence.name)")
+                    await MainActor.run {
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        errorMessage = "Failed to save geofence: \(error.localizedDescription)"
+                        showingError = true
+                    }
+                }
+            }
         }
     }
 
     private func requestNotificationPermissionIfNeeded() {
         guard let manager = notificationManager else { return }
-        
+
         switch manager.authorizationStatus {
         case .notDetermined:
             Task {

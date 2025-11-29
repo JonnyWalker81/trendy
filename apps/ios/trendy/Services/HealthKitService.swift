@@ -21,8 +21,81 @@ class HealthKitService: NSObject {
     private let eventStore: EventStore
     private let notificationManager: NotificationManager?
 
-    /// Current authorization status (simplified)
-    var isAuthorized: Bool = false
+    /// App Group identifier for shared UserDefaults (persists across app reinstalls)
+    private static let appGroupIdentifier = "group.com.memento.trendy"
+
+    /// Whether the App Group UserDefaults is working (vs falling back to standard)
+    private static var isUsingAppGroup: Bool = false
+
+    /// Shared UserDefaults that persists across app reinstalls
+    /// Falls back to .standard if App Group is not available, but logs a warning
+    private static var sharedDefaults: UserDefaults {
+        if let appGroupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
+            isUsingAppGroup = true
+            return appGroupDefaults
+        } else {
+            // This should not happen if entitlements are configured correctly
+            print("⚠️ WARNING: App Group UserDefaults not available! Falling back to standard UserDefaults.")
+            print("⚠️ This means HealthKit settings will NOT persist across app reinstalls.")
+            print("⚠️ Check that '\(appGroupIdentifier)' is in both entitlements AND provisioning profile.")
+            isUsingAppGroup = false
+            return .standard
+        }
+    }
+
+    /// Key for tracking if authorization was requested
+    private static let authorizationRequestedKey = "healthKitAuthorizationRequested"
+
+    /// Key for verifying App Group is working
+    private static let appGroupVerificationKey = "healthKitAppGroupVerified"
+
+    /// Whether authorization has been requested (stored in UserDefaults)
+    /// Note: HealthKit does NOT report read authorization status for privacy reasons.
+    /// We track whether the user has been prompted, and assume they granted access if the request completed.
+    private var authorizationRequestedInDefaults: Bool {
+        get { Self.sharedDefaults.bool(forKey: Self.authorizationRequestedKey) }
+        set {
+            Self.sharedDefaults.set(newValue, forKey: Self.authorizationRequestedKey)
+            Self.sharedDefaults.synchronize() // Force immediate write
+        }
+    }
+
+    /// Whether authorization has been requested - checks both UserDefaults AND HealthKitSettings
+    /// If categories are enabled in settings, the user must have previously authorized
+    var authorizationRequested: Bool {
+        get {
+            // First check UserDefaults
+            if authorizationRequestedInDefaults {
+                return true
+            }
+
+            // Fallback: Check if any categories are enabled in settings
+            // If they are, user previously set up health tracking, so consider authorized
+            if !HealthKitSettings.shared.enabledCategories.isEmpty {
+                // Sync the flag back to UserDefaults so future checks are faster
+                print("📱 HealthKit: Found enabled categories, restoring authorization flag")
+                authorizationRequestedInDefaults = true
+                return true
+            }
+
+            return false
+        }
+        set {
+            authorizationRequestedInDefaults = newValue
+        }
+    }
+
+    /// Check if any HealthKit categories are enabled
+    private var hasEnabledCategories: Bool {
+        !HealthKitSettings.shared.enabledCategories.isEmpty
+    }
+
+    /// Current authorization status - true if authorization was requested
+    /// Since we only request read access, we can't determine if user granted or denied.
+    /// We assume authorization after the request completes.
+    var isAuthorized: Bool {
+        authorizationRequested
+    }
 
     /// Whether HealthKit is available on this device
     var isHealthKitAvailable: Bool {
@@ -38,6 +111,9 @@ class HealthKitService: NSObject {
     /// Last processed date for daily step aggregation
     private var lastStepDate: Date?
 
+    /// Last processed date for daily sleep aggregation
+    private var lastSleepDate: Date?
+
     /// Anchors for incremental fetching
     private var queryAnchors: [HealthDataCategory: HKQueryAnchor] = [:]
 
@@ -45,7 +121,17 @@ class HealthKitService: NSObject {
 
     private let processedSampleIdsKey = "healthKitProcessedSampleIds"
     private let lastStepDateKey = "healthKitLastStepDate"
+    private let lastSleepDateKey = "healthKitLastSleepDate"
     private let maxProcessedSampleIds = 1000
+    private static let migrationCompletedKey = "healthKitMigrationToAppGroupCompleted"
+
+    /// Date formatter for consistent date-only sampleIds (no timezone issues)
+    private static let dateOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter
+    }()
 
     // MARK: - Initialization
 
@@ -62,8 +148,106 @@ class HealthKitService: NSObject {
 
         super.init()
 
+        // Verify App Group is working
+        verifyAppGroupSetup()
+
+        // Migrate from old UserDefaults.standard to App Group if needed
+        migrateFromStandardUserDefaults()
+
         loadProcessedSampleIds()
         loadLastStepDate()
+        loadLastSleepDate()
+
+        // Debug: Log current state
+        #if DEBUG
+        logCurrentState()
+        #endif
+    }
+
+    /// Verify that the App Group UserDefaults is properly set up
+    private func verifyAppGroupSetup() {
+        // Force access to sharedDefaults to trigger the isUsingAppGroup check
+        let testKey = "healthKitAppGroupTest"
+        let testValue = "verified-\(Date().timeIntervalSince1970)"
+
+        // Write a test value
+        Self.sharedDefaults.set(testValue, forKey: testKey)
+        Self.sharedDefaults.synchronize()
+
+        // Read it back
+        let readValue = Self.sharedDefaults.string(forKey: testKey)
+
+        if readValue == testValue {
+            print("✅ HealthKit: App Group UserDefaults is working correctly")
+            print("   Using App Group: \(Self.isUsingAppGroup)")
+            print("   App Group ID: \(Self.appGroupIdentifier)")
+        } else {
+            print("❌ HealthKit: App Group UserDefaults verification FAILED!")
+            print("   Written: \(testValue)")
+            print("   Read back: \(readValue ?? "nil")")
+        }
+
+        // Clean up test value
+        Self.sharedDefaults.removeObject(forKey: testKey)
+    }
+
+    /// Log current HealthKit state for debugging
+    private func logCurrentState() {
+        print("📊 HealthKit Service State:")
+        print("   App Group ID: \(Self.appGroupIdentifier)")
+        print("   isUsingAppGroup: \(Self.isUsingAppGroup)")
+        print("   authorizationInDefaults: \(authorizationRequestedInDefaults)")
+        print("   authorizationRequested (combined): \(authorizationRequested)")
+        print("   hasHealthKitAuthorization: \(hasHealthKitAuthorization)")
+        print("   lastStepDate: \(lastStepDate?.description ?? "nil")")
+        print("   lastSleepDate: \(lastSleepDate?.description ?? "nil")")
+        print("   processedSampleIds count: \(processedSampleIds.count)")
+
+        // Log HealthKitSettings state
+        HealthKitSettings.shared.logCurrentState()
+    }
+
+    // MARK: - Migration
+
+    /// Migrate data from UserDefaults.standard to App Group UserDefaults
+    /// This ensures continuity when upgrading from versions that used standard UserDefaults
+    private func migrateFromStandardUserDefaults() {
+        // Check if migration already completed
+        guard !Self.sharedDefaults.bool(forKey: Self.migrationCompletedKey) else { return }
+
+        let standardDefaults = UserDefaults.standard
+
+        // Migrate processed sample IDs
+        if let data = standardDefaults.data(forKey: processedSampleIdsKey),
+           Self.sharedDefaults.data(forKey: processedSampleIdsKey) == nil {
+            Self.sharedDefaults.set(data, forKey: processedSampleIdsKey)
+            print("Migrated processedSampleIds to App Group")
+        }
+
+        // Migrate last step date
+        if let date = standardDefaults.object(forKey: lastStepDateKey) as? Date,
+           Self.sharedDefaults.object(forKey: lastStepDateKey) == nil {
+            Self.sharedDefaults.set(date, forKey: lastStepDateKey)
+            print("Migrated lastStepDate to App Group")
+        }
+
+        // Migrate last sleep date
+        if let date = standardDefaults.object(forKey: lastSleepDateKey) as? Date,
+           Self.sharedDefaults.object(forKey: lastSleepDateKey) == nil {
+            Self.sharedDefaults.set(date, forKey: lastSleepDateKey)
+            print("Migrated lastSleepDate to App Group")
+        }
+
+        // Migrate authorization requested flag
+        if standardDefaults.bool(forKey: Self.authorizationRequestedKey),
+           !Self.sharedDefaults.bool(forKey: Self.authorizationRequestedKey) {
+            Self.sharedDefaults.set(true, forKey: Self.authorizationRequestedKey)
+            print("Migrated authorizationRequested to App Group")
+        }
+
+        // Mark migration as completed
+        Self.sharedDefaults.set(true, forKey: Self.migrationCompletedKey)
+        print("HealthKit UserDefaults migration completed")
     }
 
     // MARK: - Authorization
@@ -95,58 +279,47 @@ class HealthKitService: NSObject {
 
         try await healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead)
 
-        // Update authorization status
-        await checkAuthorizationStatus()
+        // Mark that we've requested authorization
+        // Note: HealthKit doesn't tell us if the user granted or denied read access for privacy reasons.
+        // If the request completed without throwing, the user has seen the permission prompt.
+        authorizationRequested = true
 
         print("HealthKit authorization completed")
     }
 
-    /// Check current authorization status
-    @MainActor
-    func checkAuthorizationStatus() async {
-        // Check if we have authorization for at least workouts
-        if let workoutType = HKWorkoutType.workoutType() as? HKObjectType {
-            let status = healthStore.authorizationStatus(for: workoutType)
-            isAuthorized = (status == .sharingAuthorized)
-        }
-    }
-
     /// Check if we have sufficient authorization for HealthKit monitoring
+    /// Note: For read-only access, HealthKit doesn't report actual status for privacy.
+    /// We rely on whether the user has been prompted for authorization.
     var hasHealthKitAuthorization: Bool {
         isAuthorized
     }
 
+    /// Reset authorization state (for debugging/testing)
+    func resetAuthorizationState() {
+        authorizationRequested = false
+    }
+
     // MARK: - Monitoring Management
 
-    /// Start monitoring all enabled HealthKit configurations
+    /// Start monitoring all enabled HealthKit categories
     func startMonitoringAllConfigurations() {
         guard isHealthKitAvailable else {
             print("HealthKit is not available on this device")
             return
         }
 
-        // Fetch all enabled configurations from SwiftData
-        let descriptor = FetchDescriptor<HealthKitConfiguration>(
-            predicate: #Predicate { $0.isEnabled }
-        )
+        let enabledCategories = HealthKitSettings.shared.enabledCategories
 
-        guard let configurations = try? modelContext.fetch(descriptor) else {
-            print("Failed to fetch HealthKit configurations")
-            return
+        for category in enabledCategories {
+            startMonitoring(category: category)
         }
 
-        for config in configurations {
-            startMonitoring(configuration: config)
-        }
-
-        print("Started monitoring \(configurations.count) HealthKit configurations")
+        print("Started monitoring \(enabledCategories.count) HealthKit configurations")
     }
 
-    /// Start monitoring a specific HealthKit configuration
-    /// - Parameter configuration: The HealthKit configuration to monitor
-    func startMonitoring(configuration: HealthKitConfiguration) {
-        let category = configuration.category
-
+    /// Start monitoring a specific HealthKit category
+    /// - Parameter category: The HealthKit data category to monitor
+    func startMonitoring(category: HealthDataCategory) {
         // Skip if already monitoring this category
         if observerQueries[category] != nil {
             print("Already monitoring \(category.displayName)")
@@ -192,11 +365,9 @@ class HealthKitService: NSObject {
         print("Started monitoring: \(category.displayName)")
     }
 
-    /// Stop monitoring a specific HealthKit configuration
-    /// - Parameter configuration: The HealthKit configuration to stop monitoring
-    func stopMonitoring(configuration: HealthKitConfiguration) {
-        let category = configuration.category
-
+    /// Stop monitoring a specific HealthKit category
+    /// - Parameter category: The HealthKit data category to stop monitoring
+    func stopMonitoring(category: HealthDataCategory) {
         if let query = observerQueries[category] {
             healthStore.stop(query)
             observerQueries.removeValue(forKey: category)
@@ -271,7 +442,7 @@ class HealthKitService: NSObject {
     /// Process a single sample based on its category
     @MainActor
     private func processSample(_ sample: HKSample, category: HealthDataCategory) async {
-        // Check for duplicates
+        // Check for duplicates using individual sample UUID
         let sampleId = sample.uuid.uuidString
         guard !processedSampleIds.contains(sampleId) else {
             return
@@ -288,9 +459,13 @@ class HealthKitService: NSObject {
             }
         case .steps:
             // Steps are handled via daily aggregation
+            // Mark this individual sample as processed first to avoid redundant calls
+            markSampleAsProcessed(sampleId)
             await aggregateDailySteps()
         case .activeEnergy:
             if let quantitySample = sample as? HKQuantitySample {
+                // Mark this individual sample as processed first to avoid redundant calls
+                markSampleAsProcessed(sampleId)
                 await processActiveEnergySample(quantitySample)
             }
         case .mindfulness:
@@ -400,61 +575,196 @@ class HealthKitService: NSObject {
         }
     }
 
-    // MARK: - Sleep Processing
+    // MARK: - Sleep Processing (Daily Aggregation)
 
-    /// Process a sleep sample
+    /// Process a sleep sample - redirects to daily aggregation
     @MainActor
     private func processSleepSample(_ sample: HKCategorySample) async {
-        let sampleId = sample.uuid.uuidString
-        guard !processedSampleIds.contains(sampleId) else { return }
+        // Sleep is handled via daily aggregation, similar to steps
+        await aggregateDailySleep()
+    }
 
-        // Determine sleep stage
-        let sleepStage: String
-        if let sleepValue = HKCategoryValueSleepAnalysis(rawValue: sample.value) {
-            switch sleepValue {
-            case .inBed:
-                sleepStage = "In Bed"
-            case .asleepUnspecified, .asleepCore, .asleepDeep, .asleepREM:
-                sleepStage = "Asleep"
-            case .awake:
-                sleepStage = "Awake"
-            @unknown default:
-                sleepStage = "Unknown"
-            }
+    /// Aggregate daily sleep and create a single event per night
+    /// Sleep sessions are attributed to the day they end (wake-up day)
+    @MainActor
+    private func aggregateDailySleep() async {
+        let calendar = Calendar.current
+        let now = Date()
+
+        // Determine the "sleep day" - if it's before noon, look at yesterday's sleep
+        // (since sleep typically spans midnight)
+        let hour = calendar.component(.hour, from: now)
+        let sleepDate: Date
+        if hour < 12 {
+            // Before noon - aggregate yesterday's full night sleep
+            sleepDate = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) ?? now
         } else {
-            sleepStage = "Unknown"
+            // After noon - aggregate today's sleep (e.g., naps)
+            sleepDate = calendar.startOfDay(for: now)
         }
 
-        // Only track actual sleep, not "in bed" or "awake"
-        guard sleepStage == "Asleep" else { return }
+        // Skip if already processed this sleep date
+        if let lastDate = lastSleepDate, calendar.isDate(lastDate, inSameDayAs: sleepDate) {
+            return
+        }
 
-        print("Processing sleep: \(sleepStage)")
+        guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
+
+        // Query window: from 6 PM the previous day to 12 PM (noon) the next day
+        // This captures typical sleep patterns (going to bed evening, waking up morning)
+        let queryStart = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: sleepDate) ?? sleepDate
+        let queryEnd = calendar.date(byAdding: .hour, value: 18, to: queryStart) ?? now // 18 hours later = noon next day
+
+        let predicate = HKQuery.predicateForSamples(withStart: queryStart, end: queryEnd, options: .strictStartDate)
+
+        let samples = await withCheckedContinuation { (continuation: CheckedContinuation<[HKCategorySample], Never>) in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, results, error in
+                if let error = error {
+                    print("Sleep query error: \(error.localizedDescription)")
+                    continuation.resume(returning: [])
+                    return
+                }
+                continuation.resume(returning: (results as? [HKCategorySample]) ?? [])
+            }
+            healthStore.execute(query)
+        }
+
+        // Filter and aggregate sleep samples
+        var totalSleepDuration: TimeInterval = 0
+        var coreSleepDuration: TimeInterval = 0
+        var deepSleepDuration: TimeInterval = 0
+        var remSleepDuration: TimeInterval = 0
+        var awakeDuration: TimeInterval = 0
+        var inBedDuration: TimeInterval = 0
+        var sleepStart: Date?
+        var sleepEnd: Date?
+
+        for sample in samples {
+            guard let sleepValue = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { continue }
+
+            let duration = sample.endDate.timeIntervalSince(sample.startDate)
+
+            switch sleepValue {
+            case .inBed:
+                inBedDuration += duration
+                // Track overall time in bed for start/end
+                if sleepStart == nil || sample.startDate < sleepStart! {
+                    sleepStart = sample.startDate
+                }
+                if sleepEnd == nil || sample.endDate > sleepEnd! {
+                    sleepEnd = sample.endDate
+                }
+            case .asleepUnspecified:
+                totalSleepDuration += duration
+            case .asleepCore:
+                coreSleepDuration += duration
+                totalSleepDuration += duration
+            case .asleepDeep:
+                deepSleepDuration += duration
+                totalSleepDuration += duration
+            case .asleepREM:
+                remSleepDuration += duration
+                totalSleepDuration += duration
+            case .awake:
+                awakeDuration += duration
+            @unknown default:
+                break
+            }
+
+            // Track sleep start/end from actual sleep samples too
+            if sleepValue != .awake && sleepValue != .inBed {
+                if sleepStart == nil || sample.startDate < sleepStart! {
+                    sleepStart = sample.startDate
+                }
+                if sleepEnd == nil || sample.endDate > sleepEnd! {
+                    sleepEnd = sample.endDate
+                }
+            }
+        }
+
+        // Only create an event if we have actual sleep data (at least 30 minutes)
+        guard totalSleepDuration >= 1800 else {
+            print("Not enough sleep data to aggregate: \(Int(totalSleepDuration / 60)) minutes")
+            return
+        }
+
+        // Use consistent date-only format for sampleId (no timezone issues)
+        let sampleId = "sleep-\(Self.dateOnlyFormatter.string(from: sleepDate))"
+
+        // Skip if already in processedSampleIds
+        guard !processedSampleIds.contains(sampleId) else {
+            // Update lastSleepDate to prevent repeated checks
+            lastSleepDate = sleepDate
+            saveLastSleepDate()
+            return
+        }
+
+        // Database-level deduplication: check if event already exists in SwiftData
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            print("Sleep event already exists in database for \(sampleId), skipping")
+            markSampleAsProcessed(sampleId)
+            lastSleepDate = sleepDate
+            saveLastSleepDate()
+            return
+        }
+
+        print("Processing aggregated sleep: \(Int(totalSleepDuration / 3600))h \(Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60))m")
 
         guard let eventType = await ensureEventType(for: .sleep) else {
             print("Failed to get/create EventType for sleep")
             return
         }
 
-        let duration = sample.endDate.timeIntervalSince(sample.startDate)
-
-        let properties: [String: PropertyValue] = [
-            "Duration": PropertyValue(type: .duration, value: duration),
-            "Sleep Stage": PropertyValue(type: .text, value: sleepStage),
-            "Started At": PropertyValue(type: .date, value: sample.startDate),
-            "Ended At": PropertyValue(type: .date, value: sample.endDate)
+        // Build properties
+        var properties: [String: PropertyValue] = [
+            "Total Sleep": PropertyValue(type: .duration, value: totalSleepDuration),
+            "Date": PropertyValue(type: .date, value: sleepDate)
         ]
+
+        if let start = sleepStart {
+            properties["Bedtime"] = PropertyValue(type: .date, value: start)
+        }
+        if let end = sleepEnd {
+            properties["Wake Time"] = PropertyValue(type: .date, value: end)
+        }
+
+        // Add sleep stage breakdown if available
+        if coreSleepDuration > 0 {
+            properties["Core Sleep"] = PropertyValue(type: .duration, value: coreSleepDuration)
+        }
+        if deepSleepDuration > 0 {
+            properties["Deep Sleep"] = PropertyValue(type: .duration, value: deepSleepDuration)
+        }
+        if remSleepDuration > 0 {
+            properties["REM Sleep"] = PropertyValue(type: .duration, value: remSleepDuration)
+        }
+        if awakeDuration > 0 {
+            properties["Time Awake"] = PropertyValue(type: .duration, value: awakeDuration)
+        }
+
+        // Format duration for notes
+        let hours = Int(totalSleepDuration / 3600)
+        let minutes = Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60)
+        let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
 
         await createEvent(
             eventType: eventType,
             category: .sleep,
-            timestamp: sample.startDate,
-            endDate: sample.endDate,
-            notes: "Auto-logged: Sleep",
+            timestamp: sleepStart ?? sleepDate,
+            endDate: sleepEnd,
+            notes: "Auto-logged: \(durationText) of sleep",
             properties: properties,
             healthKitSampleId: sampleId
         )
 
         markSampleAsProcessed(sampleId)
+        lastSleepDate = sleepDate
+        saveLastSleepDate()
     }
 
     // MARK: - Steps Processing (Daily Aggregation)
@@ -464,8 +774,28 @@ class HealthKitService: NSObject {
     private func aggregateDailySteps() async {
         let today = Calendar.current.startOfDay(for: Date())
 
-        // Skip if already processed today
+        // Use consistent date-only format for sampleId (no timezone issues)
+        let sampleId = "steps-\(Self.dateOnlyFormatter.string(from: today))"
+
+        // Skip if already processed today (in-memory check)
         if let lastDate = lastStepDate, Calendar.current.isDate(lastDate, inSameDayAs: today) {
+            return
+        }
+
+        // Skip if already in processedSampleIds
+        guard !processedSampleIds.contains(sampleId) else {
+            // Update lastStepDate to prevent repeated checks
+            lastStepDate = today
+            saveLastStepDate()
+            return
+        }
+
+        // Database-level deduplication: check if event already exists in SwiftData
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            print("Steps event already exists in database for \(sampleId), skipping")
+            markSampleAsProcessed(sampleId)
+            lastStepDate = today
+            saveLastStepDate()
             return
         }
 
@@ -505,11 +835,6 @@ class HealthKitService: NSObject {
             "Date": PropertyValue(type: .date, value: today)
         ]
 
-        // Use date-based ID for deduplication
-        let sampleId = "steps-\(ISO8601DateFormatter().string(from: today))"
-
-        guard !processedSampleIds.contains(sampleId) else { return }
-
         await createEvent(
             eventType: eventType,
             category: .steps,
@@ -541,6 +866,20 @@ class HealthKitService: NSObject {
         guard let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
 
         let today = Calendar.current.startOfDay(for: Date())
+
+        // Use consistent date-only format for sampleId (no timezone issues)
+        let sampleId = "activeEnergy-\(Self.dateOnlyFormatter.string(from: today))"
+
+        // Skip if already in processedSampleIds
+        guard !processedSampleIds.contains(sampleId) else { return }
+
+        // Database-level deduplication: check if event already exists in SwiftData
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            print("Active energy event already exists in database for \(sampleId), skipping")
+            markSampleAsProcessed(sampleId)
+            return
+        }
+
         let startOfDay = today
         let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: today) ?? Date()
 
@@ -562,9 +901,6 @@ class HealthKitService: NSObject {
         }
 
         guard let calories = totalCalories, calories > 0 else { return }
-
-        let sampleId = "activeEnergy-\(ISO8601DateFormatter().string(from: today))"
-        guard !processedSampleIds.contains(sampleId) else { return }
 
         print("Processing daily active energy: \(Int(calories)) kcal")
 
@@ -696,18 +1032,35 @@ class HealthKitService: NSObject {
         }
     }
 
+    /// Check if an event with the given HealthKit sample ID already exists in SwiftData
+    /// This provides database-level deduplication as a final safety net
+    @MainActor
+    private func eventExistsWithHealthKitSampleId(_ sampleId: String) async -> Bool {
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.healthKitSampleId == sampleId
+            }
+        )
+
+        do {
+            let existingEvents = try modelContext.fetch(descriptor)
+            return !existingEvents.isEmpty
+        } catch {
+            print("Error checking for existing HealthKit event: \(error.localizedDescription)")
+            // In case of error, assume it doesn't exist to avoid blocking new events
+            return false
+        }
+    }
+
     // MARK: - Auto-Create EventType
 
     /// Ensures an EventType exists for the category, creating one if needed
     @MainActor
     private func ensureEventType(for category: HealthDataCategory) async -> EventType? {
-        // 1. Check if configuration already has a linked EventType
-        let configDescriptor = FetchDescriptor<HealthKitConfiguration>(
-            predicate: #Predicate { config in config.healthDataCategory == category.rawValue && config.isEnabled }
-        )
+        let settings = HealthKitSettings.shared
 
-        if let config = try? modelContext.fetch(configDescriptor).first,
-           let eventTypeID = config.eventTypeID {
+        // 1. Check if settings already has a linked EventType
+        if let eventTypeID = settings.eventTypeId(for: category) {
             let eventTypeDescriptor = FetchDescriptor<EventType>(
                 predicate: #Predicate { eventType in eventType.id == eventTypeID }
             )
@@ -723,8 +1076,8 @@ class HealthKitService: NSObject {
         )
 
         if let existing = try? modelContext.fetch(existingDescriptor).first {
-            // Link existing EventType to configuration
-            await linkEventType(existing, to: category)
+            // Link existing EventType to settings
+            settings.setEventTypeId(existing.id, for: category)
             return existing
         }
 
@@ -748,52 +1101,19 @@ class HealthKitService: NSObject {
             await eventStore.syncEventTypeToBackend(newEventType)
         }
 
-        // 5. Create/update configuration to link to new EventType
-        await linkEventType(newEventType, to: category)
+        // 5. Link new EventType to settings
+        settings.setEventTypeId(newEventType.id, for: category)
 
         print("Auto-created EventType '\(newEventType.name)' for \(category.rawValue)")
         return newEventType
-    }
-
-    /// Links an EventType to a HealthKit category configuration
-    @MainActor
-    private func linkEventType(_ eventType: EventType, to category: HealthDataCategory) async {
-        let descriptor = FetchDescriptor<HealthKitConfiguration>(
-            predicate: #Predicate { config in config.healthDataCategory == category.rawValue }
-        )
-
-        if let config = try? modelContext.fetch(descriptor).first {
-            config.eventTypeID = eventType.id
-            config.isEnabled = true
-            config.updatedAt = Date()
-        } else {
-            // Create new configuration
-            let config = HealthKitConfiguration(
-                category: category,
-                eventTypeID: eventType.id,
-                isEnabled: true,
-                notifyOnDetection: false
-            )
-            modelContext.insert(config)
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to link EventType to configuration: \(error.localizedDescription)")
-        }
     }
 
     // MARK: - Notifications
 
     /// Send notification if enabled for this category
     private func sendNotificationIfEnabled(for category: HealthDataCategory, eventTypeName: String, details: String?) async {
-        // Check if notifications are enabled for this category
-        let descriptor = FetchDescriptor<HealthKitConfiguration>(
-            predicate: #Predicate { config in config.healthDataCategory == category.rawValue && config.notifyOnDetection }
-        )
-
-        guard let _ = try? modelContext.fetch(descriptor).first else { return }
+        // Check if notifications are enabled for this category using HealthKitSettings
+        guard HealthKitSettings.shared.notifyOnDetection(for: category) else { return }
         guard let notificationManager = notificationManager else { return }
 
         await notificationManager.sendNotification(
@@ -823,29 +1143,39 @@ class HealthKitService: NSObject {
         saveProcessedSampleIds()
     }
 
-    /// Load processed sample IDs from UserDefaults
+    /// Load processed sample IDs from shared UserDefaults (persists across reinstalls)
     private func loadProcessedSampleIds() {
-        if let data = UserDefaults.standard.data(forKey: processedSampleIdsKey),
+        if let data = Self.sharedDefaults.data(forKey: processedSampleIdsKey),
            let decoded = try? JSONDecoder().decode(Set<String>.self, from: data) {
             processedSampleIds = decoded
         }
     }
 
-    /// Save processed sample IDs to UserDefaults
+    /// Save processed sample IDs to shared UserDefaults (persists across reinstalls)
     private func saveProcessedSampleIds() {
         if let encoded = try? JSONEncoder().encode(processedSampleIds) {
-            UserDefaults.standard.set(encoded, forKey: processedSampleIdsKey)
+            Self.sharedDefaults.set(encoded, forKey: processedSampleIdsKey)
         }
     }
 
-    /// Load last step date from UserDefaults
+    /// Load last step date from shared UserDefaults (persists across reinstalls)
     private func loadLastStepDate() {
-        lastStepDate = UserDefaults.standard.object(forKey: lastStepDateKey) as? Date
+        lastStepDate = Self.sharedDefaults.object(forKey: lastStepDateKey) as? Date
     }
 
-    /// Save last step date to UserDefaults
+    /// Save last step date to shared UserDefaults (persists across reinstalls)
     private func saveLastStepDate() {
-        UserDefaults.standard.set(lastStepDate, forKey: lastStepDateKey)
+        Self.sharedDefaults.set(lastStepDate, forKey: lastStepDateKey)
+    }
+
+    /// Load last sleep date from shared UserDefaults (persists across reinstalls)
+    private func loadLastSleepDate() {
+        lastSleepDate = Self.sharedDefaults.object(forKey: lastSleepDateKey) as? Date
+    }
+
+    /// Save last sleep date to shared UserDefaults (persists across reinstalls)
+    private func saveLastSleepDate() {
+        Self.sharedDefaults.set(lastSleepDate, forKey: lastSleepDateKey)
     }
 
     // MARK: - Debug/Testing

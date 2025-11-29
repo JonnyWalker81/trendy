@@ -1,0 +1,26 @@
+# Gymfile - build settings
+# For more information: https://docs.fastlane.tools/actions/gym/
+
+# Project settings
+project("trendy.xcodeproj")
+
+# Output directory
+output_directory("./build")
+
+# Clean before building
+clean(true)
+
+# Include bitcode (not needed for iOS 14+)
+include_bitcode(false)
+
+# Include symbols for crash reporting
+include_symbols(true)
+
+# Build for iOS
+sdk("iphoneos")
+
+# Silent xcodebuild output
+silent(true)
+
+# Export options
+export_xcargs("-allowProvisioningUpdates")

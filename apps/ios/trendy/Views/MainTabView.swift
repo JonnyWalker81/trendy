@@ -12,6 +12,7 @@ import HealthKit
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.apiClient) private var apiClient
+    @Environment(\.scenePhase) private var scenePhase
     @State private var eventStore: EventStore?
     @State private var insightsViewModel = InsightsViewModel()
     @StateObject private var calendarManager = CalendarManager()
@@ -125,6 +126,37 @@ struct MainTabView: View {
         .onDisappear {
             // Clean up widget notification observer
             eventStore?.removeWidgetNotificationObserver()
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                // Re-verify geofences when app becomes active
+                if let geoManager = geofenceManager, geoManager.hasGeofencingAuthorization {
+                    // Check if geofences need to be re-registered
+                    if geoManager.monitoredRegions.isEmpty {
+                        #if DEBUG
+                        print("📍 App became active - re-registering geofences")
+                        #endif
+                        geoManager.startMonitoringAllGeofences()
+                    }
+                }
+
+                // Sync local geofences to backend if not yet synced
+                if let store = eventStore, store.useBackend {
+                    Task {
+                        await syncUnsyncedGeofences(store: store)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sync any local geofences that haven't been synced to the backend yet
+    private func syncUnsyncedGeofences(store: EventStore) async {
+        let descriptor = FetchDescriptor<Geofence>()
+        guard let geofences = try? modelContext.fetch(descriptor) else { return }
+
+        for geofence in geofences {
+            await store.syncGeofenceToBackend(geofence)
         }
     }
 }

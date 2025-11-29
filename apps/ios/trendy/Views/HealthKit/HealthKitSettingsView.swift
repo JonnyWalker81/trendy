@@ -11,29 +11,30 @@ import HealthKit
 
 struct HealthKitSettingsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \HealthKitConfiguration.createdAt) private var configurations: [HealthKitConfiguration]
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
     @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
 
     @State private var showingAddConfiguration = false
-    @State private var selectedConfigurationID: UUID?
+    @State private var selectedCategory: HealthDataCategory?
     @State private var showingDeleteConfirmation = false
-    @State private var configurationToDeleteID: UUID?
+    @State private var categoryToDelete: HealthDataCategory?
+    @State private var isRequestingPermission = false
+    @State private var refreshTrigger = false
+
+    private let settings = HealthKitSettings.shared
 
     private var needsHealthKitPermission: Bool {
+        _ = refreshTrigger
         guard let service = healthKitService else { return true }
         return !service.hasHealthKitAuthorization
     }
 
-    private var configurationToDelete: HealthKitConfiguration? {
-        guard let id = configurationToDeleteID else { return nil }
-        return configurations.first { $0.id == id }
+    private var enabledCategories: [HealthDataCategory] {
+        Array(settings.enabledCategories).sorted { $0.displayName < $1.displayName }
     }
 
-    // Get categories that don't have a configuration yet
     private var availableCategories: [HealthDataCategory] {
-        let configuredCategories = Set(configurations.map { $0.category })
-        return HealthDataCategory.allCases.filter { !configuredCategories.contains($0) }
+        settings.availableCategories
     }
 
     var body: some View {
@@ -43,7 +44,7 @@ struct HealthKitSettingsView: View {
                     unavailableView
                 } else if needsHealthKitPermission {
                     healthKitPermissionView
-                } else if configurations.isEmpty {
+                } else if enabledCategories.isEmpty {
                     emptyState
                 } else {
                     configurationList
@@ -60,28 +61,28 @@ struct HealthKitSettingsView: View {
                 }
             }
             .sheet(isPresented: $showingAddConfiguration) {
-                AddHealthKitConfigurationView(availableCategories: availableCategories)
+                AddHealthKitCategoriesView(availableCategories: availableCategories)
             }
-            .sheet(item: $selectedConfigurationID) { configID in
-                if let config = configurations.first(where: { $0.id == configID }) {
-                    EditHealthKitConfigurationView(configuration: config)
-                }
+            .sheet(item: $selectedCategory) { category in
+                EditHealthKitCategoryView(category: category, eventTypes: eventTypes)
             }
-            .alert("Delete Configuration", isPresented: $showingDeleteConfirmation) {
-                Button("Delete", role: .destructive) {
-                    if let config = configurationToDelete {
-                        deleteConfiguration(config)
+            .alert("Stop Tracking", isPresented: $showingDeleteConfirmation) {
+                Button("Stop Tracking", role: .destructive) {
+                    if let category = categoryToDelete {
+                        deleteCategory(category)
                     }
                 }
                 Button("Cancel", role: .cancel) {
-                    configurationToDeleteID = nil
+                    categoryToDelete = nil
                 }
             } message: {
-                if let config = configurationToDelete {
-                    Text("Are you sure you want to stop tracking \(config.category.displayName)? This won't delete any existing events.")
-                } else {
-                    Text("Are you sure you want to delete this configuration?")
+                if let category = categoryToDelete {
+                    Text("Stop tracking \(category.displayName)? This won't delete any existing events.")
                 }
+            }
+            .onAppear {
+                refreshTrigger.toggle()
+                settings.logCurrentState()
             }
         }
     }
@@ -89,22 +90,11 @@ struct HealthKitSettingsView: View {
     // MARK: - Unavailable View
 
     private var unavailableView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "heart.slash")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text("HealthKit Unavailable")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text("HealthKit is not available on this device.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView(
+            "HealthKit Unavailable",
+            systemImage: "heart.slash",
+            description: Text("HealthKit is not available on this device.")
+        )
     }
 
     // MARK: - Permission View
@@ -129,54 +119,34 @@ struct HealthKitSettingsView: View {
 
             VStack(spacing: 12) {
                 Button(action: requestHealthKitPermission) {
-                    Label("Enable Health Access", systemImage: "heart.fill")
-                        .font(.headline)
+                    if isRequestingPermission {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Label("Enable Health Access", systemImage: "heart.fill")
+                            .font(.headline)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.pink)
+                .disabled(isRequestingPermission)
 
-                Button("Open Settings") {
-                    if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(settingsURL)
+                Button("Open Health Settings") {
+                    if let healthURL = URL(string: "x-apple-health://") {
+                        UIApplication.shared.open(healthURL)
                     }
                 }
                 .font(.subheadline)
+
+                Text("If you previously denied access, enable it in Health app under Sources > Trendy")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
             }
             .padding(.top)
 
             Spacer()
-
-            #if DEBUG || STAGING
-            // Debug section - available even before permission granted
-            VStack(spacing: 12) {
-                Text("Debug Actions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 16) {
-                    Button {
-                        Task {
-                            await healthKitService?.simulateWorkoutDetection()
-                        }
-                    } label: {
-                        Label("Workout", systemImage: "figure.run")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        Task {
-                            await healthKitService?.simulateSleepDetection()
-                        }
-                    } label: {
-                        Label("Sleep", systemImage: "bed.double")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-            .padding(.bottom, 20)
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -184,37 +154,23 @@ struct HealthKitSettingsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "heart.text.square")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text("No Health Tracking")
-                .font(.title2)
-                .fontWeight(.semibold)
-
+        ContentUnavailableView {
+            Label("No Health Tracking", systemImage: "heart.text.square")
+        } description: {
             Text("Add health data types to automatically create events when workouts, sleep, and other activities are detected.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-
+        } actions: {
             Button(action: { showingAddConfiguration = true }) {
                 Label("Add Health Tracking", systemImage: "plus.circle.fill")
-                    .font(.headline)
             }
             .buttonStyle(.borderedProminent)
             .tint(.pink)
-            .padding(.top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Configuration List
 
     private var configurationList: some View {
         List {
-            // Status section
             Section {
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
@@ -222,43 +178,31 @@ struct HealthKitSettingsView: View {
                     VStack(alignment: .leading) {
                         Text("Health Tracking Active")
                             .font(.subheadline.bold())
-                        Text("\(configurations.filter { $0.isEnabled }.count) of \(configurations.count) types enabled")
+                        Text("\(enabledCategories.count) types enabled")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
 
-            // Configurations section
             Section("Tracked Health Data") {
-                ForEach(configurations) { config in
-                    HealthKitConfigurationRow(configuration: config)
+                ForEach(enabledCategories, id: \.self) { category in
+                    HealthKitCategoryRow(category: category)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            selectedConfigurationID = config.id
+                            selectedCategory = category
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
-                                configurationToDeleteID = config.id
+                                categoryToDelete = category
                                 showingDeleteConfirmation = true
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label("Remove", systemImage: "trash")
                             }
-
-                            Button {
-                                toggleConfigurationEnabled(config)
-                            } label: {
-                                Label(
-                                    config.isEnabled ? "Disable" : "Enable",
-                                    systemImage: config.isEnabled ? "pause.circle" : "play.circle"
-                                )
-                            }
-                            .tint(config.isEnabled ? .orange : .green)
                         }
                 }
             }
 
-            // Add more section (if categories available)
             if !availableCategories.isEmpty {
                 Section {
                     Button(action: { showingAddConfiguration = true }) {
@@ -268,7 +212,6 @@ struct HealthKitSettingsView: View {
             }
 
             #if DEBUG || STAGING
-            // Debug section - available in Debug and Staging builds
             Section("Debug Actions") {
                 Button {
                     Task {
@@ -299,121 +242,313 @@ struct HealthKitSettingsView: View {
     // MARK: - Actions
 
     private func requestHealthKitPermission() {
+        guard !isRequestingPermission else { return }
+        isRequestingPermission = true
+
         Task {
             do {
                 try await healthKitService?.requestAuthorization()
+                healthKitService?.startMonitoringAllConfigurations()
             } catch {
                 print("Failed to request HealthKit permission: \(error)")
             }
-        }
-    }
 
-    private func toggleConfigurationEnabled(_ config: HealthKitConfiguration) {
-        config.isEnabled.toggle()
-        config.updatedAt = Date()
-
-        do {
-            try modelContext.save()
-
-            // Update monitoring
-            if config.isEnabled {
-                healthKitService?.startMonitoring(configuration: config)
-            } else {
-                healthKitService?.stopMonitoring(configuration: config)
+            await MainActor.run {
+                isRequestingPermission = false
+                refreshTrigger.toggle()
             }
-        } catch {
-            print("Failed to toggle configuration: \(error)")
         }
     }
 
-    private func deleteConfiguration(_ config: HealthKitConfiguration) {
-        // Stop monitoring
-        healthKitService?.stopMonitoring(configuration: config)
-
-        // Delete from SwiftData
-        modelContext.delete(config)
-
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to delete configuration: \(error)")
-        }
+    private func deleteCategory(_ category: HealthDataCategory) {
+        healthKitService?.stopMonitoring(category: category)
+        settings.setEnabled(category, enabled: false)
+        categoryToDelete = nil
     }
 }
 
-// MARK: - Configuration Row
+// MARK: - Category Row
 
-struct HealthKitConfigurationRow: View {
-    let configuration: HealthKitConfiguration
+struct HealthKitCategoryRow: View {
+    let category: HealthDataCategory
+    private let settings = HealthKitSettings.shared
     @Query private var eventTypes: [EventType]
 
-    private var eventType: EventType? {
-        guard let id = configuration.eventTypeID else { return nil }
+    private var linkedEventType: EventType? {
+        guard let id = settings.eventTypeId(for: category) else { return nil }
         return eventTypes.first { $0.id == id }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                // Category icon and name
-                HStack(spacing: 12) {
-                    Image(systemName: configuration.category.iconName)
-                        .font(.title2)
-                        .foregroundStyle(.pink)
-                        .frame(width: 30)
+        HStack(spacing: 12) {
+            Image(systemName: category.iconName)
+                .font(.title2)
+                .foregroundStyle(.pink)
+                .frame(width: 30)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(configuration.category.displayName)
-                            .font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(category.displayName)
+                    .font(.headline)
 
-                        if let eventType = eventType {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(Color(hex: eventType.colorHex) ?? .blue)
-                                    .frame(width: 8, height: 8)
-                                Text(eventType.name)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Text("Auto-creates event type")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                if let eventType = linkedEventType {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color(hex: eventType.colorHex) ?? .blue)
+                            .frame(width: 8, height: 8)
+                        Text(eventType.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-
-                Spacer()
-
-                // Status badge
-                if configuration.isEnabled {
-                    Label("Active", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
                 } else {
-                    Label("Disabled", systemImage: "pause.circle.fill")
+                    Text("Auto-creates event type")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            // Features row
-            HStack(spacing: 12) {
-                if configuration.notifyOnDetection {
-                    Label("Notifications", systemImage: "bell.fill")
+            Spacer()
+
+            HStack(spacing: 8) {
+                if settings.notifyOnDetection(for: category) {
+                    Image(systemName: "bell.fill")
                         .font(.caption)
                         .foregroundStyle(.blue)
                 }
 
-                Label(
-                    configuration.category.supportsImmediateDelivery ? "Real-time" : "Hourly",
-                    systemImage: configuration.category.supportsImmediateDelivery ? "bolt.fill" : "clock"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Image(systemName: category.supportsImmediateDelivery ? "bolt.fill" : "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
     }
 }
 
+// MARK: - Add Categories View
+
+struct AddHealthKitCategoriesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
+    @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
+
+    let availableCategories: [HealthDataCategory]
+    private let settings = HealthKitSettings.shared
+
+    @State private var selectedCategories: Set<HealthDataCategory> = []
+    @State private var notifyOnDetection = false
+    @State private var showingNotificationAlert = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(availableCategories, id: \.self) { category in
+                        Button {
+                            toggleCategory(category)
+                        } label: {
+                            HStack {
+                                Image(systemName: category.iconName)
+                                    .font(.title2)
+                                    .foregroundStyle(.pink)
+                                    .frame(width: 40)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(category.displayName)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text(categoryDescription(for: category))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: selectedCategories.contains(category) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selectedCategories.contains(category) ? .pink : .secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    HStack {
+                        Text("Health Data Types")
+                        Spacer()
+                        if !selectedCategories.isEmpty {
+                            Text("\(selectedCategories.count) selected")
+                                .font(.caption)
+                        }
+                    }
+                }
+
+                if availableCategories.count > 1 {
+                    Section {
+                        Button { selectedCategories = Set(availableCategories) } label: {
+                            Label("Select All", systemImage: "checkmark.circle.fill")
+                        }
+                        .disabled(selectedCategories.count == availableCategories.count)
+
+                        Button { selectedCategories.removeAll() } label: {
+                            Label("Deselect All", systemImage: "circle")
+                        }
+                        .disabled(selectedCategories.isEmpty)
+                    }
+                }
+
+                Section {
+                    Toggle("Notify on Detection", isOn: $notifyOnDetection)
+                } header: {
+                    Text("Notifications")
+                } footer: {
+                    Text("Receive notifications when health activities are detected and logged.")
+                }
+            }
+            .navigationTitle("Add Health Tracking")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { addCategories() }
+                        .fontWeight(.semibold)
+                        .disabled(selectedCategories.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func toggleCategory(_ category: HealthDataCategory) {
+        if selectedCategories.contains(category) {
+            selectedCategories.remove(category)
+        } else {
+            selectedCategories.insert(category)
+        }
+    }
+
+    private func categoryDescription(for category: HealthDataCategory) -> String {
+        switch category {
+        case .workout: return "Auto-log workouts from Apple Health"
+        case .steps: return "Daily step count summary"
+        case .sleep: return "Track sleep sessions"
+        case .activeEnergy: return "Daily active calories burned"
+        case .mindfulness: return "Meditation and mindfulness sessions"
+        case .water: return "Water intake logging"
+        }
+    }
+
+    private func addCategories() {
+        // Save to HealthKitSettings (UserDefaults - immediate, reliable)
+        settings.enableCategories(selectedCategories)
+
+        // Set notification preferences
+        for category in selectedCategories {
+            settings.setNotifyOnDetection(notifyOnDetection, for: category)
+        }
+
+        // Start monitoring
+        for category in selectedCategories {
+            healthKitService?.startMonitoring(category: category)
+        }
+
+        print("✅ HealthKit: Added \(selectedCategories.count) categories")
+        settings.logCurrentState()
+
+        dismiss()
+    }
+}
+
+// MARK: - Edit Category View
+
+struct EditHealthKitCategoryView: View {
+    let category: HealthDataCategory
+    let eventTypes: [EventType]
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
+
+    private let settings = HealthKitSettings.shared
+
+    @State private var selectedEventTypeId: UUID?
+    @State private var notifyOnDetection = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Image(systemName: category.iconName)
+                            .font(.title2)
+                            .foregroundStyle(.pink)
+                            .frame(width: 40)
+                        Text(category.displayName)
+                            .font(.headline)
+                    }
+                } header: {
+                    Text("Health Data Type")
+                }
+
+                Section {
+                    Picker("Event Type", selection: $selectedEventTypeId) {
+                        Text("Auto-create").tag(nil as UUID?)
+                        ForEach(eventTypes) { eventType in
+                            HStack {
+                                Circle()
+                                    .fill(Color(hex: eventType.colorHex) ?? .blue)
+                                    .frame(width: 12, height: 12)
+                                Text(eventType.name)
+                            }
+                            .tag(eventType.id as UUID?)
+                        }
+                    }
+                } footer: {
+                    Text("Choose which event type to use when logging this health data.")
+                }
+
+                Section {
+                    Toggle("Notify on Detection", isOn: $notifyOnDetection)
+                } header: {
+                    Text("Notifications")
+                }
+
+                Section {
+                    HStack {
+                        Text("Update Frequency")
+                        Spacer()
+                        Text(category.supportsImmediateDelivery ? "Real-time" : "Hourly")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Info")
+                }
+            }
+            .navigationTitle("Edit \(category.displayName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { saveChanges() }
+                        .fontWeight(.semibold)
+                }
+            }
+            .onAppear {
+                selectedEventTypeId = settings.eventTypeId(for: category)
+                notifyOnDetection = settings.notifyOnDetection(for: category)
+            }
+        }
+    }
+
+    private func saveChanges() {
+        settings.setEventTypeId(selectedEventTypeId, for: category)
+        settings.setNotifyOnDetection(notifyOnDetection, for: category)
+        print("✅ HealthKit: Updated \(category.displayName) settings")
+        dismiss()
+    }
+}
+
+// MARK: - Identifiable Conformance
+
+extension HealthDataCategory: Identifiable {
+    public var id: String { rawValue }
+}

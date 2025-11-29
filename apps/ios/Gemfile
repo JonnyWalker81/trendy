@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Fastlane - automate building and releasing iOS apps
+gem "fastlane", "~> 2.225"
+
+# Required for Ruby 3.5+ compatibility
+gem "ostruct"
+gem "logger"
+gem "bigdecimal"
+
+# Optional plugins - uncomment as needed
+# gem "fastlane-plugin-firebase_app_distribution"
+# gem "fastlane-plugin-badge"
+# gem "fastlane-plugin-versioning"

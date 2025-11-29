@@ -49,11 +49,80 @@ struct trendyApp: App {
             groupContainer: .identifier(appGroupIdentifier)
         )
 
+        // Try to create the container, with fallback to reset if schema is corrupted
+        var container: ModelContainer
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            print("⚠️ Failed to create ModelContainer: \(error)")
+            print("⚠️ Attempting to reset database due to schema incompatibility...")
+
+            // Delete the corrupted database files
+            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+                let storeURL = appGroupURL.appendingPathComponent("Library/Application Support")
+                let filesToDelete = ["default.store", "default.store-wal", "default.store-shm"]
+                for file in filesToDelete {
+                    let fileURL = storeURL.appendingPathComponent(file)
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+                print("   Deleted old database files")
+            }
+
+            // Try again with a fresh database
+            do {
+                container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                print("   ✅ Created fresh database successfully")
+            } catch {
+                fatalError("Could not create ModelContainer even after reset: \(error)")
+            }
         }
+
+        // Verify schema by testing access to all tables
+        let context = container.mainContext
+        var schemaValid = true
+
+        // Test each table - if any fails, we need to reset
+        do {
+            _ = try context.fetchCount(FetchDescriptor<EventType>())
+            _ = try context.fetchCount(FetchDescriptor<Event>())
+            _ = try context.fetchCount(FetchDescriptor<QueuedOperation>())
+            _ = try context.fetchCount(FetchDescriptor<Geofence>())
+            _ = try context.fetchCount(FetchDescriptor<PropertyDefinition>())
+            _ = try context.fetchCount(FetchDescriptor<HealthKitConfiguration>())
+        } catch {
+            print("⚠️ Schema validation failed: \(error)")
+            schemaValid = false
+        }
+
+        if !schemaValid {
+            print("⚠️ Database schema is incomplete. Resetting database...")
+
+            // Delete the corrupted database files
+            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+                let storeURL = appGroupURL.appendingPathComponent("Library/Application Support")
+                let filesToDelete = ["default.store", "default.store-wal", "default.store-shm"]
+                for file in filesToDelete {
+                    let fileURL = storeURL.appendingPathComponent(file)
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+                print("   Deleted old database files")
+            }
+
+            // Create a new container with fresh database
+            do {
+                container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                print("   ✅ Created fresh database with complete schema")
+            } catch {
+                fatalError("Could not create ModelContainer after schema reset: \(error)")
+            }
+        }
+
+        // Log SwiftData container location
+        #if DEBUG
+        print("📦 SwiftData using App Group: \(appGroupIdentifier)")
+        #endif
+
+        return container
     }()
 
     // MARK: - Initialization
@@ -126,3 +195,4 @@ extension EnvironmentValues {
         set { self[APIClientKey.self] = newValue }
     }
 }
+

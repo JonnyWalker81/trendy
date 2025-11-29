@@ -69,3 +69,4 @@ apps/ios/*.cer
 /apps/backend/trendy-api
 /apps/backend/coverage.out
 /scratch.org
+/docs/

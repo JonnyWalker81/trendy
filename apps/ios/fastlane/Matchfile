@@ -1,0 +1,38 @@
+# Matchfile - code signing configuration
+# For more information: https://docs.fastlane.tools/actions/match/
+
+# Git repository for storing certificates and profiles
+# Replace with your private certificates repository
+git_url(ENV["MATCH_GIT_URL"] || "git@github.com:YOUR_ORG/ios-certificates.git")
+
+# Storage mode (git, google_cloud, s3, or gitlab_secure_files)
+storage_mode("git")
+
+# App identifiers to manage
+app_identifier([
+  "com.memento.trendy",
+  "com.memento.trendy.staging",
+  "com.memento.trendy.testflight",
+  "com.memento.trendy.TrendyWidgetsExtension"
+])
+
+# Your Apple Developer username
+username(ENV["APPLE_ID"])
+
+# Team ID
+team_id("6H6N882H4S")
+
+# Certificate types: development, appstore, adhoc, enterprise
+type("development")
+
+# Don't clone the whole repo, just shallow clone
+shallow_clone(true)
+
+# Force generate new certificates/profiles (use with caution)
+# force(false)
+
+# Read-only mode for CI environments
+readonly(ENV["CI"] == "true")
+
+# Keychain settings for CI
+# platform("ios")

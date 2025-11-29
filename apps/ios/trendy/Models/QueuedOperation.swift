@@ -46,4 +46,7 @@ enum OperationType: String {
     case createEventType = "create_event_type"
     case updateEventType = "update_event_type"
     case deleteEventType = "delete_event_type"
+    case createGeofence = "create_geofence"
+    case updateGeofence = "update_geofence"
+    case deleteGeofence = "delete_geofence"
 }

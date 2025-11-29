@@ -27,7 +27,6 @@ struct RectangularWidgetView: View {
                         Text(eventType.name)
                             .font(.headline)
                             .lineLimit(1)
-                            .privacySensitive()
 
                         // Streak (if enabled and > 0)
                         if (entry.configuration.showStreak ?? true) && entry.streak > 0 {
@@ -42,12 +41,10 @@ struct RectangularWidgetView: View {
                                 Text("\(entry.todayCount) today")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    .privacySensitive()
                             } else if let lastTime = entry.lastEventTime {
                                 Text("Last: \(lastTime, style: .relative)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    .privacySensitive()
                             }
                         }
                     }

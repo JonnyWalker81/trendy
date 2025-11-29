@@ -181,12 +181,24 @@ class SyncQueue {
             let _ = try await apiClient.createEventType(request)
 
         case OperationType.updateEventType.rawValue:
-            let request = try decoder.decode(UpdateEventTypeRequest.self, from: operation.payload)
-            print("Skipping update operation: \(operation.id)")
+            let queuedUpdate = try decoder.decode(QueuedEventTypeUpdate.self, from: operation.payload)
+            _ = try await apiClient.updateEventType(id: queuedUpdate.backendId, queuedUpdate.request)
 
         case OperationType.deleteEventType.rawValue:
             let backendId = String(decoding: operation.payload, as: UTF8.self)
             try await apiClient.deleteEventType(id: backendId)
+
+        case OperationType.createGeofence.rawValue:
+            let request = try decoder.decode(CreateGeofenceRequest.self, from: operation.payload)
+            let _ = try await apiClient.createGeofence(request)
+
+        case OperationType.updateGeofence.rawValue:
+            let queuedUpdate = try decoder.decode(QueuedGeofenceUpdate.self, from: operation.payload)
+            _ = try await apiClient.updateGeofence(id: queuedUpdate.backendId, queuedUpdate.request)
+
+        case OperationType.deleteGeofence.rawValue:
+            let backendId = String(decoding: operation.payload, as: UTF8.self)
+            try await apiClient.deleteGeofence(id: backendId)
 
         default:
             print("Unknown operation type: \(operation.operationType)")

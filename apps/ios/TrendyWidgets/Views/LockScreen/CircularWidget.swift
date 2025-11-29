@@ -44,6 +44,9 @@ struct CircularWidgetView: View {
                 .widgetAccentable()
             }
             .buttonStyle(.plain)
+            .widgetLabel {
+                Text(eventType.name)
+            }
         } else {
             // Not configured
             ZStack {
@@ -55,6 +58,9 @@ struct CircularWidgetView: View {
                     .font(.system(size: 16, weight: .medium))
             }
             .widgetAccentable()
+            .widgetLabel {
+                Text("Configure")
+            }
         }
     }
 }

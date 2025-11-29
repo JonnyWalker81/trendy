@@ -19,13 +19,10 @@ struct InlineWidgetView: View {
                 Label {
                     if entry.todayCount > 0 {
                         Text("\(eventType.name): \(entry.todayCount) today")
-                            .privacySensitive()
                     } else if entry.streak > 0 {
                         Text("\(eventType.name): \(entry.streak) day streak")
-                            .privacySensitive()
                     } else {
                         Text(eventType.name)
-                            .privacySensitive()
                     }
                 } icon: {
                     Image(systemName: eventType.iconName)
@@ -35,10 +32,8 @@ struct InlineWidgetView: View {
                 Label {
                     if entry.todayCount > 0 {
                         Text("\(entry.todayCount) today")
-                            .privacySensitive()
                     } else {
                         Text(eventType.name)
-                            .privacySensitive()
                     }
                 } icon: {
                     Image(systemName: eventType.iconName)
@@ -46,7 +41,6 @@ struct InlineWidgetView: View {
 
                 // Minimal version
                 Label("\(entry.todayCount)", systemImage: eventType.iconName)
-                    .privacySensitive()
             }
         } else {
             Label("Tap to configure", systemImage: "plus.circle")

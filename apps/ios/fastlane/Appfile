@@ -1,0 +1,23 @@
+# Appfile - app identifiers and team settings
+# For more information: https://docs.fastlane.tools/advanced/Appfile/
+
+# App Store Connect credentials
+app_identifier("com.memento.trendy")  # Bundle Identifier
+apple_id(ENV["APPLE_ID"])             # Your Apple Developer email
+itc_team_id(ENV["ITC_TEAM_ID"])       # App Store Connect Team ID (optional)
+team_id("6H6N882H4S")                 # Developer Portal Team ID
+
+# Use environment-specific bundle identifiers
+for_platform :ios do
+  for_lane :beta do
+    app_identifier("com.memento.trendy.testflight")
+  end
+
+  for_lane :staging do
+    app_identifier("com.memento.trendy.staging")
+  end
+
+  for_lane :release do
+    app_identifier("com.memento.trendy")
+  end
+end

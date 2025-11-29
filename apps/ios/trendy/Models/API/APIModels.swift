@@ -44,6 +44,12 @@ struct UpdateEventTypeRequest: Codable {
     let icon: String?
 }
 
+/// Wrapper for queued event type updates (includes backend ID)
+struct QueuedEventTypeUpdate: Codable {
+    let backendId: String
+    let request: UpdateEventTypeRequest
+}
+
 // MARK: - Event Models
 
 /// Backend Event model
@@ -474,6 +480,12 @@ struct UpdateGeofenceRequest: Codable {
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
     }
+}
+
+/// Wrapper for queued geofence updates (includes backend ID)
+struct QueuedGeofenceUpdate: Codable {
+    let backendId: String
+    let request: UpdateGeofenceRequest
 }
 
 // MARK: - Insights Models
