@@ -57,12 +57,19 @@
             # Set Xcode path for fastlane/xcodebuild
             export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 
-            # Unset nix SDK variables that conflict with Xcode toolchain for Ruby gem compilation
+            # Unset nix SDK variables that conflict with Xcode toolchain
             unset DEVELOPER_DIR_arm64_apple_darwin
             unset DEVELOPER_DIR_FOR_TARGET
             unset SDKROOT
+            unset NIX_CFLAGS_COMPILE
             unset NIX_CFLAGS_COMPILE_FOR_TARGET
+            unset NIX_LDFLAGS
             unset NIX_LDFLAGS_FOR_TARGET
+            unset NIX_CC
+            unset NIX_CXX
+            unset CC
+            unset CXX
+            unset LD
 
             echo "🚀 Trendy monorepo development environment"
             echo ""
