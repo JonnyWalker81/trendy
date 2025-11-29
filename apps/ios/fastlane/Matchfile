@@ -10,10 +10,10 @@ storage_mode("git")
 
 # App identifiers to manage
 app_identifier([
-  "com.memento.trendy",
-  "com.memento.trendy.staging",
-  "com.memento.trendy.testflight",
-  "com.memento.trendy.TrendyWidgetsExtension"
+  "com.shadowlabs.trendsight",
+  "com.shadowlabs.trendsight.staging",
+  "com.shadowlabs.trendsight.testflight",
+  "com.shadowlabs.trendsight.TrendyWidgetsExtension"
 ])
 
 # Your Apple Developer username

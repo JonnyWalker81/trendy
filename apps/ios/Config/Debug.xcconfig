@@ -15,7 +15,7 @@ INFOPLIST_FILE = trendy/trendy-Info.plist
 
 // MARK: - Bundle Identifier
 // Different bundle ID allows installing Debug build alongside other environments
-PRODUCT_BUNDLE_IDENTIFIER = com.memento.trendy.dev
+PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.dev
 
 // MARK: - Display Name
 // Shows "Trendy Dev" in app name to distinguish from other builds
