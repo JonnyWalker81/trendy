@@ -39,10 +39,14 @@ platform :ios do
 
   desc "Deploy staging build for internal testing"
   lane :staging do
-    # Increment build number (using xcodeproj to avoid agvtool dependency)
-    increment_build_number(
-      build_number: latest_testflight_build_number + 1,
-      xcodeproj: PROJECT_PATH
+    # Calculate new build number
+    new_build_number = latest_testflight_build_number + 1
+
+    # Set build number directly in Info.plist (avoids agvtool dependency)
+    set_info_plist_value(
+      path: "trendy/trendy-Info.plist",
+      key: "CFBundleVersion",
+      value: new_build_number.to_s
     )
 
     # Build the app
@@ -64,10 +68,14 @@ platform :ios do
     # Ensure we're on a clean git state
     ensure_git_status_clean unless ENV["SKIP_GIT_CHECK"]
 
-    # Increment build number (using xcodeproj to avoid agvtool dependency)
-    increment_build_number(
-      build_number: latest_testflight_build_number + 1,
-      xcodeproj: PROJECT_PATH
+    # Calculate new build number
+    new_build_number = latest_testflight_build_number + 1
+
+    # Set build number directly in Info.plist (avoids agvtool dependency)
+    set_info_plist_value(
+      path: "trendy/trendy-Info.plist",
+      key: "CFBundleVersion",
+      value: new_build_number.to_s
     )
 
     # Build the app
@@ -89,16 +97,14 @@ platform :ios do
     )
 
     # Commit version bump
-    commit_version_bump(
-      message: "chore: bump build number for TestFlight",
-      xcodeproj: PROJECT_PATH,
-      force: true
+    git_commit(
+      path: "trendy/trendy-Info.plist",
+      message: "chore: bump build number to #{new_build_number} for TestFlight"
     )
 
     # Tag release
-    add_git_tag(
-      tag: "testflight/#{get_version_number(xcodeproj: PROJECT_PATH)}-#{get_build_number(xcodeproj: PROJECT_PATH)}"
-    )
+    version = get_info_plist_value(path: "trendy/trendy-Info.plist", key: "CFBundleShortVersionString")
+    add_git_tag(tag: "testflight/#{version}-#{new_build_number}")
   end
 
   desc "Deploy to App Store"
@@ -113,16 +119,39 @@ platform :ios do
       ["patch", "minor", "major"]
     )
 
-    # Increment version number
-    increment_version_number(
-      bump_type: version_bump_type,
-      xcodeproj: PROJECT_PATH
+    # Get current version from Info.plist
+    current_version = get_info_plist_value(
+      path: "trendy/trendy-Info.plist",
+      key: "CFBundleShortVersionString"
+    )
+
+    # Calculate new version
+    version_parts = current_version.split(".").map(&:to_i)
+    case version_bump_type
+    when "major"
+      version_parts[0] += 1
+      version_parts[1] = 0
+      version_parts[2] = 0
+    when "minor"
+      version_parts[1] += 1
+      version_parts[2] = 0
+    when "patch"
+      version_parts[2] = (version_parts[2] || 0) + 1
+    end
+    new_version = version_parts.join(".")
+
+    # Set new version in Info.plist
+    set_info_plist_value(
+      path: "trendy/trendy-Info.plist",
+      key: "CFBundleShortVersionString",
+      value: new_version
     )
 
     # Reset build number for new version
-    increment_build_number(
-      build_number: 1,
-      xcodeproj: PROJECT_PATH
+    set_info_plist_value(
+      path: "trendy/trendy-Info.plist",
+      key: "CFBundleVersion",
+      value: "1"
     )
 
     # Build the app
@@ -143,14 +172,12 @@ platform :ios do
     )
 
     # Commit and tag
-    version = get_version_number(xcodeproj: PROJECT_PATH)
-    commit_version_bump(
-      message: "chore: release v#{version}",
-      xcodeproj: PROJECT_PATH,
-      force: true
+    git_commit(
+      path: "trendy/trendy-Info.plist",
+      message: "chore: release v#{new_version}"
     )
 
-    add_git_tag(tag: "v#{version}")
+    add_git_tag(tag: "v#{new_version}")
 
     push_to_git_remote(tags: true)
   end
