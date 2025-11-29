@@ -7,17 +7,7 @@ apple_id(ENV["APPLE_ID"])                    # Your Apple Developer email
 itc_team_id(ENV["ITC_TEAM_ID"])              # App Store Connect Team ID (optional)
 team_id("6H6N882H4S")                        # Developer Portal Team ID
 
-# Use environment-specific bundle identifiers
-for_platform :ios do
-  for_lane :beta do
-    app_identifier("com.shadowlabs.trendsight.testflight")
-  end
-
-  for_lane :staging do
-    app_identifier("com.shadowlabs.trendsight.staging")
-  end
-
-  for_lane :release do
-    app_identifier("com.shadowlabs.trendsight")
-  end
-end
+# All deployment lanes use the same App Store Connect app
+# Different Xcode configurations (Debug/Staging/TestFlight/Release) can use
+# different local bundle IDs for side-by-side installation during development,
+# but App Store Connect only has one app: com.shadowlabs.trendsight
