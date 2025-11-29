@@ -11,8 +11,6 @@ storage_mode("git")
 # App identifiers to manage
 app_identifier([
   "com.shadowlabs.trendsight",
-  "com.shadowlabs.trendsight.staging",
-  "com.shadowlabs.trendsight.testflight",
   "com.shadowlabs.trendsight.TrendyWidgetsExtension"
 ])
 
