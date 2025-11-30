@@ -70,3 +70,4 @@ apps/ios/*.cer
 /apps/backend/coverage.out
 /scratch.org
 /docs/
+/apps/ios/fastlane/SCREENSHOTS_README.md

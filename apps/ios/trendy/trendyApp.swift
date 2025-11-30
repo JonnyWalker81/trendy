@@ -160,6 +160,11 @@ struct trendyApp: App {
 
     // MARK: - Body
 
+    /// Check if UI testing dark mode is enabled via launch argument
+    private var isUITestingDarkMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("-UITestingDarkModeEnabled")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -167,6 +172,7 @@ struct trendyApp: App {
                 .environment(themeManager)
                 .environment(\.supabaseService, supabaseService)
                 .environment(\.apiClient, apiClient)
+                .preferredColorScheme(isUITestingDarkMode ? .dark : nil)
         }
         .modelContainer(sharedModelContainer)
     }

@@ -88,6 +88,7 @@ struct AnalyticsView: View {
                 await loadAnalytics()
             }
         }
+        .accessibilityIdentifier("analyticsView")
     }
     
     private var emptyStateView: some View {
@@ -129,9 +130,11 @@ struct AnalyticsView: View {
                         .foregroundColor(selectedEventTypeID == eventType.id ? .white : .primary)
                         .clipShape(Capsule())
                     }
+                    .accessibilityIdentifier("analyticsEventType_\(eventType.id.uuidString)")
                 }
             }
         }
+        .accessibilityIdentifier("analyticsEventTypePicker")
     }
     
     private var timeRangePicker: some View {
@@ -147,6 +150,7 @@ struct AnalyticsView: View {
             Text("Year").tag(TimeRange.year)
         }
         .pickerStyle(.segmented)
+        .accessibilityIdentifier("analyticsTimeRangePicker")
     }
     
     private var statisticsCard: some View {
@@ -190,6 +194,7 @@ struct AnalyticsView: View {
         .padding()
         .background(Color.cardBackground)
         .cornerRadius(12)
+        .accessibilityIdentifier("analyticsStatisticsCard")
     }
 
     private var frequencyChart: some View {
@@ -247,6 +252,7 @@ struct AnalyticsView: View {
         .padding()
         .background(Color.cardBackground)
         .cornerRadius(12)
+        .accessibilityIdentifier("analyticsChartCard")
     }
 
     private func loadAnalytics() async {

@@ -25,7 +25,7 @@ class EventStore {
     var syncWithCalendar = true
 
     // Backend integration (injected)
-    private let apiClient: APIClient
+    private let apiClient: APIClient?
 
     // UserDefaults-backed properties (can't use @AppStorage with @Observable)
     @ObservationIgnored var useBackend: Bool {
@@ -127,6 +127,16 @@ class EventStore {
         monitor.start(queue: queue)
     }
 
+    #if DEBUG
+    /// Initialize EventStore for local-only mode (screenshot testing)
+    /// No network calls, uses SwiftData directly
+    init() {
+        self.apiClient = nil
+        self.useBackend = false
+        // Don't start network monitor in local-only mode
+    }
+    #endif
+
     deinit {
         monitor.cancel()
     }
@@ -172,7 +182,11 @@ class EventStore {
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
-        self.syncQueue = SyncQueue(modelContext: context, apiClient: apiClient)
+
+        // Only set up sync queue if we have an API client
+        if let apiClient = apiClient {
+            self.syncQueue = SyncQueue(modelContext: context, apiClient: apiClient)
+        }
 
         // Enable backend mode after migration
         if migrationCompleted {
@@ -186,7 +200,7 @@ class EventStore {
     }
     
     func fetchData() async {
-        guard let modelContext else { return }
+        guard modelContext != nil else { return }
 
         isLoading = true
         errorMessage = nil
@@ -213,6 +227,11 @@ class EventStore {
 
     private func fetchFromBackend() async throws {
         guard let modelContext else { return }
+        guard let apiClient = apiClient else {
+            // No API client, fall back to local
+            try await fetchFromLocal()
+            return
+        }
 
         // Fetch from API
         let apiEventTypes = try await apiClient.getEventTypes()
@@ -440,12 +459,20 @@ class EventStore {
                     #endif
                 } else {
                     // Check if there's already a local geofence with same name and location (unmapped)
-                    if let existingByMatch = existingGeofences.first(where: {
-                        $0.name == apiGeofence.name &&
-                        abs($0.latitude - apiGeofence.latitude) < 0.0001 &&
-                        abs($0.longitude - apiGeofence.longitude) < 0.0001 &&
-                        !currentGeofenceMappings.keys.contains($0.id)
-                    }) {
+                    let targetName = apiGeofence.name
+                    let targetLat = apiGeofence.latitude
+                    let targetLon = apiGeofence.longitude
+                    let mappedIds = Set(currentGeofenceMappings.keys)
+
+                    let existingByMatch = existingGeofences.first { geofence in
+                        let nameMatches = geofence.name == targetName
+                        let latMatches = abs(geofence.latitude - targetLat) < 0.0001
+                        let lonMatches = abs(geofence.longitude - targetLon) < 0.0001
+                        let notMapped = !mappedIds.contains(geofence.id)
+                        return nameMatches && latMatches && lonMatches && notMapped
+                    }
+
+                    if let existingByMatch = existingByMatch {
                         // Link existing local geofence to backend
                         existingByMatch.radius = apiGeofence.radius
                         existingByMatch.eventTypeEntryID = localEntryTypeId
@@ -587,7 +614,7 @@ class EventStore {
 
                 if isOnline {
                     // Online: create on backend
-                    let apiEvent = try await apiClient.createEvent(request)
+                    let apiEvent = try await apiClient!.createEvent(request)
 
                     // Cache locally
                     let newEvent = Event(
@@ -719,7 +746,7 @@ class EventStore {
 
                 do {
                     if isOnline {
-                        _ = try await apiClient.updateEvent(id: backendId, request)
+                        _ = try await apiClient!.updateEvent(id: backendId, request)
                     } else {
                         // Queue for sync when online
                         try? syncQueue?.enqueue(type: .updateEvent, entityId: event.id, payload: request)
@@ -763,7 +790,7 @@ class EventStore {
             if let backendId = eventBackendIds[event.id] {
                 do {
                     if isOnline {
-                        try await apiClient.deleteEvent(id: backendId)
+                        try await apiClient!.deleteEvent(id: backendId)
                     } else {
                         // Queue for deletion when online
                         try? syncQueue?.enqueue(
@@ -805,7 +832,7 @@ class EventStore {
 
                 if isOnline {
                     // Online: create on backend
-                    let apiEventType = try await apiClient.createEventType(request)
+                    let apiEventType = try await apiClient!.createEventType(request)
 
                     // Cache locally
                     let newType = EventType(name: name, colorHex: colorHex, iconName: iconName)
@@ -859,7 +886,7 @@ class EventStore {
                 do {
                     if isOnline {
                         // Online: update on backend immediately
-                        _ = try await apiClient.updateEventType(id: backendId, request)
+                        _ = try await apiClient!.updateEventType(id: backendId, request)
                     } else {
                         // Offline: queue for sync when online
                         let queuedUpdate = QueuedEventTypeUpdate(backendId: backendId, request: request)
@@ -894,7 +921,7 @@ class EventStore {
             if let backendId = eventTypeBackendIds[eventType.id] {
                 do {
                     if isOnline {
-                        try await apiClient.deleteEventType(id: backendId)
+                        try await apiClient!.deleteEventType(id: backendId)
                     } else {
                         // Queue for deletion when online
                         try? syncQueue?.enqueue(
@@ -1007,7 +1034,7 @@ class EventStore {
                 )
 
                 if isOnline {
-                    _ = try await apiClient.updateEvent(id: existingBackendId!, request)
+                    _ = try await apiClient!.updateEvent(id: existingBackendId!, request)
                     #if DEBUG
                     print("✅ Updated event on backend: \(event.id)")
                     #endif
@@ -1038,7 +1065,7 @@ class EventStore {
                 )
 
                 if isOnline {
-                    let apiEvent = try await apiClient.createEvent(request)
+                    let apiEvent = try await apiClient!.createEvent(request)
                     eventBackendIds[event.id] = apiEvent.id
                     reloadWidgets()
                     #if DEBUG
@@ -1082,7 +1109,7 @@ class EventStore {
 
         do {
             if isOnline {
-                let apiEventType = try await apiClient.createEventType(request)
+                let apiEventType = try await apiClient!.createEventType(request)
                 eventTypeBackendIds[eventType.id] = apiEventType.id
                 #if DEBUG
                 print("✅ Synced EventType to backend: \(eventType.name)")
@@ -1158,7 +1185,7 @@ class EventStore {
 
             do {
                 if isOnline {
-                    let apiGeofence = try await apiClient.createGeofence(request)
+                    let apiGeofence = try await apiClient!.createGeofence(request)
                     geofenceBackendIds[geofence.id] = apiGeofence.id
                     #if DEBUG
                     print("✅ Created geofence on backend: \(geofence.name)")
@@ -1212,7 +1239,7 @@ class EventStore {
 
                 do {
                     if isOnline {
-                        _ = try await apiClient.updateGeofence(id: backendId, request)
+                        _ = try await apiClient!.updateGeofence(id: backendId, request)
                         #if DEBUG
                         print("✅ Updated geofence on backend: \(geofence.name)")
                         #endif
@@ -1248,7 +1275,7 @@ class EventStore {
             if let backendId = geofenceBackendIds[geofence.id] {
                 do {
                     if isOnline {
-                        try await apiClient.deleteGeofence(id: backendId)
+                        try await apiClient!.deleteGeofence(id: backendId)
                         #if DEBUG
                         print("✅ Deleted geofence from backend: \(geofence.name)")
                         #endif
@@ -1310,7 +1337,7 @@ class EventStore {
 
         do {
             if isOnline {
-                let apiGeofence = try await apiClient.createGeofence(request)
+                let apiGeofence = try await apiClient!.createGeofence(request)
                 geofenceBackendIds[geofence.id] = apiGeofence.id
                 #if DEBUG
                 print("✅ Synced geofence to backend: \(geofence.name)")

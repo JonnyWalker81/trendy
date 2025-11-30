@@ -79,6 +79,7 @@ struct EventListView: View {
                 await eventStore.fetchData()
             }
         }
+        .accessibilityIdentifier("eventListView")
     }
     
     private var filterSection: some View {
@@ -91,7 +92,8 @@ struct EventListView: View {
                     ) {
                         selectedEventTypeID = nil
                     }
-                    
+                    .accessibilityIdentifier("filterChip_all")
+
                     ForEach(eventStore.eventTypes) { eventType in
                         FilterChip(
                             title: eventType.name,
@@ -104,12 +106,14 @@ struct EventListView: View {
                                 selectedEventTypeID = eventType.id
                             }
                         }
+                        .accessibilityIdentifier("filterChip_\(eventType.id.uuidString)")
                     }
                 }
                 .padding(.horizontal)
             }
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
+            .accessibilityIdentifier("filterChipsSection")
         }
     }
     

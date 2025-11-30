@@ -41,6 +41,7 @@ struct EventTypeSettingsView: View {
                         EventTypeRow(eventType: eventType) {
                             editingEventTypeID = eventType.id
                         }
+                        .accessibilityIdentifier("eventTypeRow_\(eventType.id.uuidString)")
                     }
                     .onDelete(perform: deleteEventTypes)
                 } header: {
@@ -50,6 +51,7 @@ struct EventTypeSettingsView: View {
                         Text("Tap the + button to create your first event type")
                     }
                 }
+                .accessibilityIdentifier("eventTypesSection")
                 
                 Section {
                     Button {
@@ -57,31 +59,37 @@ struct EventTypeSettingsView: View {
                     } label: {
                         Label("Add Event Type", systemImage: "plus.circle.fill")
                     }
-                    
+                    .accessibilityIdentifier("addEventTypeButton")
+
                     Button {
                         showingCalendarImport = true
                     } label: {
                         Label("Import from Calendar", systemImage: "calendar.badge.plus")
                     }
-                    
+                    .accessibilityIdentifier("importCalendarButton")
+
                     NavigationLink {
                         CalendarSyncSettingsView()
                     } label: {
                         Label("Calendar Sync", systemImage: "calendar.badge.checkmark")
                     }
+                    .accessibilityIdentifier("calendarSyncLink")
 
                     NavigationLink {
                         GeofenceListView()
                     } label: {
                         Label("Geofences", systemImage: "location.circle.fill")
                     }
+                    .accessibilityIdentifier("geofencesLink")
 
                     NavigationLink {
                         HealthKitSettingsView()
                     } label: {
                         Label("Health Tracking", systemImage: "heart.circle.fill")
                     }
+                    .accessibilityIdentifier("healthTrackingLink")
                 }
+                .accessibilityIdentifier("actionsSection")
             }
             .navigationTitle("Settings")
             .toolbar {
@@ -104,6 +112,7 @@ struct EventTypeSettingsView: View {
                 await eventStore.fetchData()
             }
         }
+        .accessibilityIdentifier("settingsView")
     }
     
     private func deleteEventTypes(at offsets: IndexSet) {

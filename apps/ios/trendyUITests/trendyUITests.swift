@@ -10,12 +10,12 @@ import XCTest
 final class trendyUITests: XCTestCase {
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
+        // Skip these tests during Fastlane screenshot capture
+        // Use ScreenshotTests.swift instead for screenshots
+        try skipIfScreenshotMode()
 
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
     override func tearDownWithError() throws {
@@ -36,6 +36,14 @@ final class trendyUITests: XCTestCase {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func skipIfScreenshotMode() throws {
+        if ProcessInfo.processInfo.environment["FASTLANE_SNAPSHOT"] != nil {
+            throw XCTSkip("Skipping during Fastlane screenshot capture")
         }
     }
 }

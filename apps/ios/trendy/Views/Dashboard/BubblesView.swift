@@ -53,8 +53,10 @@ struct BubblesView: View {
                             }
 
                             addBubbleButton
+                                .accessibilityIdentifier("addEventTypeBubble")
                         }
                         .padding(.horizontal)
+                        .accessibilityIdentifier("bubblesGrid")
                     }
                 }
             }
@@ -66,6 +68,7 @@ struct BubblesView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("addEventTypeButton")
                 }
             }
             .sheet(isPresented: $showingAddEventType) {
@@ -90,6 +93,7 @@ struct BubblesView: View {
                 }
             }
         }
+        .accessibilityIdentifier("dashboardView")
     }
     
     private var emptyStateView: some View {

@@ -52,6 +52,7 @@ struct CalendarView: View {
                 await eventStore.fetchData()
             }
         }
+        .accessibilityIdentifier("calendarView")
     }
     
     private var monthHeader: some View {
@@ -114,6 +115,7 @@ struct CalendarView: View {
                 }
             }
         }
+        .accessibilityIdentifier("calendarGrid")
     }
     
     private var selectedDateEvents: some View {
@@ -174,6 +176,7 @@ struct CalendarView: View {
         }
         .pickerStyle(SegmentedPickerStyle())
         .padding(.horizontal)
+        .accessibilityIdentifier("calendarViewModeSelector")
     }
     
     private var quarterView: some View {
@@ -242,15 +245,16 @@ struct CalendarView: View {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                 }
-                
+                .accessibilityIdentifier("calendarPrevYear")
+
                 Spacer()
-                
+
                 Text(currentYear, format: .dateTime.year())
                     .font(.title2)
                     .fontWeight(.semibold)
-                
+
                 Spacer()
-                
+
                 Button {
                     withAnimation {
                         currentYear = calendar.date(byAdding: .year, value: 1, to: currentYear) ?? currentYear
@@ -259,8 +263,9 @@ struct CalendarView: View {
                     Image(systemName: "chevron.right")
                         .font(.title2)
                 }
+                .accessibilityIdentifier("calendarNextYear")
             }
-            
+
             // 12 months grid
             LazyVGrid(columns: yearColumns, spacing: 12) {
                 ForEach(0..<12) { month in
@@ -278,6 +283,7 @@ struct CalendarView: View {
                 }
             }
         }
+        .accessibilityIdentifier("calendarYearView")
     }
     
     private var startOfQuarter: Date {

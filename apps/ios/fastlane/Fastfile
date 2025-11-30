@@ -78,6 +78,21 @@ platform :ios do
       value: new_build_number.to_s
     )
 
+    # Sync widget extension version with main app (update project build settings, not Info.plist)
+    # Widget uses GENERATE_INFOPLIST_FILE = YES, so it reads version from build settings
+    project = Xcodeproj::Project.open("../#{PROJECT_PATH}")
+    widget_target = project.targets.find { |t| t.name == "TrendyWidgetsExtension" }
+    if widget_target
+      widget_target.build_configurations.each do |config|
+        config.build_settings["CURRENT_PROJECT_VERSION"] = new_build_number.to_s
+        config.build_settings["MARKETING_VERSION"] = get_info_plist_value(path: "trendy/trendy-Info.plist", key: "CFBundleShortVersionString")
+      end
+      project.save
+      UI.success("Updated widget extension version to #{new_build_number}")
+    else
+      UI.error("Could not find TrendyWidgetsExtension target")
+    end
+
     # Build the app
     build_app(
       project: PROJECT_PATH,
@@ -98,7 +113,7 @@ platform :ios do
 
     # Commit version bump
     git_commit(
-      path: "trendy/trendy-Info.plist",
+      path: ["trendy/trendy-Info.plist", "trendy.xcodeproj/project.pbxproj"],
       message: "chore: bump build number to #{new_build_number} for TestFlight"
     )
 
@@ -211,20 +226,64 @@ platform :ios do
     match(type: "development", force_for_new_devices: true)
   end
 
-  desc "Take screenshots for all device sizes"
-  lane :screenshots do
+  desc "Take screenshots for App Store (raw, unframed)"
+  lane :screenshots_raw do
+    # Clear existing screenshots
+    sh("rm -rf ./screenshots/raw/*") if Dir.exist?("./screenshots/raw")
+
     capture_screenshots(
       project: PROJECT_PATH,
-      scheme: "trendyUITests",
-      output_directory: "./fastlane/screenshots",
+      scheme: "trendy (local)",
+      output_directory: "./screenshots/raw",
       clear_previous_screenshots: true,
       devices: [
-        "iPhone 15 Pro Max",
-        "iPhone 15 Pro",
-        "iPhone SE (3rd generation)",
-        "iPad Pro (12.9-inch) (6th generation)"
-      ]
+        "iPhone 16 Pro Max"        # 6.9" display (1320x2868) - required for App Store
+      ],
+      languages: ["en-US"],
+      override_status_bar: true,
+      concurrent_simulators: true,
+      stop_after_first_error: false,
+      launch_arguments: [
+        "-FASTLANE_SNAPSHOT",
+        "--screenshot-mode"
+      ],
+      test_target_name: "trendyUITests",
+      only_testing: ["trendyUITests/ScreenshotTests"]
     )
+
+    UI.success("📸 Raw screenshots captured in ./screenshots/raw/")
+  end
+
+  desc "Take screenshots and add device frames with marketing text"
+  lane :screenshots do
+    # First capture raw screenshots
+    screenshots_raw
+
+    # Copy raw screenshots to framed directory before framing
+    sh("mkdir -p ./screenshots/framed")
+    sh("cp -R ./screenshots/raw/* ./screenshots/framed/")
+
+    # Then add device frames and marketing text (works in-place)
+    frame_screenshots(
+      path: "./screenshots/framed"
+    )
+
+    # Open the output folder
+    sh("open ./screenshots/framed") if File.directory?("./screenshots/framed")
+
+    UI.success("🖼️ Framed screenshots ready in ./screenshots/framed/")
+  end
+
+  desc "Frame existing screenshots (skip capture)"
+  lane :frame_screenshots_only do
+    sh("mkdir -p ./screenshots/framed")
+    sh("cp -R ./screenshots/raw/* ./screenshots/framed/")
+
+    frame_screenshots(
+      path: "./screenshots/framed"
+    )
+
+    sh("open ./screenshots/framed") if File.directory?("./screenshots/framed")
   end
 
   # Private helper lanes

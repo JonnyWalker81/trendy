@@ -71,13 +71,29 @@ Sync code signing certificates and profiles using match
 
 Register new devices from a file
 
+### ios screenshots_raw
+
+```sh
+[bundle exec] fastlane ios screenshots_raw
+```
+
+Take screenshots for App Store (raw, unframed)
+
 ### ios screenshots
 
 ```sh
 [bundle exec] fastlane ios screenshots
 ```
 
-Take screenshots for all device sizes
+Take screenshots and add device frames with marketing text
+
+### ios frame_screenshots_only
+
+```sh
+[bundle exec] fastlane ios frame_screenshots_only
+```
+
+Frame existing screenshots (skip capture)
 
 ----
 

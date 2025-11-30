@@ -1,0 +1,47 @@
+# Snapfile - Screenshot configuration for Trendy
+# Documentation: https://docs.fastlane.tools/actions/snapshot/
+
+# Device configurations for App Store screenshots
+# iPhone 16/15 Pro Max (6.9" - 1320x2868) and iPad 13" (2064x2752)
+devices([
+  "iPhone 16 Pro Max"
+])
+
+# Languages to capture (add more for localization)
+languages(["en-US"])
+
+# Xcode project and scheme configuration
+# Use main app scheme - it includes the UITests target
+scheme("trendy (local)")
+project("trendy.xcodeproj")
+
+# Output directory for screenshots
+output_directory("./fastlane/screenshots")
+
+# Clear existing screenshots before capturing new ones
+clear_previous_screenshots(true)
+
+# Launch arguments passed to the app during screenshot capture
+launch_arguments([
+  "-FASTLANE_SNAPSHOT",
+  "--screenshot-mode"
+])
+
+# Override status bar to show clean 9:41 time
+override_status_bar(true)
+
+# Run simulators concurrently to speed up capture
+concurrent_simulators(true)
+
+# Continue capturing even if one screenshot fails
+stop_after_first_error(false)
+
+# Test targets without building
+test_without_building(false)
+
+# Reinstall the app before running
+reinstall_app(false)
+
+# Specify which test target and tests to run
+test_target_name("trendyUITests")
+only_testing(["trendyUITests/ScreenshotTests"])

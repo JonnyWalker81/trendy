@@ -41,6 +41,11 @@ final class LoginFlowUITests: XCTestCase {
     // MARK: - Setup & Teardown
 
     override func setUpWithError() throws {
+        // Skip during Fastlane screenshot capture - use ScreenshotTests.swift instead
+        if ProcessInfo.processInfo.environment["FASTLANE_SNAPSHOT"] != nil {
+            throw XCTSkip("Skipping during Fastlane screenshot capture")
+        }
+
         continueAfterFailure = false
 
         app = XCUIApplication()

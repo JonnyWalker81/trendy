@@ -21,107 +21,55 @@ struct MainTabView: View {
     @State private var healthKitService: HealthKitService?
     @State private var selectedTab = 0
     @State private var isLoading = true
-    
+
+    #if DEBUG
+    /// Check if running in screenshot mode for UI tests
+    private var isScreenshotMode: Bool {
+        let result = ScreenshotMockData.isScreenshotMode
+        print("📸 isScreenshotMode check: \(result)")
+        print("📸 Arguments: \(ProcessInfo.processInfo.arguments)")
+        print("📸 Environment UITEST_SCREENSHOT_MODE: \(ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] ?? "nil")")
+        return result
+    }
+    #endif
+
     var body: some View {
         ZStack {
+            #if DEBUG
+            // In screenshot mode, skip the loading check for geofenceManager
+            if isScreenshotMode {
+                if eventStore == nil {
+                    LoadingView()
+                        .transition(.opacity.combined(with: .scale))
+                } else {
+                    mainTabContent
+                }
+            } else {
+                if isLoading || eventStore == nil || geofenceManager == nil {
+                    LoadingView()
+                        .transition(.opacity.combined(with: .scale))
+                } else {
+                    mainTabContent
+                }
+            }
+            #else
             if isLoading || eventStore == nil || geofenceManager == nil {
                 LoadingView()
                     .transition(.opacity.combined(with: .scale))
             } else {
-                TabView(selection: $selectedTab) {
-                    BubblesView()
-                        .tabItem {
-                            Label("Dashboard", systemImage: "square.grid.2x2.fill")
-                        }
-                        .tag(0)
-                    
-                    EventListView()
-                        .tabItem {
-                            Label("List", systemImage: "list.bullet")
-                        }
-                        .tag(1)
-                    
-                    CalendarView()
-                        .tabItem {
-                            Label("Calendar", systemImage: "calendar")
-                        }
-                        .tag(2)
-                    
-                    AnalyticsView()
-                        .tabItem {
-                            Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
-                        }
-                        .tag(3)
-                    
-                    EventTypeSettingsView()
-                        .tabItem {
-                            Label("Settings", systemImage: "gear")
-                        }
-                        .tag(4)
-                }
-                .environment(eventStore)
-                .environment(insightsViewModel)
-                .environmentObject(calendarManager)
-                .environment(notificationManager)
-                .environment(geofenceManager)
-                .environment(healthKitService)
+                mainTabContent
             }
+            #endif
         }
         .animation(.easeInOut(duration: 0.3), value: isLoading)
         .task {
-            // Initialize EventStore with APIClient from environment
-            guard let apiClient = apiClient else {
-                print("Error: APIClient not available in environment")
+            #if DEBUG
+            if isScreenshotMode {
+                await initializeForScreenshotMode()
                 return
             }
-
-            let store = EventStore(apiClient: apiClient)
-            eventStore = store
-
-            store.setModelContext(modelContext)
-            store.setCalendarManager(calendarManager)
-
-            // Configure InsightsViewModel with API client
-            insightsViewModel.configure(with: apiClient)
-
-            // Initialize GeofenceManager with dependencies
-            let geoManager = GeofenceManager(
-                modelContext: modelContext,
-                eventStore: store,
-                notificationManager: notificationManager
-            )
-            geofenceManager = geoManager
-
-            // Start monitoring active geofences if authorized
-            if geoManager.hasGeofencingAuthorization {
-                geoManager.startMonitoringAllGeofences()
-            }
-
-            // Initialize HealthKitService if available
-            if HKHealthStore.isHealthDataAvailable() {
-                let hkService = HealthKitService(
-                    modelContext: modelContext,
-                    eventStore: store,
-                    notificationManager: notificationManager
-                )
-                healthKitService = hkService
-
-                // Start monitoring if authorized
-                if hkService.hasHealthKitAuthorization {
-                    hkService.startMonitoringAllConfigurations()
-                }
-            }
-
-            // Set up widget notification observer to sync widget-created events
-            store.setupWidgetNotificationObserver()
-
-            // Load initial data
-            await store.fetchData()
-
-            // Hide loading screen
-            withAnimation {
-                isLoading = false
-            }
+            #endif
+            await initializeNormally()
         }
         .onDisappear {
             // Clean up widget notification observer
@@ -147,6 +95,139 @@ struct MainTabView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Main Tab Content
+
+    @ViewBuilder
+    private var mainTabContent: some View {
+        TabView(selection: $selectedTab) {
+            BubblesView()
+                .tabItem {
+                    Label("Dashboard", systemImage: "square.grid.2x2.fill")
+                }
+                .tag(0)
+                .accessibilityIdentifier("dashboardTab")
+
+            EventListView()
+                .tabItem {
+                    Label("List", systemImage: "list.bullet")
+                }
+                .tag(1)
+                .accessibilityIdentifier("eventListTab")
+
+            CalendarView()
+                .tabItem {
+                    Label("Calendar", systemImage: "calendar")
+                }
+                .tag(2)
+                .accessibilityIdentifier("calendarTab")
+
+            AnalyticsView()
+                .tabItem {
+                    Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .tag(3)
+                .accessibilityIdentifier("analyticsTab")
+
+            EventTypeSettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(4)
+                .accessibilityIdentifier("settingsTab")
+        }
+        .accessibilityIdentifier("mainTabView")
+        .environment(eventStore)
+        .environment(insightsViewModel)
+        .environmentObject(calendarManager)
+        .environment(notificationManager)
+        .environment(geofenceManager)
+        .environment(healthKitService)
+    }
+
+    // MARK: - Initialization Methods
+
+    #if DEBUG
+    /// Initialize for screenshot mode - uses local SwiftData only, no network calls
+    private func initializeForScreenshotMode() async {
+        print("📸 Screenshot mode: Initializing with local-only EventStore")
+
+        // Create a local-only EventStore (no API client needed)
+        let store = EventStore()
+        store.setModelContext(modelContext)
+        store.setCalendarManager(calendarManager)
+
+        // Disable backend mode - use local SwiftData only
+        store.useBackend = false
+
+        eventStore = store
+
+        // Inject mock data if not already present
+        ScreenshotMockData.injectMockData(into: modelContext)
+
+        // Load data from SwiftData
+        await store.fetchData()
+
+        print("📸 Screenshot mode: Initialization complete with \(store.eventTypes.count) event types")
+    }
+    #endif
+
+    /// Normal initialization with API client and all services
+    private func initializeNormally() async {
+        // Initialize EventStore with APIClient from environment
+        guard let apiClient = apiClient else {
+            print("Error: APIClient not available in environment")
+            return
+        }
+
+        let store = EventStore(apiClient: apiClient)
+        eventStore = store
+
+        store.setModelContext(modelContext)
+        store.setCalendarManager(calendarManager)
+
+        // Configure InsightsViewModel with API client
+        insightsViewModel.configure(with: apiClient)
+
+        // Initialize GeofenceManager with dependencies
+        let geoManager = GeofenceManager(
+            modelContext: modelContext,
+            eventStore: store,
+            notificationManager: notificationManager
+        )
+        geofenceManager = geoManager
+
+        // Start monitoring active geofences if authorized
+        if geoManager.hasGeofencingAuthorization {
+            geoManager.startMonitoringAllGeofences()
+        }
+
+        // Initialize HealthKitService if available
+        if HKHealthStore.isHealthDataAvailable() {
+            let hkService = HealthKitService(
+                modelContext: modelContext,
+                eventStore: store,
+                notificationManager: notificationManager
+            )
+            healthKitService = hkService
+
+            // Start monitoring if authorized
+            if hkService.hasHealthKitAuthorization {
+                hkService.startMonitoringAllConfigurations()
+            }
+        }
+
+        // Set up widget notification observer to sync widget-created events
+        store.setupWidgetNotificationObserver()
+
+        // Load initial data
+        await store.fetchData()
+
+        // Hide loading screen
+        withAnimation {
+            isLoading = false
         }
     }
 

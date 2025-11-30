@@ -29,6 +29,7 @@ struct InsightsBannerView: View {
                 }
             }
             .padding(.horizontal)
+            .accessibilityIdentifier("insightsHeader")
 
             if viewModel.hasInsights {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -67,6 +68,7 @@ struct InsightsBannerView: View {
                     }
                     .padding(.horizontal)
                 }
+                .accessibilityIdentifier("insightsCarousel")
             } else if !viewModel.dataSufficient {
                 // Insufficient data message
                 HStack {
@@ -84,6 +86,7 @@ struct InsightsBannerView: View {
                 .padding(.horizontal)
             }
         }
+        .accessibilityIdentifier("insightsBannerView")
     }
 }
 

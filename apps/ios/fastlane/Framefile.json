@@ -1,0 +1,94 @@
+{
+  "device_frame_version": "latest",
+  "default": {
+    "keyword": {
+      "font": "./frameit/fonts/SFProDisplay-Bold.otf",
+      "color": "#1a1a1a",
+      "font_size": 128
+    },
+    "title": {
+      "font": "./frameit/fonts/SFProDisplay-Regular.otf",
+      "color": "#666666",
+      "font_size": 48
+    },
+    "background": "./frameit/backgrounds/gradient_light.png",
+    "padding": 50,
+    "show_complete_frame": true,
+    "stack_title": true,
+    "title_below_image": true
+  },
+  "data": [
+    {
+      "filter": "01_Dashboard",
+      "keyword": {
+        "text": "Track Everything"
+      },
+      "title": {
+        "text": "Beautiful dashboard with colorful event bubbles"
+      }
+    },
+    {
+      "filter": "02_EventList",
+      "keyword": {
+        "text": "Stay Organized"
+      },
+      "title": {
+        "text": "Filter and search your event history"
+      }
+    },
+    {
+      "filter": "03_CalendarMonth",
+      "keyword": {
+        "text": "See Your Month"
+      },
+      "title": {
+        "text": "Monthly view with event indicators"
+      }
+    },
+    {
+      "filter": "04_CalendarYear",
+      "keyword": {
+        "text": "Year at a Glance"
+      },
+      "title": {
+        "text": "View your entire year of activity"
+      }
+    },
+    {
+      "filter": "05_Analytics",
+      "keyword": {
+        "text": "Discover Patterns"
+      },
+      "title": {
+        "text": "Charts and statistics for each event type"
+      }
+    },
+    {
+      "filter": "06_Insights",
+      "keyword": {
+        "text": "AI Insights"
+      },
+      "title": {
+        "text": "Streaks, correlations, and patterns"
+      }
+    },
+    {
+      "filter": "07_Settings",
+      "keyword": {
+        "text": "Customize Everything"
+      },
+      "title": {
+        "text": "Colors, icons, and integration settings"
+      }
+    },
+    {
+      "filter": "08_WidgetPreview",
+      "keyword": {
+        "text": "Home Screen Widgets"
+      },
+      "title": {
+        "text": "Quick log from your home screen"
+      }
+    }
+  ]
+}
