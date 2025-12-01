@@ -71,8 +71,9 @@ func (s *eventService) GetEvent(ctx context.Context, userID, eventID string) (*m
 
 func (s *eventService) GetUserEvents(ctx context.Context, userID string, limit, offset int) ([]models.Event, error) {
 	// Set default pagination limits
-	if limit <= 0 || limit > 100 {
-		limit = 50
+	// Allow up to 1000 events per request to support iOS full-sync
+	if limit <= 0 || limit > 1000 {
+		limit = 100
 	}
 	if offset < 0 {
 		offset = 0

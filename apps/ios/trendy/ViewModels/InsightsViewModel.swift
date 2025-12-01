@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import FoundationModels
 
 @Observable
 @MainActor
@@ -17,6 +18,36 @@ class InsightsViewModel {
     private(set) var isLoading = false
     private(set) var error: Error?
     private(set) var lastRefreshed: Date?
+
+    // MARK: - AI Insight Properties
+
+    private(set) var dailyBriefing: DailyBriefing?
+    private(set) var weeklyReflection: WeeklyReflection?
+    private(set) var aiExplanations: [String: PatternExplanation] = [:]
+    private(set) var isGeneratingAI = false
+    private(set) var aiError: AIInsightError?
+
+    /// Check if Foundation Model is available
+    var isAIAvailable: Bool {
+        SystemLanguageModel.default.availability == .available
+    }
+
+    /// Reason why AI is unavailable
+    var aiUnavailabilityReason: String? {
+        switch SystemLanguageModel.default.availability {
+        case .available:
+            return nil
+        case .unavailable:
+            return "Apple Intelligence is not available on this device"
+        @unknown default:
+            return "Unknown availability status"
+        }
+    }
+
+    // MARK: - AI Dependencies
+
+    private var foundationModelService: FoundationModelService?
+    private var insightDataProvider: InsightDataProvider?
 
     // Computed convenience properties
     var correlations: [APIInsight] { insights?.correlations ?? [] }
@@ -210,5 +241,161 @@ class InsightsViewModel {
             return "Keep tracking for \(minDays) more days to see insights"
         }
         return "Keep tracking for 2 more weeks to see insights"
+    }
+
+    // MARK: - AI Configuration
+
+    /// Configure AI services
+    func configureAI(
+        foundationModelService: FoundationModelService,
+        eventStore: EventStore
+    ) {
+        self.foundationModelService = foundationModelService
+        self.insightDataProvider = InsightDataProvider(eventStore: eventStore, insightsViewModel: self)
+    }
+
+    // MARK: - AI Insight Generation
+
+    /// Generate a daily briefing
+    func generateDailyBriefing() async {
+        guard isAIAvailable else {
+            aiError = .modelUnavailable(reason: aiUnavailabilityReason ?? "Unknown")
+            return
+        }
+
+        guard let service = foundationModelService,
+              let provider = insightDataProvider else {
+            Log.api.warning("AI services not configured")
+            return
+        }
+
+        // Check cache first
+        if let cached = await AIInsightCache.shared.getDailyBriefing() {
+            dailyBriefing = cached
+            return
+        }
+
+        isGeneratingAI = true
+        aiError = nil
+
+        do {
+            let context = await provider.buildContext()
+            let briefing = try await service.generateDailyBriefing(context: context)
+            dailyBriefing = briefing
+            await AIInsightCache.shared.setDailyBriefing(briefing)
+            Log.api.info("Daily briefing generated successfully")
+        } catch let error as AIInsightError {
+            aiError = error
+            Log.api.error("Daily briefing generation failed", error: error)
+        } catch {
+            aiError = .generationFailed(underlying: error)
+            Log.api.error("Daily briefing generation failed", error: error)
+        }
+
+        isGeneratingAI = false
+    }
+
+    /// Generate a weekly reflection
+    func generateWeeklyReflection() async {
+        guard isAIAvailable else {
+            aiError = .modelUnavailable(reason: aiUnavailabilityReason ?? "Unknown")
+            return
+        }
+
+        guard let service = foundationModelService,
+              let provider = insightDataProvider else {
+            Log.api.warning("AI services not configured")
+            return
+        }
+
+        // Check cache first
+        if let cached = await AIInsightCache.shared.getWeeklyReflection() {
+            weeklyReflection = cached
+            return
+        }
+
+        isGeneratingAI = true
+        aiError = nil
+
+        do {
+            let context = await provider.buildContext()
+            let reflection = try await service.generateWeeklyReflection(context: context)
+            weeklyReflection = reflection
+            await AIInsightCache.shared.setWeeklyReflection(reflection)
+            Log.api.info("Weekly reflection generated successfully")
+        } catch let error as AIInsightError {
+            aiError = error
+            Log.api.error("Weekly reflection generation failed", error: error)
+        } catch {
+            aiError = .generationFailed(underlying: error)
+            Log.api.error("Weekly reflection generation failed", error: error)
+        }
+
+        isGeneratingAI = false
+    }
+
+    /// Generate AI explanation for an insight
+    func explainInsight(_ insight: APIInsight) async -> PatternExplanation? {
+        guard isAIAvailable else {
+            aiError = .modelUnavailable(reason: aiUnavailabilityReason ?? "Unknown")
+            return nil
+        }
+
+        guard let service = foundationModelService,
+              let provider = insightDataProvider else {
+            Log.api.warning("AI services not configured")
+            return nil
+        }
+
+        // Check cache first
+        if let cached = await AIInsightCache.shared.getPatternExplanation(for: insight.id) {
+            aiExplanations[insight.id] = cached
+            return cached
+        }
+
+        isGeneratingAI = true
+        aiError = nil
+
+        do {
+            let context = await provider.buildContext()
+            let explanation = try await service.explainInsight(insight, context: context)
+            aiExplanations[insight.id] = explanation
+            await AIInsightCache.shared.setPatternExplanation(explanation, for: insight.id)
+            Log.api.info("Pattern explanation generated", context: .with { ctx in
+                ctx.add("insight_id", insight.id)
+            })
+            isGeneratingAI = false
+            return explanation
+        } catch let error as AIInsightError {
+            aiError = error
+            Log.api.error("Pattern explanation failed", error: error)
+        } catch {
+            aiError = .generationFailed(underlying: error)
+            Log.api.error("Pattern explanation failed", error: error)
+        }
+
+        isGeneratingAI = false
+        return nil
+    }
+
+    /// Get cached explanation for an insight
+    func getCachedExplanation(for insight: APIInsight) async -> PatternExplanation? {
+        if let cached = aiExplanations[insight.id] {
+            return cached
+        }
+        return await AIInsightCache.shared.getPatternExplanation(for: insight.id)
+    }
+
+    /// Check if an insight has a cached explanation
+    func hasExplanation(for insight: APIInsight) -> Bool {
+        aiExplanations[insight.id] != nil
+    }
+
+    /// Clear AI cache
+    func clearAICache() async {
+        await AIInsightCache.shared.clearAll()
+        dailyBriefing = nil
+        weeklyReflection = nil
+        aiExplanations.removeAll()
     }
 }

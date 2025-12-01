@@ -8,6 +8,8 @@
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).sync</string>
+		<string>com.trendy.ai.dailyBriefing</string>
+		<string>com.trendy.ai.weeklyReflection</string>
 	</array>
 	<key>CFBundleDisplayName</key>
 	<string>$(PRODUCT_DISPLAY_NAME)</string>

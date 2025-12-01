@@ -218,6 +218,41 @@ class APIClient {
         return try await request("GET", endpoint: "/events?limit=\(limit)&offset=\(offset)")
     }
 
+    /// Fetch all events using pagination
+    /// This method iterates through all pages to ensure no events are missed
+    /// - Parameter batchSize: Number of events to fetch per request (default: 500)
+    /// - Returns: Array of all events for the user
+    func getAllEvents(batchSize: Int = 500) async throws -> [APIEvent] {
+        var allEvents: [APIEvent] = []
+        var offset = 0
+
+        while true {
+            let batch: [APIEvent] = try await request(
+                "GET",
+                endpoint: "/events?limit=\(batchSize)&offset=\(offset)"
+            )
+            allEvents.append(contentsOf: batch)
+
+            Log.api.debug("Fetched events batch", context: .with { ctx in
+                ctx.add("batch_size", batch.count)
+                ctx.add("offset", offset)
+                ctx.add("total_so_far", allEvents.count)
+            })
+
+            // If we got fewer than requested, we've reached the end
+            if batch.count < batchSize {
+                break
+            }
+            offset += batchSize
+        }
+
+        Log.api.info("Fetched all events", context: .with { ctx in
+            ctx.add("total_events", allEvents.count)
+        })
+
+        return allEvents
+    }
+
     /// Get single event
     func getEvent(id: String) async throws -> APIEvent {
         return try await request("GET", endpoint: "/events/\(id)")

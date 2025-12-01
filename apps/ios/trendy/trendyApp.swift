@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import WidgetKit
+import FoundationModels
 
 /// App Group identifier for sharing data with widgets
 let appGroupIdentifier = "group.com.memento.trendy"
@@ -25,10 +26,14 @@ struct trendyApp: App {
     /// API client for backend communication
     private let apiClient: APIClient
 
+    /// Foundation Model service for AI insights
+    private let foundationModelService: FoundationModelService
+
     // MARK: - View Models
 
     @State private var authViewModel: AuthViewModel
     @State private var themeManager: ThemeManager
+    @State private var insightsViewModel: InsightsViewModel
 
     // MARK: - SwiftData
 
@@ -151,11 +156,22 @@ struct trendyApp: App {
             supabaseService: supabaseService
         )
 
+        // Initialize Foundation Model service for AI insights
+        self.foundationModelService = FoundationModelService()
+
         // Initialize AuthViewModel with Supabase service
         _authViewModel = State(initialValue: AuthViewModel(supabaseService: supabaseService))
 
         // Initialize ThemeManager
         _themeManager = State(initialValue: ThemeManager())
+
+        // Initialize InsightsViewModel
+        let insights = InsightsViewModel()
+        insights.configure(with: apiClient)
+        _insightsViewModel = State(initialValue: insights)
+
+        // Register background tasks for AI insight generation
+        AIBackgroundTaskScheduler.shared.registerTasks()
     }
 
     // MARK: - Body
@@ -170,11 +186,27 @@ struct trendyApp: App {
             ContentView()
                 .environment(authViewModel)
                 .environment(themeManager)
+                .environment(insightsViewModel)
                 .environment(\.supabaseService, supabaseService)
                 .environment(\.apiClient, apiClient)
-                .preferredColorScheme(isUITestingDarkMode ? .dark : nil)
+                .environment(\.foundationModelService, foundationModelService)
+                .preferredColorScheme(isUITestingDarkMode ? .dark : themeManager.currentTheme.colorScheme)
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+// MARK: - Foundation Model Service Environment Key
+
+/// Environment key for FoundationModelService
+struct FoundationModelServiceKey: EnvironmentKey {
+    static let defaultValue: FoundationModelService? = nil
+}
+
+extension EnvironmentValues {
+    var foundationModelService: FoundationModelService? {
+        get { self[FoundationModelServiceKey.self] }
+        set { self[FoundationModelServiceKey.self] = newValue }
     }
 }
 

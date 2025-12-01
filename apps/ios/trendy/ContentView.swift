@@ -10,7 +10,6 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(AuthViewModel.self) private var authViewModel
-    @Environment(ThemeManager.self) private var themeManager
     @Environment(\.modelContext) private var modelContext
     @AppStorage("migration_completed") private var migrationCompleted = false
 
@@ -22,8 +21,6 @@ struct ContentView: View {
     #endif
 
     var body: some View {
-        @Bindable var themeManager = themeManager
-
         Group {
             #if DEBUG
             if isScreenshotMode {
@@ -39,7 +36,6 @@ struct ContentView: View {
             authenticatedContent
             #endif
         }
-        .preferredColorScheme(themeManager.currentTheme.colorScheme)
     }
 
     @ViewBuilder

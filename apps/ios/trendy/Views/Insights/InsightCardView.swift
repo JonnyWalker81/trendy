@@ -6,10 +6,22 @@
 //
 
 import SwiftUI
+import FoundationModels
 
 struct InsightCardView: View {
     let insight: APIInsight
     let viewModel: InsightsViewModel
+    var onExplainTapped: ((APIInsight) -> Void)?
+
+    @State private var showingAIExplanation = false
+    @State private var aiExplanation: PatternExplanation?
+    @State private var isGeneratingExplanation = false
+    @State private var explanationError: String?
+
+    /// Check if AI explanation is available
+    private var canExplainWithAI: Bool {
+        SystemLanguageModel.default.availability == .available
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -34,7 +46,12 @@ struct InsightCardView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
 
-            // Metadata row
+            // AI Explanation section (if available)
+            if showingAIExplanation {
+                aiExplanationSection
+            }
+
+            // Metadata row with AI button
             HStack {
                 if let pValue = insight.pValue {
                     Text("p=\(String(format: "%.3f", pValue))")
@@ -48,6 +65,26 @@ struct InsightCardView: View {
 
                 Spacer()
 
+                // AI Explain button
+                if canExplainWithAI && insight.insightType == .correlation {
+                    Button {
+                        if let onExplainTapped {
+                            onExplainTapped(insight)
+                        } else {
+                            showingAIExplanation.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: showingAIExplanation ? "sparkles" : "sparkles")
+                            Text(showingAIExplanation ? "Hide" : "Explain")
+                        }
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 directionIndicator
             }
         }
@@ -55,6 +92,81 @@ struct InsightCardView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+
+    // MARK: - AI Explanation Section
+
+    @ViewBuilder
+    private var aiExplanationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+
+            if isGeneratingExplanation {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Generating explanation...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+            } else if let error = explanationError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let explanation = aiExplanation {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Explanation
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(.purple)
+                            .font(.caption)
+                        Text(explanation.explanation)
+                            .font(.subheadline)
+                    }
+
+                    // Possible reason
+                    if !explanation.possibleReason.isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "lightbulb")
+                                .foregroundStyle(.yellow)
+                                .font(.caption)
+                            Text(explanation.possibleReason)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // Recommendation
+                    if !explanation.recommendation.isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "arrow.right.circle")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text(explanation.recommendation)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+                    }
+
+                    // AI confidence
+                    HStack {
+                        Spacer()
+                        Text("AI Confidence: \(explanation.confidence.capitalized)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .animation(.easeInOut(duration: 0.2), value: showingAIExplanation)
     }
 
     // MARK: - Subviews

@@ -235,7 +235,7 @@ class EventStore {
 
         // Fetch from API
         let apiEventTypes = try await apiClient.getEventTypes()
-        let apiEvents = try await apiClient.getEvents()
+        let apiEvents = try await apiClient.getAllEvents() // Uses pagination to fetch ALL events
 
         // CRITICAL: Clear in-memory arrays FIRST to prevent SwiftUI from
         // accessing invalidated objects while we process
