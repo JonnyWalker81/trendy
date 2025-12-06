@@ -21,7 +21,11 @@ struct GeofenceListView: View {
 
     // GeofenceManager should be passed in as environment
     @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
-    
+    @Environment(EventStore.self) private var eventStore: EventStore?
+
+    @State private var isRefreshing = false
+    @State private var hasPerformedInitialSync = false
+
     private var selectedGeofence: Geofence? {
         guard let id = selectedGeofenceID else { return nil }
         return geofences.first { $0.id == id }
@@ -50,6 +54,17 @@ struct GeofenceListView: View {
             }
             .navigationTitle("Geofences")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if isRefreshing {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Syncing...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingAddGeofence = true }) {
                         Label("Add Geofence", systemImage: "plus.circle.fill")
@@ -79,6 +94,12 @@ struct GeofenceListView: View {
                 } else {
                     Text("Are you sure you want to delete this geofence?")
                 }
+            }
+            .task {
+                // Perform initial sync when view first appears
+                guard !hasPerformedInitialSync else { return }
+                hasPerformedInitialSync = true
+                await refreshGeofences()
             }
         }
     }
@@ -185,29 +206,55 @@ struct GeofenceListView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "location.circle")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 20) {
+                Spacer()
+                    .frame(height: 100)
 
-            Text("No Geofences")
-                .font(.title2)
-                .fontWeight(.semibold)
+                Image(systemName: "location.circle")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary)
 
-            Text("Create a geofence to automatically track events when you enter or leave a location")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                Text("No Geofences")
+                    .font(.title2)
+                    .fontWeight(.semibold)
 
-            Button(action: { showingAddGeofence = true }) {
-                Label("Add Geofence", systemImage: "plus.circle.fill")
-                    .font(.headline)
+                Text("Create a geofence to automatically track events when you enter or leave a location")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+
+                Button(action: { showingAddGeofence = true }) {
+                    Label("Add Geofence", systemImage: "plus.circle.fill")
+                        .font(.headline)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+
+                if isRefreshing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Syncing with server...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+                } else {
+                    Text("Pull down to refresh from server")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 8)
+                }
+
+                Spacer()
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.top)
+            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .refreshable {
+            await refreshGeofences()
+        }
     }
 
     // MARK: - Geofence List
@@ -222,11 +269,30 @@ struct GeofenceListView: View {
                     VStack(alignment: .leading) {
                         Text("Monitoring Status")
                             .font(.subheadline.bold())
-                        Text(geofenceManager?.hasGeofencingAuthorization == true 
+                        Text(geofenceManager?.hasGeofencingAuthorization == true
                              ? "Active - \(geofenceManager?.monitoredRegions.count ?? 0) regions monitored"
                              : "Requires \"Always\" location permission")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Debug view link - always visible for troubleshooting
+                NavigationLink {
+                    GeofenceDebugView()
+                } label: {
+                    HStack {
+                        Label("Debug Status", systemImage: "ladybug")
+                        Spacer()
+                        if let manager = geofenceManager {
+                            let regionCount = manager.monitoredRegions.count
+                            let activeCount = geofences.filter { $0.isActive }.count
+                            if regionCount != activeCount {
+                                Text("Mismatch")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
                     }
                 }
             }
@@ -263,19 +329,25 @@ struct GeofenceListView: View {
             #if DEBUG
             // Debug section for testing
             Section("Debug Actions") {
+                NavigationLink {
+                    GeofenceDebugView()
+                } label: {
+                    Label("Debug Status View", systemImage: "ladybug")
+                }
+
                 Button {
                     printDebugInfo()
                 } label: {
-                    Label("Print Debug Info", systemImage: "ladybug")
+                    Label("Print Debug to Console", systemImage: "terminal")
                 }
-                
+
                 Button {
                     repairBrokenGeofences()
                 } label: {
                     Label("Repair Broken Geofences", systemImage: "wrench.and.screwdriver")
                 }
                 .tint(.orange)
-                
+
                 ForEach(geofences.filter { $0.isActive }) { geofence in
                     HStack {
                         Text(geofence.name)
@@ -286,7 +358,7 @@ struct GeofenceListView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        
+
                         Button("Simulate Exit") {
                             simulateGeofenceExit(geofence)
                         }
@@ -297,6 +369,33 @@ struct GeofenceListView: View {
             }
             #endif
         }
+        .refreshable {
+            await refreshGeofences()
+        }
+    }
+
+    // MARK: - Refresh Geofences
+
+    private func refreshGeofences() async {
+        guard let store = eventStore else {
+            print("📍 Cannot refresh: EventStore not available")
+            return
+        }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        print("📍 Syncing geofences with backend...")
+
+        // Fetch from backend and reconcile with local SwiftData
+        let definitions = await store.reconcileGeofencesWithBackend(forceRefresh: true)
+
+        // Reconcile CLLocationManager regions if geofenceManager is available
+        if let geoManager = geofenceManager {
+            geoManager.reconcileRegions(desired: definitions)
+        }
+
+        print("📍 Sync complete: \(definitions.count) geofence definitions")
     }
     
     #if DEBUG
@@ -400,6 +499,11 @@ struct GeofenceListView: View {
     private func toggleGeofenceActive(_ geofence: Geofence) {
         geofence.isActive.toggle()
 
+        // Sync to backend
+        Task {
+            await eventStore?.updateGeofence(geofence)
+        }
+
         do {
             try modelContext.save()
 
@@ -418,13 +522,9 @@ struct GeofenceListView: View {
         // Stop monitoring
         geofenceManager?.stopMonitoring(geofence: geofence)
 
-        // Delete from SwiftData
-        modelContext.delete(geofence)
-
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to delete geofence: \(error)")
+        // Delete from backend and local storage via EventStore
+        Task {
+            await eventStore?.deleteGeofence(geofence)
         }
     }
 }
@@ -518,6 +618,7 @@ struct EditGeofenceView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(NotificationManager.self) private var notificationManager: NotificationManager?
     @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
+    @Environment(EventStore.self) private var eventStore: EventStore?
     @Query private var eventTypes: [EventType]
     
     @State private var name: String = ""
@@ -723,17 +824,22 @@ struct EditGeofenceView: View {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let radiusChanged = geofence.radius != radius
         let activeChanged = geofence.isActive != isActive
-        
+
         geofence.name = trimmedName
         geofence.radius = radius
         geofence.isActive = isActive
         geofence.eventTypeEntryID = selectedEventTypeID
         geofence.notifyOnEntry = notifyOnEntry
         geofence.notifyOnExit = notifyOnExit
-        
+
+        // Sync to backend
+        Task {
+            await eventStore?.updateGeofence(geofence)
+        }
+
         do {
             try modelContext.save()
-            
+
             // If radius or active status changed, refresh monitoring
             if radiusChanged || activeChanged {
                 if isActive {
@@ -743,7 +849,7 @@ struct EditGeofenceView: View {
                     geofenceManager?.stopMonitoring(geofence: geofence)
                 }
             }
-            
+
             print("✅ Updated geofence '\(trimmedName)'")
             dismiss()
         } catch {

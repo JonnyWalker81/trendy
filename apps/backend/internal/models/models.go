@@ -190,45 +190,48 @@ type UpdatePropertyDefinitionRequest struct {
 
 // Geofence represents a geographic region for automatic event tracking
 type Geofence struct {
-	ID               string     `json:"id"`
-	UserID           string     `json:"user_id"`
-	Name             string     `json:"name"`
-	Latitude         float64    `json:"latitude"`
-	Longitude        float64    `json:"longitude"`
-	Radius           float64    `json:"radius"`
-	EventTypeEntryID *string    `json:"event_type_entry_id,omitempty"`
-	EventTypeExitID  *string    `json:"event_type_exit_id,omitempty"`
-	IsActive         bool       `json:"is_active"`
-	NotifyOnEntry    bool       `json:"notify_on_entry"`
-	NotifyOnExit     bool       `json:"notify_on_exit"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	EventTypeEntry   *EventType `json:"event_type_entry,omitempty"`
-	EventTypeExit    *EventType `json:"event_type_exit,omitempty"`
+	ID                  string     `json:"id"`
+	UserID              string     `json:"user_id"`
+	Name                string     `json:"name"`
+	Latitude            float64    `json:"latitude"`
+	Longitude           float64    `json:"longitude"`
+	Radius              float64    `json:"radius"`
+	EventTypeEntryID    *string    `json:"event_type_entry_id,omitempty"`
+	EventTypeExitID     *string    `json:"event_type_exit_id,omitempty"`
+	IsActive            *bool      `json:"is_active"`
+	NotifyOnEntry       *bool      `json:"notify_on_entry"`
+	NotifyOnExit        *bool      `json:"notify_on_exit"`
+	IOSRegionIdentifier *string    `json:"ios_region_identifier,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	EventTypeEntry      *EventType `json:"event_type_entry,omitempty"`
+	EventTypeExit       *EventType `json:"event_type_exit,omitempty"`
 }
 
 // CreateGeofenceRequest represents the request to create a geofence
 type CreateGeofenceRequest struct {
-	Name             string  `json:"name" binding:"required"`
-	Latitude         float64 `json:"latitude" binding:"required,min=-90,max=90"`
-	Longitude        float64 `json:"longitude" binding:"required,min=-180,max=180"`
-	Radius           float64 `json:"radius" binding:"required,min=50,max=10000"`
-	EventTypeEntryID *string `json:"event_type_entry_id"`
-	EventTypeExitID  *string `json:"event_type_exit_id"`
-	IsActive         bool    `json:"is_active"`
-	NotifyOnEntry    bool    `json:"notify_on_entry"`
-	NotifyOnExit     bool    `json:"notify_on_exit"`
+	Name                string  `json:"name" binding:"required"`
+	Latitude            float64 `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude           float64 `json:"longitude" binding:"required,min=-180,max=180"`
+	Radius              float64 `json:"radius" binding:"required,min=50,max=10000"`
+	EventTypeEntryID    *string `json:"event_type_entry_id"`
+	EventTypeExitID     *string `json:"event_type_exit_id"`
+	IsActive            bool    `json:"is_active"`
+	NotifyOnEntry       bool    `json:"notify_on_entry"`
+	NotifyOnExit        bool    `json:"notify_on_exit"`
+	IOSRegionIdentifier *string `json:"ios_region_identifier"`
 }
 
 // UpdateGeofenceRequest represents the request to update a geofence
 type UpdateGeofenceRequest struct {
-	Name             *string  `json:"name"`
-	Latitude         *float64 `json:"latitude" binding:"omitempty,min=-90,max=90"`
-	Longitude        *float64 `json:"longitude" binding:"omitempty,min=-180,max=180"`
-	Radius           *float64 `json:"radius" binding:"omitempty,min=50,max=10000"`
-	EventTypeEntryID *string  `json:"event_type_entry_id"`
-	EventTypeExitID  *string  `json:"event_type_exit_id"`
-	IsActive         *bool    `json:"is_active"`
-	NotifyOnEntry    *bool    `json:"notify_on_entry"`
-	NotifyOnExit     *bool    `json:"notify_on_exit"`
+	Name                *string  `json:"name"`
+	Latitude            *float64 `json:"latitude" binding:"omitempty,min=-90,max=90"`
+	Longitude           *float64 `json:"longitude" binding:"omitempty,min=-180,max=180"`
+	Radius              *float64 `json:"radius" binding:"omitempty,min=50,max=10000"`
+	EventTypeEntryID    *string  `json:"event_type_entry_id"`
+	EventTypeExitID     *string  `json:"event_type_exit_id"`
+	IsActive            *bool    `json:"is_active"`
+	NotifyOnEntry       *bool    `json:"notify_on_entry"`
+	NotifyOnExit        *bool    `json:"notify_on_exit"`
+	IOSRegionIdentifier *string  `json:"ios_region_identifier"`
 }

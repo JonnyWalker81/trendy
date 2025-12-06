@@ -20,14 +20,28 @@ func NewGeofenceRepository(client *supabase.Client) GeofenceRepository {
 
 func (r *geofenceRepository) Create(ctx context.Context, geofence *models.Geofence) (*models.Geofence, error) {
 	data := map[string]interface{}{
-		"user_id":         geofence.UserID,
-		"name":            geofence.Name,
-		"latitude":        geofence.Latitude,
-		"longitude":       geofence.Longitude,
-		"radius":          geofence.Radius,
-		"is_active":       geofence.IsActive,
-		"notify_on_entry": geofence.NotifyOnEntry,
-		"notify_on_exit":  geofence.NotifyOnExit,
+		"user_id":   geofence.UserID,
+		"name":      geofence.Name,
+		"latitude":  geofence.Latitude,
+		"longitude": geofence.Longitude,
+		"radius":    geofence.Radius,
+	}
+
+	// Boolean fields - dereference pointers (default to false if nil)
+	if geofence.IsActive != nil {
+		data["is_active"] = *geofence.IsActive
+	} else {
+		data["is_active"] = false
+	}
+	if geofence.NotifyOnEntry != nil {
+		data["notify_on_entry"] = *geofence.NotifyOnEntry
+	} else {
+		data["notify_on_entry"] = false
+	}
+	if geofence.NotifyOnExit != nil {
+		data["notify_on_exit"] = *geofence.NotifyOnExit
+	} else {
+		data["notify_on_exit"] = false
 	}
 
 	if geofence.EventTypeEntryID != nil {
@@ -35,6 +49,9 @@ func (r *geofenceRepository) Create(ctx context.Context, geofence *models.Geofen
 	}
 	if geofence.EventTypeExitID != nil {
 		data["event_type_exit_id"] = *geofence.EventTypeExitID
+	}
+	if geofence.IOSRegionIdentifier != nil {
+		data["ios_region_identifier"] = *geofence.IOSRegionIdentifier
 	}
 
 	// Extract user token from context for RLS
@@ -139,10 +156,16 @@ func (r *geofenceRepository) Update(ctx context.Context, id string, geofence *mo
 		data["radius"] = geofence.Radius
 	}
 
-	// Always update these boolean fields (they have explicit values)
-	data["is_active"] = geofence.IsActive
-	data["notify_on_entry"] = geofence.NotifyOnEntry
-	data["notify_on_exit"] = geofence.NotifyOnExit
+	// Only update boolean fields if explicitly provided (not nil)
+	if geofence.IsActive != nil {
+		data["is_active"] = *geofence.IsActive
+	}
+	if geofence.NotifyOnEntry != nil {
+		data["notify_on_entry"] = *geofence.NotifyOnEntry
+	}
+	if geofence.NotifyOnExit != nil {
+		data["notify_on_exit"] = *geofence.NotifyOnExit
+	}
 
 	// Handle optional foreign keys
 	if geofence.EventTypeEntryID != nil {
@@ -150,6 +173,9 @@ func (r *geofenceRepository) Update(ctx context.Context, id string, geofence *mo
 	}
 	if geofence.EventTypeExitID != nil {
 		data["event_type_exit_id"] = *geofence.EventTypeExitID
+	}
+	if geofence.IOSRegionIdentifier != nil {
+		data["ios_region_identifier"] = *geofence.IOSRegionIdentifier
 	}
 
 	body, err := r.client.Update("geofences", id, data)

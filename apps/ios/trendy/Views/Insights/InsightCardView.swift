@@ -92,6 +92,22 @@ struct InsightCardView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .task(id: showingAIExplanation) {
+            guard showingAIExplanation, aiExplanation == nil else { return }
+
+            isGeneratingExplanation = true
+            explanationError = nil
+
+            if let explanation = await viewModel.explainInsight(insight) {
+                aiExplanation = explanation
+            } else if let error = viewModel.aiError {
+                explanationError = error.localizedDescription
+            } else {
+                explanationError = "Unable to generate explanation"
+            }
+
+            isGeneratingExplanation = false
+        }
     }
 
     // MARK: - AI Explanation Section

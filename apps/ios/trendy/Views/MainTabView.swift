@@ -12,6 +12,7 @@ import HealthKit
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.apiClient) private var apiClient
+    @Environment(\.foundationModelService) private var foundationModelService
     @Environment(\.scenePhase) private var scenePhase
     @State private var eventStore: EventStore?
     @State private var insightsViewModel = InsightsViewModel()
@@ -191,6 +192,14 @@ struct MainTabView: View {
         // Configure InsightsViewModel with API client
         insightsViewModel.configure(with: apiClient)
 
+        // Configure AI services for insights
+        if let foundationModelService = foundationModelService {
+            insightsViewModel.configureAI(
+                foundationModelService: foundationModelService,
+                eventStore: store
+            )
+        }
+
         // Initialize GeofenceManager with dependencies
         let geoManager = GeofenceManager(
             modelContext: modelContext,
@@ -198,11 +207,6 @@ struct MainTabView: View {
             notificationManager: notificationManager
         )
         geofenceManager = geoManager
-
-        // Start monitoring active geofences if authorized
-        if geoManager.hasGeofencingAuthorization {
-            geoManager.startMonitoringAllGeofences()
-        }
 
         // Initialize HealthKitService if available
         if HKHealthStore.isHealthDataAvailable() {
@@ -224,6 +228,12 @@ struct MainTabView: View {
 
         // Load initial data
         await store.fetchData()
+
+        // Reconcile geofences with backend after data is loaded
+        if geoManager.hasGeofencingAuthorization {
+            let definitions = await store.reconcileGeofencesWithBackend()
+            geoManager.reconcileRegions(desired: definitions)
+        }
 
         // Hide loading screen
         withAnimation {

@@ -19,6 +19,15 @@ class EventStore {
     var isLoading = false
     var errorMessage: String?
 
+    /// Indicates whether data has been loaded at least once (for distinguishing initial load vs refresh)
+    private(set) var hasLoadedOnce = false
+
+    /// Timestamp of last successful fetch (for debouncing)
+    private var lastFetchTime: Date?
+
+    /// Minimum interval between fetches (5 seconds) to prevent redundant API calls on tab switches
+    private let fetchDebounceInterval: TimeInterval = 5.0
+
     private var modelContext: ModelContext?
     private var calendarManager: CalendarManager?
     private var syncQueue: SyncQueue?
@@ -105,11 +114,30 @@ class EventStore {
             return result
         }
         set {
-            let stringDict = Dictionary(uniqueKeysWithValues: newValue.map { ($0.key.uuidString, $0.value) })
+            // Clean up duplicate backend IDs - keep only the first local ID for each backend ID
+            var seenBackendIds = Set<String>()
+            var cleanedValue: [UUID: String] = [:]
+            for (localId, backendId) in newValue {
+                if !seenBackendIds.contains(backendId) {
+                    seenBackendIds.insert(backendId)
+                    cleanedValue[localId] = backendId
+                } else {
+                    #if DEBUG
+                    print("⚠️ Removing duplicate backend ID mapping: local \(localId) -> backend \(backendId)")
+                    #endif
+                }
+            }
+            let stringDict = Dictionary(uniqueKeysWithValues: cleanedValue.map { ($0.key.uuidString, $0.value) })
             if let data = try? JSONEncoder().encode(stringDict) {
                 UserDefaults.standard.set(data, forKey: "geofenceBackendIds")
             }
         }
+    }
+
+    /// Reverse mapping: backend ID → local UUID for geofences
+    private var backendIdToLocalGeofenceId: [String: UUID] {
+        // Use uniquingKeysWith to handle duplicate backend IDs (keep the first one)
+        Dictionary(geofenceBackendIds.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Initialize EventStore with APIClient
@@ -199,8 +227,16 @@ class EventStore {
         self.calendarManager = manager
     }
     
-    func fetchData() async {
+    /// Fetch data from backend or local cache
+    /// - Parameter force: If true, bypasses debouncing and forces a fresh fetch (use for pull-to-refresh)
+    func fetchData(force: Bool = false) async {
         guard modelContext != nil else { return }
+
+        // Debounce: skip if recently fetched (unless forced)
+        if !force, let lastFetch = lastFetchTime,
+           Date().timeIntervalSince(lastFetch) < fetchDebounceInterval {
+            return
+        }
 
         isLoading = true
         errorMessage = nil
@@ -222,6 +258,7 @@ class EventStore {
             try? await fetchFromLocal()
         }
 
+        lastFetchTime = Date()
         isLoading = false
     }
 
@@ -237,10 +274,9 @@ class EventStore {
         let apiEventTypes = try await apiClient.getEventTypes()
         let apiEvents = try await apiClient.getAllEvents() // Uses pagination to fetch ALL events
 
-        // CRITICAL: Clear in-memory arrays FIRST to prevent SwiftUI from
-        // accessing invalidated objects while we process
-        events = []
-        eventTypes = []
+        // NOTE: We no longer clear arrays here to prevent UI flashing during refresh.
+        // Existing data remains visible while we process, and arrays are updated
+        // atomically by fetchFromLocal() at the end of this method.
 
         // Fetch existing local data
         let localTypeDescriptor = FetchDescriptor<EventType>()
@@ -418,7 +454,9 @@ class EventStore {
         }
 
         do {
+            Log.geofence.info("Fetching geofences from backend...")
             let apiGeofences = try await apiClient.getGeofences()
+            Log.geofence.info("Fetched \(apiGeofences.count) geofences from backend")
 
             // Fetch existing local geofences
             let localGeofenceDescriptor = FetchDescriptor<Geofence>()
@@ -526,8 +564,9 @@ class EventStore {
             #endif
         } catch {
             // Geofence sync is non-critical, log but continue
+            Log.geofence.error("Geofence sync failed: \(error.localizedDescription)")
             #if DEBUG
-            print("⚠️ Geofence sync failed: \(error.localizedDescription)")
+            print("⚠️ Geofence sync failed: \(error)")
             #endif
         }
 
@@ -553,6 +592,9 @@ class EventStore {
 
         events = try modelContext.fetch(eventDescriptor)
         eventTypes = try modelContext.fetch(typeDescriptor)
+
+        // Mark that we've successfully loaded data at least once
+        hasLoadedOnce = true
     }
     
     func recordEvent(type: EventType, timestamp: Date = Date(), isAllDay: Bool = false, endDate: Date? = nil, notes: String? = nil, properties: [String: PropertyValue] = [:]) async {
@@ -1161,7 +1203,10 @@ class EventStore {
     /// - Returns: True if creation was successful
     @discardableResult
     func createGeofence(_ geofence: Geofence) async -> Bool {
-        guard let modelContext else { return false }
+        guard let modelContext else {
+            Log.geofence.error("createGeofence failed: modelContext is nil")
+            return false
+        }
 
         // Insert locally first
         modelContext.insert(geofence)
@@ -1170,6 +1215,10 @@ class EventStore {
             // Get backend EventType IDs for the geofence's event types
             let backendEntryTypeId: String? = geofence.eventTypeEntryID.flatMap { eventTypeBackendIds[$0] }
             let backendExitTypeId: String? = geofence.eventTypeExitID.flatMap { eventTypeBackendIds[$0] }
+
+            Log.geofence.info("createGeofence: name=\(geofence.name), useBackend=\(useBackend), isOnline=\(isOnline)")
+            Log.geofence.info("createGeofence: localEntryTypeId=\(geofence.eventTypeEntryID?.uuidString ?? "nil"), backendEntryTypeId=\(backendEntryTypeId ?? "nil")")
+            Log.geofence.info("createGeofence: isActive=\(geofence.isActive), notifyOnEntry=\(geofence.notifyOnEntry), notifyOnExit=\(geofence.notifyOnExit)")
 
             let request = CreateGeofenceRequest(
                 name: geofence.name,
@@ -1180,17 +1229,32 @@ class EventStore {
                 eventTypeExitId: backendExitTypeId,
                 isActive: geofence.isActive,
                 notifyOnEntry: geofence.notifyOnEntry,
-                notifyOnExit: geofence.notifyOnExit
+                notifyOnExit: geofence.notifyOnExit,
+                iosRegionIdentifier: nil // Will be set after we get backend ID
             )
 
             do {
                 if isOnline {
+                    Log.geofence.info("createGeofence: calling API...")
                     let apiGeofence = try await apiClient!.createGeofence(request)
                     geofenceBackendIds[geofence.id] = apiGeofence.id
+                    Log.geofence.info("createGeofence: success, backendId=\(apiGeofence.id)")
+
+                    // Update backend with ios_region_identifier (use LOCAL UUID as identifier
+                    // so CLLocationManager regions can be matched with local geofences)
+                    let updateRequest = UpdateGeofenceRequest(
+                        name: nil, latitude: nil, longitude: nil, radius: nil,
+                        eventTypeEntryId: nil, eventTypeExitId: nil,
+                        isActive: nil, notifyOnEntry: nil, notifyOnExit: nil,
+                        iosRegionIdentifier: geofence.id.uuidString
+                    )
+                    _ = try? await apiClient!.updateGeofence(id: apiGeofence.id, updateRequest)
+
                     #if DEBUG
                     print("✅ Created geofence on backend: \(geofence.name)")
                     #endif
                 } else {
+                    Log.geofence.info("createGeofence: offline, queuing for sync")
                     // Queue for sync when online
                     try? syncQueue?.enqueue(type: .createGeofence, entityId: geofence.id, payload: request)
                     #if DEBUG
@@ -1198,11 +1262,14 @@ class EventStore {
                     #endif
                 }
             } catch {
+                Log.geofence.error("createGeofence failed: \(error.localizedDescription)")
                 #if DEBUG
                 print("❌ Failed to create geofence on backend: \(error.localizedDescription)")
                 #endif
                 // Continue with local creation even if backend fails
             }
+        } else {
+            Log.geofence.info("createGeofence: useBackend=false, local only")
         }
 
         do {
@@ -1234,7 +1301,8 @@ class EventStore {
                     eventTypeExitId: backendExitTypeId,
                     isActive: geofence.isActive,
                     notifyOnEntry: geofence.notifyOnEntry,
-                    notifyOnExit: geofence.notifyOnExit
+                    notifyOnExit: geofence.notifyOnExit,
+                    iosRegionIdentifier: nil
                 )
 
                 do {
@@ -1332,13 +1400,25 @@ class EventStore {
             eventTypeExitId: backendExitTypeId,
             isActive: geofence.isActive,
             notifyOnEntry: geofence.notifyOnEntry,
-            notifyOnExit: geofence.notifyOnExit
+            notifyOnExit: geofence.notifyOnExit,
+            iosRegionIdentifier: nil // Will be set after we get backend ID
         )
 
         do {
             if isOnline {
                 let apiGeofence = try await apiClient!.createGeofence(request)
                 geofenceBackendIds[geofence.id] = apiGeofence.id
+
+                // Update backend with ios_region_identifier (use LOCAL UUID as identifier
+                // so CLLocationManager regions can be matched with local geofences)
+                let updateRequest = UpdateGeofenceRequest(
+                    name: nil, latitude: nil, longitude: nil, radius: nil,
+                    eventTypeEntryId: nil, eventTypeExitId: nil,
+                    isActive: nil, notifyOnEntry: nil, notifyOnExit: nil,
+                    iosRegionIdentifier: geofence.id.uuidString
+                )
+                _ = try? await apiClient!.updateGeofence(id: apiGeofence.id, updateRequest)
+
                 #if DEBUG
                 print("✅ Synced geofence to backend: \(geofence.name)")
                 #endif
@@ -1352,6 +1432,249 @@ class EventStore {
             #if DEBUG
             print("❌ Failed to sync geofence to backend: \(error.localizedDescription)")
             #endif
+        }
+    }
+
+    // MARK: - Geofence Reconciliation
+
+    /// Look up local Geofence UUID from a region identifier (backend ID or local UUID string)
+    /// - Parameter identifier: The CLRegion identifier
+    /// - Returns: Local UUID if found
+    func lookupLocalGeofenceId(from identifier: String) -> UUID? {
+        // First check if it's a backend ID
+        if let localId = backendIdToLocalGeofenceId[identifier] {
+            return localId
+        }
+        // Otherwise try parsing as UUID (offline-created geofence)
+        return UUID(uuidString: identifier)
+    }
+
+    /// Reconciles local geofences with backend state.
+    /// Returns definitions for CLLocationManager to monitor.
+    /// - Parameter forceRefresh: Bypasses cache and forces backend fetch
+    /// - Returns: Array of GeofenceDefinitions for active geofences (limited to 20, newest first)
+    func reconcileGeofencesWithBackend(forceRefresh: Bool = false) async -> [GeofenceDefinition] {
+        guard let modelContext else { return [] }
+
+        // If offline or not using backend, return local definitions
+        guard useBackend && isOnline else {
+            #if DEBUG
+            print("📍 Offline or not using backend - using local geofence cache")
+            #endif
+            return getLocalGeofenceDefinitions()
+        }
+
+        guard let apiClient = apiClient else {
+            #if DEBUG
+            print("⚠️ No API client available for geofence reconciliation")
+            #endif
+            return getLocalGeofenceDefinitions()
+        }
+
+        do {
+            // 1. Fetch all geofences from backend
+            let apiGeofences = try await apiClient.getGeofences(activeOnly: false)
+
+            // 2. Sync to local SwiftData
+            try await syncGeofencesToLocal(apiGeofences, modelContext: modelContext)
+
+            // 3. Build definitions for monitoring (only active, sorted newest first, limited to 20)
+            let activeGeofences = apiGeofences
+                .filter { $0.isActive }
+                .sorted { $0.createdAt > $1.createdAt }  // Newest first
+            let limitedGeofences = Array(activeGeofences.prefix(20))
+
+            if activeGeofences.count > 20 {
+                #if DEBUG
+                print("⚠️ More than 20 active geofences - only monitoring first 20 (newest)")
+                #endif
+            }
+
+            // 4. Build definitions with local ID lookup
+            let definitions = limitedGeofences.map { apiGeofence in
+                let localId = backendIdToLocalGeofenceId[apiGeofence.id]
+                return GeofenceDefinition(from: apiGeofence, localId: localId)
+            }
+
+            #if DEBUG
+            print("📍 Reconciled geofences with backend: \(apiGeofences.count) total, \(activeGeofences.count) active, \(definitions.count) monitoring")
+            #endif
+
+            return definitions
+
+        } catch {
+            #if DEBUG
+            print("❌ Failed to reconcile with backend, using cache: \(error.localizedDescription)")
+            #endif
+            return getLocalGeofenceDefinitions()
+        }
+    }
+
+    /// Get current geofence definitions from local cache (for offline use)
+    /// - Returns: Array of GeofenceDefinitions from SwiftData
+    func getLocalGeofenceDefinitions() -> [GeofenceDefinition] {
+        guard let modelContext else { return [] }
+
+        let descriptor = FetchDescriptor<Geofence>(
+            predicate: #Predicate { $0.isActive },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]  // Newest first
+        )
+
+        guard let geofences = try? modelContext.fetch(descriptor) else {
+            return []
+        }
+
+        let limited = Array(geofences.prefix(20))
+
+        return limited.map { geofence -> GeofenceDefinition in
+            // Use backend ID if available, otherwise use local UUID string
+            if let backendId = geofenceBackendIds[geofence.id] {
+                return GeofenceDefinition(from: geofence, backendId: backendId)
+            } else {
+                return GeofenceDefinition(fromLocal: geofence)
+            }
+        }
+    }
+
+    /// Helper: Sync API geofences to local SwiftData
+    /// Also updates backend with iosRegionIdentifier when creating/linking local geofences
+    private func syncGeofencesToLocal(_ apiGeofences: [APIGeofence], modelContext: ModelContext) async throws {
+        // Track geofences that need their iosRegionIdentifier updated on backend
+        var geofencesToUpdateOnBackend: [(backendId: String, localId: UUID)] = []
+
+        // Build reverse mapping: backend EventType ID -> local EventType UUID
+        var backendTypeIdToLocalId: [String: UUID] = [:]
+        for (localId, backendId) in eventTypeBackendIds {
+            backendTypeIdToLocalId[backendId] = localId
+        }
+
+        // Fetch existing local geofences
+        let localGeofenceDescriptor = FetchDescriptor<Geofence>()
+        let existingGeofences = try modelContext.fetch(localGeofenceDescriptor)
+
+        // Build reverse mapping: backend ID -> local Geofence
+        var backendIdToLocalGeofence: [String: Geofence] = [:]
+        let currentGeofenceMappings = geofenceBackendIds
+        for (localId, backendId) in currentGeofenceMappings {
+            if let localGeofence = existingGeofences.first(where: { $0.id == localId }) {
+                backendIdToLocalGeofence[backendId] = localGeofence
+            }
+        }
+
+        var processedBackendGeofenceIds = Set<String>()
+        var updatedGeofenceMappings = currentGeofenceMappings
+
+        for apiGeofence in apiGeofences {
+            processedBackendGeofenceIds.insert(apiGeofence.id)
+
+            // Resolve backend EventType IDs to local UUIDs
+            let localEntryTypeId: UUID? = apiGeofence.eventTypeEntryId.flatMap { backendTypeIdToLocalId[$0] }
+            let localExitTypeId: UUID? = apiGeofence.eventTypeExitId.flatMap { backendTypeIdToLocalId[$0] }
+
+            if let existingGeofence = backendIdToLocalGeofence[apiGeofence.id] {
+                // UPDATE existing geofence
+                existingGeofence.name = apiGeofence.name
+                existingGeofence.latitude = apiGeofence.latitude
+                existingGeofence.longitude = apiGeofence.longitude
+                existingGeofence.radius = apiGeofence.radius
+                existingGeofence.eventTypeEntryID = localEntryTypeId
+                existingGeofence.eventTypeExitID = localExitTypeId
+                existingGeofence.isActive = apiGeofence.isActive
+                existingGeofence.notifyOnEntry = apiGeofence.notifyOnEntry
+                existingGeofence.notifyOnExit = apiGeofence.notifyOnExit
+                #if DEBUG
+                print("📝 Updated geofence from backend: \(apiGeofence.name)")
+                #endif
+            } else {
+                // Check for existing unsynced geofence by name/location
+                let targetName = apiGeofence.name
+                let targetLat = apiGeofence.latitude
+                let targetLon = apiGeofence.longitude
+                let mappedIds = Set(currentGeofenceMappings.keys)
+
+                let existingByMatch = existingGeofences.first { geofence in
+                    geofence.name == targetName &&
+                    abs(geofence.latitude - targetLat) < 0.0001 &&
+                    abs(geofence.longitude - targetLon) < 0.0001 &&
+                    !mappedIds.contains(geofence.id)
+                }
+
+                if let existingByMatch = existingByMatch {
+                    // Link existing local geofence to backend
+                    existingByMatch.radius = apiGeofence.radius
+                    existingByMatch.eventTypeEntryID = localEntryTypeId
+                    existingByMatch.eventTypeExitID = localExitTypeId
+                    existingByMatch.isActive = apiGeofence.isActive
+                    existingByMatch.notifyOnEntry = apiGeofence.notifyOnEntry
+                    existingByMatch.notifyOnExit = apiGeofence.notifyOnExit
+                    updatedGeofenceMappings[existingByMatch.id] = apiGeofence.id
+                    backendIdToLocalGeofence[apiGeofence.id] = existingByMatch
+
+                    // Queue update if iosRegionIdentifier needs to be set
+                    if apiGeofence.iosRegionIdentifier != existingByMatch.id.uuidString {
+                        geofencesToUpdateOnBackend.append((backendId: apiGeofence.id, localId: existingByMatch.id))
+                    }
+
+                    #if DEBUG
+                    print("🔗 Linked local geofence to backend: \(apiGeofence.name)")
+                    #endif
+                } else {
+                    // CREATE new geofence
+                    let newGeofence = Geofence(
+                        name: apiGeofence.name,
+                        latitude: apiGeofence.latitude,
+                        longitude: apiGeofence.longitude,
+                        radius: apiGeofence.radius,
+                        eventTypeEntryID: localEntryTypeId,
+                        eventTypeExitID: localExitTypeId,
+                        isActive: apiGeofence.isActive,
+                        notifyOnEntry: apiGeofence.notifyOnEntry,
+                        notifyOnExit: apiGeofence.notifyOnExit
+                    )
+                    modelContext.insert(newGeofence)
+                    updatedGeofenceMappings[newGeofence.id] = apiGeofence.id
+
+                    // Queue update to set iosRegionIdentifier to local UUID
+                    geofencesToUpdateOnBackend.append((backendId: apiGeofence.id, localId: newGeofence.id))
+
+                    #if DEBUG
+                    print("➕ Created geofence from backend: \(apiGeofence.name)")
+                    #endif
+                }
+            }
+        }
+
+        // Save updated geofence mappings
+        geofenceBackendIds = updatedGeofenceMappings
+
+        // Delete geofences that no longer exist on backend
+        for geofence in existingGeofences {
+            if let backendId = geofenceBackendIds[geofence.id],
+               !processedBackendGeofenceIds.contains(backendId) {
+                modelContext.delete(geofence)
+                geofenceBackendIds.removeValue(forKey: geofence.id)
+                #if DEBUG
+                print("🗑️ Deleted geofence no longer on backend: \(geofence.name)")
+                #endif
+            }
+        }
+
+        try modelContext.save()
+
+        // Update backend with iosRegionIdentifier for new/linked geofences
+        if !geofencesToUpdateOnBackend.isEmpty, let apiClient = apiClient, isOnline {
+            for (backendId, localId) in geofencesToUpdateOnBackend {
+                let updateRequest = UpdateGeofenceRequest(
+                    name: nil, latitude: nil, longitude: nil, radius: nil,
+                    eventTypeEntryId: nil, eventTypeExitId: nil,
+                    isActive: nil, notifyOnEntry: nil, notifyOnExit: nil,
+                    iosRegionIdentifier: localId.uuidString
+                )
+                _ = try? await apiClient.updateGeofence(id: backendId, updateRequest)
+                #if DEBUG
+                print("📍 Updated backend iosRegionIdentifier for geofence: \(backendId) -> \(localId.uuidString)")
+                #endif
+            }
         }
     }
 }

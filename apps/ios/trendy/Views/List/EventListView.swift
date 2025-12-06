@@ -53,7 +53,16 @@ struct EventListView: View {
                 }
                 
                 if filteredEvents.isEmpty {
-                    emptyStateView
+                    if eventStore.isLoading && !eventStore.hasLoadedOnce {
+                        // Initial loading - show loading indicator
+                        ProgressView("Loading...")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 50)
+                            .listRowBackground(Color.clear)
+                    } else {
+                        // Truly empty after loading completed
+                        emptyStateView
+                    }
                 } else {
                     ForEach(sortedDates, id: \.self) { date in
                         Section {
@@ -73,7 +82,7 @@ struct EventListView: View {
             .navigationTitle("Events")
             .searchable(text: $searchText, prompt: "Search events")
             .refreshable {
-                await eventStore.fetchData()
+                await eventStore.fetchData(force: true)
             }
             .task {
                 await eventStore.fetchData()

@@ -34,16 +34,17 @@ func (s *geofenceService) CreateGeofence(ctx context.Context, userID string, req
 	}
 
 	geofence := &models.Geofence{
-		UserID:           userID,
-		Name:             req.Name,
-		Latitude:         req.Latitude,
-		Longitude:        req.Longitude,
-		Radius:           req.Radius,
-		EventTypeEntryID: req.EventTypeEntryID,
-		EventTypeExitID:  req.EventTypeExitID,
-		IsActive:         req.IsActive,
-		NotifyOnEntry:    req.NotifyOnEntry,
-		NotifyOnExit:     req.NotifyOnExit,
+		UserID:              userID,
+		Name:                req.Name,
+		Latitude:            req.Latitude,
+		Longitude:           req.Longitude,
+		Radius:              req.Radius,
+		EventTypeEntryID:    req.EventTypeEntryID,
+		EventTypeExitID:     req.EventTypeExitID,
+		IsActive:            &req.IsActive,
+		NotifyOnEntry:       &req.NotifyOnEntry,
+		NotifyOnExit:        &req.NotifyOnExit,
+		IOSRegionIdentifier: req.IOSRegionIdentifier,
 	}
 
 	return s.geofenceRepo.Create(ctx, geofence)
@@ -120,13 +121,16 @@ func (s *geofenceService) UpdateGeofence(ctx context.Context, userID, geofenceID
 		update.EventTypeExitID = req.EventTypeExitID
 	}
 	if req.IsActive != nil {
-		update.IsActive = *req.IsActive
+		update.IsActive = req.IsActive
 	}
 	if req.NotifyOnEntry != nil {
-		update.NotifyOnEntry = *req.NotifyOnEntry
+		update.NotifyOnEntry = req.NotifyOnEntry
 	}
 	if req.NotifyOnExit != nil {
-		update.NotifyOnExit = *req.NotifyOnExit
+		update.NotifyOnExit = req.NotifyOnExit
+	}
+	if req.IOSRegionIdentifier != nil {
+		update.IOSRegionIdentifier = req.IOSRegionIdentifier
 	}
 
 	return s.geofenceRepo.Update(ctx, geofenceID, update)

@@ -38,7 +38,15 @@ struct BubblesView: View {
                     }
 
                     if eventStore.eventTypes.isEmpty {
-                        emptyStateView
+                        if eventStore.isLoading && !eventStore.hasLoadedOnce {
+                            // Initial loading - show loading indicator
+                            ProgressView("Loading...")
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.vertical, 50)
+                        } else {
+                            // Truly empty after loading completed
+                            emptyStateView
+                        }
                     } else {
                         LazyVGrid(columns: columns, spacing: 20) {
                             ForEach(eventStore.eventTypes) { eventType in

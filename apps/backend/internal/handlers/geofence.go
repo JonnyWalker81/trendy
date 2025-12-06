@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -35,6 +37,15 @@ func (h *GeofenceHandler) CreateGeofence(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Log the received request for debugging
+	log := logger.Ctx(c.Request.Context())
+	log.Info("CreateGeofence request received",
+		logger.String("name", req.Name),
+		logger.String("is_active", fmt.Sprintf("%v", req.IsActive)),
+		logger.String("notify_on_entry", fmt.Sprintf("%v", req.NotifyOnEntry)),
+		logger.String("notify_on_exit", fmt.Sprintf("%v", req.NotifyOnExit)),
+	)
 
 	// Create context with user token for RLS
 	ctx := context.WithValue(c.Request.Context(), "user_token", userToken)

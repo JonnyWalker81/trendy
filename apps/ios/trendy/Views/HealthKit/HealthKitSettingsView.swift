@@ -211,6 +211,18 @@ struct HealthKitSettingsView: View {
                 }
             }
 
+            Section {
+                NavigationLink {
+                    HealthKitDebugView()
+                } label: {
+                    Label("HealthKit Debug", systemImage: "stethoscope")
+                }
+            } header: {
+                Text("Troubleshooting")
+            } footer: {
+                Text("View raw health data, observer status, and diagnose issues.")
+            }
+
             #if DEBUG || STAGING
             Section("Debug Actions") {
                 Button {

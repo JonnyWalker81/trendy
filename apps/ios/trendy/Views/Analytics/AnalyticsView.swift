@@ -29,7 +29,15 @@ struct AnalyticsView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if eventStore.eventTypes.isEmpty {
-                        emptyStateView
+                        if eventStore.isLoading && !eventStore.hasLoadedOnce {
+                            // Initial loading - show loading indicator
+                            ProgressView("Loading...")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 50)
+                        } else {
+                            // Truly empty after loading completed
+                            emptyStateView
+                        }
                     } else {
                         eventTypePicker
                         

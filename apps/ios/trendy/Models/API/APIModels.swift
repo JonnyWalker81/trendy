@@ -408,6 +408,7 @@ struct APIGeofence: Codable, Identifiable {
     let isActive: Bool
     let notifyOnEntry: Bool
     let notifyOnExit: Bool
+    let iosRegionIdentifier: String?
     let createdAt: Date
     let updatedAt: Date
     let eventTypeEntry: APIEventType?
@@ -425,10 +426,33 @@ struct APIGeofence: Codable, Identifiable {
         case isActive = "is_active"
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
+        case iosRegionIdentifier = "ios_region_identifier"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case eventTypeEntry = "event_type_entry"
         case eventTypeExit = "event_type_exit"
+    }
+
+    // Custom decoder to handle optional booleans from backend (which uses *bool)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        userId = try container.decode(String.self, forKey: .userId)
+        name = try container.decode(String.self, forKey: .name)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        radius = try container.decode(Double.self, forKey: .radius)
+        eventTypeEntryId = try container.decodeIfPresent(String.self, forKey: .eventTypeEntryId)
+        eventTypeExitId = try container.decodeIfPresent(String.self, forKey: .eventTypeExitId)
+        // Handle optional booleans with defaults (backend uses *bool which can be null)
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        notifyOnEntry = try container.decodeIfPresent(Bool.self, forKey: .notifyOnEntry) ?? false
+        notifyOnExit = try container.decodeIfPresent(Bool.self, forKey: .notifyOnExit) ?? false
+        iosRegionIdentifier = try container.decodeIfPresent(String.self, forKey: .iosRegionIdentifier)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        eventTypeEntry = try container.decodeIfPresent(APIEventType.self, forKey: .eventTypeEntry)
+        eventTypeExit = try container.decodeIfPresent(APIEventType.self, forKey: .eventTypeExit)
     }
 }
 
@@ -443,6 +467,7 @@ struct CreateGeofenceRequest: Codable {
     let isActive: Bool
     let notifyOnEntry: Bool
     let notifyOnExit: Bool
+    let iosRegionIdentifier: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -454,6 +479,7 @@ struct CreateGeofenceRequest: Codable {
         case isActive = "is_active"
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
+        case iosRegionIdentifier = "ios_region_identifier"
     }
 }
 
@@ -468,6 +494,7 @@ struct UpdateGeofenceRequest: Codable {
     let isActive: Bool?
     let notifyOnEntry: Bool?
     let notifyOnExit: Bool?
+    let iosRegionIdentifier: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -479,6 +506,7 @@ struct UpdateGeofenceRequest: Codable {
         case isActive = "is_active"
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
+        case iosRegionIdentifier = "ios_region_identifier"
     }
 }
 
@@ -486,6 +514,69 @@ struct UpdateGeofenceRequest: Codable {
 struct QueuedGeofenceUpdate: Codable {
     let backendId: String
     let request: UpdateGeofenceRequest
+}
+
+// MARK: - Geofence Reconciliation
+
+/// Represents a geofence definition for reconciliation with CLLocationManager.
+/// Used to bridge between backend APIGeofence and iOS CLCircularRegion.
+struct GeofenceDefinition: Hashable, Sendable {
+    /// Region identifier for CLLocationManager - uses backend ID when synced
+    let identifier: String
+    /// Backend geofence ID
+    let backendId: String
+    /// Local SwiftData UUID (for event creation lookup)
+    let localId: UUID?
+    let name: String
+    let latitude: Double
+    let longitude: Double
+    let radius: Double
+    let isActive: Bool
+    let notifyOnEntry: Bool
+    let notifyOnExit: Bool
+
+    /// Creates from APIGeofence (backend data)
+    init(from apiGeofence: APIGeofence, localId: UUID? = nil) {
+        // Use ios_region_identifier if set, otherwise fall back to backend ID
+        self.identifier = apiGeofence.iosRegionIdentifier ?? apiGeofence.id
+        self.backendId = apiGeofence.id
+        self.localId = localId
+        self.name = apiGeofence.name
+        self.latitude = apiGeofence.latitude
+        self.longitude = apiGeofence.longitude
+        self.radius = apiGeofence.radius
+        self.isActive = apiGeofence.isActive
+        self.notifyOnEntry = apiGeofence.notifyOnEntry
+        self.notifyOnExit = apiGeofence.notifyOnExit
+    }
+
+    /// Creates from local Geofence with backend ID
+    init(from geofence: Geofence, backendId: String) {
+        self.identifier = backendId
+        self.backendId = backendId
+        self.localId = geofence.id
+        self.name = geofence.name
+        self.latitude = geofence.latitude
+        self.longitude = geofence.longitude
+        self.radius = geofence.radius
+        self.isActive = geofence.isActive
+        self.notifyOnEntry = geofence.notifyOnEntry
+        self.notifyOnExit = geofence.notifyOnExit
+    }
+
+    /// Creates from local Geofence using local ID as identifier (offline mode)
+    init(fromLocal geofence: Geofence) {
+        self.identifier = geofence.id.uuidString
+        self.backendId = geofence.id.uuidString // No backend ID yet
+        self.localId = geofence.id
+        self.name = geofence.name
+        self.latitude = geofence.latitude
+        self.longitude = geofence.longitude
+        self.radius = geofence.radius
+        self.isActive = geofence.isActive
+        self.notifyOnEntry = geofence.notifyOnEntry
+        self.notifyOnExit = geofence.notifyOnExit
+    }
 }
 
 // MARK: - Insights Models

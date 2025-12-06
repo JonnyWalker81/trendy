@@ -586,34 +586,20 @@ class HealthKitService: NSObject {
 
     /// Aggregate daily sleep and create a single event per night
     /// Sleep sessions are attributed to the day they end (wake-up day)
+    /// Improved to handle third-party apps (EightSleep, Whoop) that may sync data with delays
     @MainActor
     private func aggregateDailySleep() async {
         let calendar = Calendar.current
         let now = Date()
 
-        // Determine the "sleep day" - if it's before noon, look at yesterday's sleep
-        // (since sleep typically spans midnight)
-        let hour = calendar.component(.hour, from: now)
-        let sleepDate: Date
-        if hour < 12 {
-            // Before noon - aggregate yesterday's full night sleep
-            sleepDate = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) ?? now
-        } else {
-            // After noon - aggregate today's sleep (e.g., naps)
-            sleepDate = calendar.startOfDay(for: now)
-        }
+        // Query a broader window to catch late-synced data from third-party apps
+        // Look back 48 hours to ensure we don't miss any sleep sessions
+        let queryStart = calendar.date(byAdding: .hour, value: -48, to: now) ?? now
+        let queryEnd = now
 
-        // Skip if already processed this sleep date
-        if let lastDate = lastSleepDate, calendar.isDate(lastDate, inSameDayAs: sleepDate) {
-            return
-        }
+        print("🌙 Sleep aggregation: querying \(queryStart) to \(queryEnd)")
 
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
-
-        // Query window: from 6 PM the previous day to 12 PM (noon) the next day
-        // This captures typical sleep patterns (going to bed evening, waking up morning)
-        let queryStart = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: sleepDate) ?? sleepDate
-        let queryEnd = calendar.date(byAdding: .hour, value: 18, to: queryStart) ?? now // 18 hours later = noon next day
 
         let predicate = HKQuery.predicateForSamples(withStart: queryStart, end: queryEnd, options: .strictStartDate)
 
@@ -625,7 +611,7 @@ class HealthKitService: NSObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
             ) { _, results, error in
                 if let error = error {
-                    print("Sleep query error: \(error.localizedDescription)")
+                    print("🌙 Sleep query error: \(error.localizedDescription)")
                     continuation.resume(returning: [])
                     return
                 }
@@ -634,137 +620,147 @@ class HealthKitService: NSObject {
             healthStore.execute(query)
         }
 
-        // Filter and aggregate sleep samples
-        var totalSleepDuration: TimeInterval = 0
-        var coreSleepDuration: TimeInterval = 0
-        var deepSleepDuration: TimeInterval = 0
-        var remSleepDuration: TimeInterval = 0
-        var awakeDuration: TimeInterval = 0
-        var inBedDuration: TimeInterval = 0
-        var sleepStart: Date?
-        var sleepEnd: Date?
+        print("🌙 Found \(samples.count) sleep samples")
+
+        if samples.isEmpty {
+            print("🌙 No sleep samples found in HealthKit")
+            return
+        }
+
+        // Group samples by "sleep night" based on when sleep ended
+        // Sleep ending before noon = attribute to previous day
+        // Sleep ending after noon = attribute to that day (likely a nap)
+        var sleepNights: [Date: [HKCategorySample]] = [:]
 
         for sample in samples {
-            guard let sleepValue = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { continue }
+            let endHour = calendar.component(.hour, from: sample.endDate)
+            let sleepDate: Date
+            if endHour < 12 {
+                // Sleep ended before noon - attribute to previous day
+                sleepDate = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: sample.endDate)) ?? sample.endDate
+            } else {
+                // Sleep ended after noon - attribute to that day
+                sleepDate = calendar.startOfDay(for: sample.endDate)
+            }
+            sleepNights[sleepDate, default: []].append(sample)
+        }
 
-            let duration = sample.endDate.timeIntervalSince(sample.startDate)
+        print("🌙 Grouped into \(sleepNights.count) sleep night(s)")
 
-            switch sleepValue {
-            case .inBed:
-                inBedDuration += duration
-                // Track overall time in bed for start/end
-                if sleepStart == nil || sample.startDate < sleepStart! {
-                    sleepStart = sample.startDate
-                }
-                if sleepEnd == nil || sample.endDate > sleepEnd! {
-                    sleepEnd = sample.endDate
-                }
-            case .asleepUnspecified:
-                totalSleepDuration += duration
-            case .asleepCore:
-                coreSleepDuration += duration
-                totalSleepDuration += duration
-            case .asleepDeep:
-                deepSleepDuration += duration
-                totalSleepDuration += duration
-            case .asleepREM:
-                remSleepDuration += duration
-                totalSleepDuration += duration
-            case .awake:
-                awakeDuration += duration
-            @unknown default:
-                break
+        // Process each sleep night
+        for (sleepDate, nightSamples) in sleepNights.sorted(by: { $0.key < $1.key }) {
+            let sampleId = "sleep-\(Self.dateOnlyFormatter.string(from: sleepDate))"
+
+            // Skip if already processed
+            if processedSampleIds.contains(sampleId) {
+                print("🌙 Already processed: \(sampleId)")
+                continue
             }
 
-            // Track sleep start/end from actual sleep samples too
-            if sleepValue != .awake && sleepValue != .inBed {
-                if sleepStart == nil || sample.startDate < sleepStart! {
-                    sleepStart = sample.startDate
+            // Database-level deduplication
+            if await eventExistsWithHealthKitSampleId(sampleId) {
+                print("🌙 Already in database: \(sampleId)")
+                markSampleAsProcessed(sampleId)
+                continue
+            }
+
+            // Aggregate this night's samples
+            var totalSleepDuration: TimeInterval = 0
+            var coreSleepDuration: TimeInterval = 0
+            var deepSleepDuration: TimeInterval = 0
+            var remSleepDuration: TimeInterval = 0
+            var awakeDuration: TimeInterval = 0
+            var sleepStart: Date?
+            var sleepEnd: Date?
+
+            for sample in nightSamples {
+                guard let sleepValue = HKCategoryValueSleepAnalysis(rawValue: sample.value) else { continue }
+                let duration = sample.endDate.timeIntervalSince(sample.startDate)
+
+                switch sleepValue {
+                case .inBed:
+                    if sleepStart == nil || sample.startDate < sleepStart! { sleepStart = sample.startDate }
+                    if sleepEnd == nil || sample.endDate > sleepEnd! { sleepEnd = sample.endDate }
+                case .asleepUnspecified:
+                    totalSleepDuration += duration
+                case .asleepCore:
+                    coreSleepDuration += duration
+                    totalSleepDuration += duration
+                case .asleepDeep:
+                    deepSleepDuration += duration
+                    totalSleepDuration += duration
+                case .asleepREM:
+                    remSleepDuration += duration
+                    totalSleepDuration += duration
+                case .awake:
+                    awakeDuration += duration
+                @unknown default:
+                    break
                 }
-                if sleepEnd == nil || sample.endDate > sleepEnd! {
-                    sleepEnd = sample.endDate
+
+                // Track sleep start/end from actual sleep samples
+                if sleepValue != .awake && sleepValue != .inBed {
+                    if sleepStart == nil || sample.startDate < sleepStart! { sleepStart = sample.startDate }
+                    if sleepEnd == nil || sample.endDate > sleepEnd! { sleepEnd = sample.endDate }
                 }
             }
-        }
 
-        // Only create an event if we have actual sleep data (at least 30 minutes)
-        guard totalSleepDuration >= 1800 else {
-            print("Not enough sleep data to aggregate: \(Int(totalSleepDuration / 60)) minutes")
-            return
-        }
+            // Require at least 30 minutes of sleep
+            guard totalSleepDuration >= 1800 else {
+                print("🌙 Not enough sleep for \(sampleId): \(Int(totalSleepDuration / 60)) minutes")
+                continue
+            }
 
-        // Use consistent date-only format for sampleId (no timezone issues)
-        let sampleId = "sleep-\(Self.dateOnlyFormatter.string(from: sleepDate))"
+            let hours = Int(totalSleepDuration / 3600)
+            let minutes = Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60)
+            print("🌙 Creating event for \(sampleId): \(hours)h \(minutes)m")
 
-        // Skip if already in processedSampleIds
-        guard !processedSampleIds.contains(sampleId) else {
-            // Update lastSleepDate to prevent repeated checks
-            lastSleepDate = sleepDate
-            saveLastSleepDate()
-            return
-        }
+            guard let eventType = await ensureEventType(for: .sleep) else {
+                print("🌙 Failed to get/create EventType for sleep")
+                continue
+            }
 
-        // Database-level deduplication: check if event already exists in SwiftData
-        if await eventExistsWithHealthKitSampleId(sampleId) {
-            print("Sleep event already exists in database for \(sampleId), skipping")
+            // Build properties
+            var properties: [String: PropertyValue] = [
+                "Total Sleep": PropertyValue(type: .duration, value: totalSleepDuration),
+                "Date": PropertyValue(type: .date, value: sleepDate)
+            ]
+
+            if let start = sleepStart {
+                properties["Bedtime"] = PropertyValue(type: .date, value: start)
+            }
+            if let end = sleepEnd {
+                properties["Wake Time"] = PropertyValue(type: .date, value: end)
+            }
+            if coreSleepDuration > 0 {
+                properties["Core Sleep"] = PropertyValue(type: .duration, value: coreSleepDuration)
+            }
+            if deepSleepDuration > 0 {
+                properties["Deep Sleep"] = PropertyValue(type: .duration, value: deepSleepDuration)
+            }
+            if remSleepDuration > 0 {
+                properties["REM Sleep"] = PropertyValue(type: .duration, value: remSleepDuration)
+            }
+            if awakeDuration > 0 {
+                properties["Time Awake"] = PropertyValue(type: .duration, value: awakeDuration)
+            }
+
+            let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+
+            await createEvent(
+                eventType: eventType,
+                category: .sleep,
+                timestamp: sleepStart ?? sleepDate,
+                endDate: sleepEnd,
+                notes: "Auto-logged: \(durationText) of sleep",
+                properties: properties,
+                healthKitSampleId: sampleId
+            )
+
             markSampleAsProcessed(sampleId)
             lastSleepDate = sleepDate
             saveLastSleepDate()
-            return
         }
-
-        print("Processing aggregated sleep: \(Int(totalSleepDuration / 3600))h \(Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60))m")
-
-        guard let eventType = await ensureEventType(for: .sleep) else {
-            print("Failed to get/create EventType for sleep")
-            return
-        }
-
-        // Build properties
-        var properties: [String: PropertyValue] = [
-            "Total Sleep": PropertyValue(type: .duration, value: totalSleepDuration),
-            "Date": PropertyValue(type: .date, value: sleepDate)
-        ]
-
-        if let start = sleepStart {
-            properties["Bedtime"] = PropertyValue(type: .date, value: start)
-        }
-        if let end = sleepEnd {
-            properties["Wake Time"] = PropertyValue(type: .date, value: end)
-        }
-
-        // Add sleep stage breakdown if available
-        if coreSleepDuration > 0 {
-            properties["Core Sleep"] = PropertyValue(type: .duration, value: coreSleepDuration)
-        }
-        if deepSleepDuration > 0 {
-            properties["Deep Sleep"] = PropertyValue(type: .duration, value: deepSleepDuration)
-        }
-        if remSleepDuration > 0 {
-            properties["REM Sleep"] = PropertyValue(type: .duration, value: remSleepDuration)
-        }
-        if awakeDuration > 0 {
-            properties["Time Awake"] = PropertyValue(type: .duration, value: awakeDuration)
-        }
-
-        // Format duration for notes
-        let hours = Int(totalSleepDuration / 3600)
-        let minutes = Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60)
-        let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-
-        await createEvent(
-            eventType: eventType,
-            category: .sleep,
-            timestamp: sleepStart ?? sleepDate,
-            endDate: sleepEnd,
-            notes: "Auto-logged: \(durationText) of sleep",
-            properties: properties,
-            healthKitSampleId: sampleId
-        )
-
-        markSampleAsProcessed(sampleId)
-        lastSleepDate = sleepDate
-        saveLastSleepDate()
     }
 
     // MARK: - Steps Processing (Daily Aggregation)
@@ -1178,7 +1174,120 @@ class HealthKitService: NSObject {
         Self.sharedDefaults.set(lastSleepDate, forKey: lastSleepDateKey)
     }
 
-    // MARK: - Debug/Testing
+    // MARK: - Debug Properties (Available in all builds)
+
+    /// Debug: Last sleep date for diagnostics
+    var lastSleepDateDebug: Date? { lastSleepDate }
+
+    /// Debug: Last step date for diagnostics
+    var lastStepDateDebug: Date? { lastStepDate }
+
+    /// Debug: Active observer categories
+    var activeObserverCategories: [HealthDataCategory] {
+        Array(observerQueries.keys)
+    }
+
+    /// Debug: Count of processed sample IDs
+    var processedSampleIdsCount: Int {
+        processedSampleIds.count
+    }
+
+    /// Debug: Whether using App Group storage
+    var isUsingAppGroupStorage: Bool {
+        Self.isUsingAppGroup
+    }
+
+    /// Debug: Query raw sleep data from HealthKit for the last 48 hours
+    func debugQuerySleepData() async -> [(start: Date, end: Date, duration: TimeInterval, sleepType: String, source: String)] {
+        guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
+            return []
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let queryStart = calendar.date(byAdding: .hour, value: -48, to: now) ?? now
+
+        let predicate = HKQuery.predicateForSamples(withStart: queryStart, end: now, options: .strictStartDate)
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<[(start: Date, end: Date, duration: TimeInterval, sleepType: String, source: String)], Never>) in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, results, error in
+                if let error = error {
+                    print("Debug sleep query error: \(error.localizedDescription)")
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                guard let samples = results as? [HKCategorySample] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let data = samples.map { sample -> (start: Date, end: Date, duration: TimeInterval, sleepType: String, source: String) in
+                    let sleepValue = HKCategoryValueSleepAnalysis(rawValue: sample.value)
+                    let sleepTypeStr: String
+                    switch sleepValue {
+                    case .inBed: sleepTypeStr = "In Bed"
+                    case .asleepUnspecified: sleepTypeStr = "Asleep"
+                    case .asleepCore: sleepTypeStr = "Core"
+                    case .asleepDeep: sleepTypeStr = "Deep"
+                    case .asleepREM: sleepTypeStr = "REM"
+                    case .awake: sleepTypeStr = "Awake"
+                    default: sleepTypeStr = "Unknown (\(sample.value))"
+                    }
+
+                    return (
+                        start: sample.startDate,
+                        end: sample.endDate,
+                        duration: sample.endDate.timeIntervalSince(sample.startDate),
+                        sleepType: sleepTypeStr,
+                        source: sample.sourceRevision.source.name
+                    )
+                }
+
+                continuation.resume(returning: data)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Debug: Force sleep aggregation check (bypasses date cache)
+    func forceSleepCheck() async {
+        print("🔧 Debug: Forcing sleep aggregation check...")
+        // Temporarily clear the lastSleepDate to force a check
+        let savedDate = lastSleepDate
+        lastSleepDate = nil
+        await aggregateDailySleep()
+        // If no event was created, restore the date
+        if lastSleepDate == nil {
+            lastSleepDate = savedDate
+        }
+    }
+
+    /// Debug: Clear sleep processing cache
+    func clearSleepCache() {
+        print("🔧 Debug: Clearing sleep cache...")
+        lastSleepDate = nil
+        Self.sharedDefaults.removeObject(forKey: lastSleepDateKey)
+
+        // Remove sleep-related processed sample IDs
+        processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("sleep-") }
+        saveProcessedSampleIds()
+        print("🔧 Debug: Sleep cache cleared")
+    }
+
+    /// Debug: Refresh all observers
+    func refreshAllObservers() {
+        print("🔧 Debug: Refreshing all observers...")
+        stopMonitoringAll()
+        startMonitoringAllConfigurations()
+    }
+
+    // MARK: - Debug/Testing (Simulation)
 
     #if DEBUG || STAGING
     /// Simulate a workout detection for testing purposes

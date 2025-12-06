@@ -37,6 +37,12 @@ class GeofenceManager: NSObject {
     /// Active geofence events (entry recorded, waiting for exit)
     private var activeGeofenceEvents: [UUID: UUID] = [:] // geofenceId -> eventId
 
+    /// Timestamp of last geofence event (for debugging)
+    var lastEventTimestamp: Date?
+
+    /// Last geofence event description (for debugging)
+    var lastEventDescription: String = "None"
+
     // MARK: - Initialization
 
     /// Initialize GeofenceManager
@@ -165,7 +171,61 @@ class GeofenceManager: NSObject {
         stopMonitoringAllGeofences()
         startMonitoringAllGeofences()
     }
-    
+
+    /// Reconciles CLLocationManager monitored regions with desired state.
+    /// Removes stale regions and adds missing ones. This is the primary method
+    /// for keeping iOS regions in sync with backend geofences.
+    /// - Parameter desired: Array of GeofenceDefinitions representing desired state
+    func reconcileRegions(desired: [GeofenceDefinition]) {
+        guard hasGeofencingAuthorization else {
+            print("⚠️ Cannot reconcile regions: insufficient authorization")
+            return
+        }
+
+        // Limit to 20 (iOS maximum)
+        let desiredLimited = Array(desired.prefix(20))
+
+        // Build lookup by identifier
+        let desiredById = Dictionary(uniqueKeysWithValues: desiredLimited.map { ($0.identifier, $0) })
+        let desiredIds = Set(desiredById.keys)
+
+        // Get current system regions
+        let systemRegions = locationManager.monitoredRegions
+        let systemIds = Set(systemRegions.compactMap { $0.identifier })
+
+        var stoppedCount = 0
+        var startedCount = 0
+
+        // 1. Remove stale regions (in system but not in desired)
+        for region in systemRegions {
+            if !desiredIds.contains(region.identifier) {
+                locationManager.stopMonitoring(for: region)
+                stoppedCount += 1
+                print("📍 Stopped monitoring stale region: \(region.identifier)")
+            }
+        }
+
+        // 2. Add missing regions (in desired but not in system)
+        for def in desiredLimited where !systemIds.contains(def.identifier) {
+            let center = CLLocationCoordinate2D(latitude: def.latitude, longitude: def.longitude)
+            let region = CLCircularRegion(
+                center: center,
+                radius: def.radius,
+                identifier: def.identifier
+            )
+            region.notifyOnEntry = def.notifyOnEntry
+            region.notifyOnExit = def.notifyOnExit
+
+            locationManager.startMonitoring(for: region)
+            locationManager.requestState(for: region)
+            startedCount += 1
+
+            print("📍 Started monitoring region: \(def.identifier) (\(def.name))")
+        }
+
+        print("📍 Region reconciliation complete: \(desiredLimited.count) desired, \(stoppedCount) stopped, \(startedCount) started, \(locationManager.monitoredRegions.count) total monitored")
+    }
+
     // MARK: - Debug/Testing Methods
     
     #if DEBUG
@@ -206,6 +266,23 @@ class GeofenceManager: NSObject {
     /// - Returns: The active event ID if exists
     func activeEvent(for geofenceId: UUID) -> UUID? {
         return activeGeofenceEvents[geofenceId]
+    }
+
+    // MARK: - Debug Properties
+
+    /// For debugging: list of monitored region identifiers
+    var monitoredRegionIdentifiers: [String] {
+        monitoredRegions.map { $0.identifier }.sorted()
+    }
+
+    /// For debugging: count of active (in-progress) geofence events
+    var activeGeofenceEventCount: Int {
+        activeGeofenceEvents.count
+    }
+
+    /// For debugging: list of active geofence IDs
+    var activeGeofenceIds: [UUID] {
+        Array(activeGeofenceEvents.keys)
     }
 
     // MARK: - Event Creation/Update
@@ -287,6 +364,10 @@ class GeofenceManager: NSObject {
             print("   Event Type: \(eventType.name)")
             print("   Timestamp: \(event.timestamp)")
 
+            // Track for debugging
+            lastEventTimestamp = Date()
+            lastEventDescription = "Entry: \(geofence.name)"
+
             // Send notification if enabled
             if geofence.notifyOnEntry, let notificationManager = notificationManager {
                 Task {
@@ -365,6 +446,10 @@ class GeofenceManager: NSObject {
 
             print("✅ Updated geofence exit event: \(geofence.name)")
 
+            // Track for debugging
+            lastEventTimestamp = Date()
+            lastEventDescription = "Exit: \(geofence.name)"
+
             // Send notification if enabled
             if geofence.notifyOnExit, let notificationManager = notificationManager, let eventType = event.eventType {
                 Task {
@@ -408,29 +493,37 @@ extension GeofenceManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
-        guard let geofenceId = UUID(uuidString: region.identifier) else {
-            print("⚠️ Invalid region identifier: \(region.identifier)")
-            return
-        }
+        let identifier = region.identifier
 
-        print("📍🟢 ENTERED geofence: \(region.identifier)")
+        print("📍🟢 ENTERED geofence: \(identifier)")
         print("   ⏰ Time: \(Date())")
 
-        handleGeofenceEntry(geofenceId: geofenceId)
+        // Dispatch to main actor since EventStore is MainActor-isolated
+        Task { @MainActor in
+            guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
+                print("⚠️ Unknown region identifier on entry: \(identifier)")
+                return
+            }
+            handleGeofenceEntry(geofenceId: localId)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
-        guard let geofenceId = UUID(uuidString: region.identifier) else {
-            print("⚠️ Invalid region identifier: \(region.identifier)")
-            return
-        }
+        let identifier = region.identifier
 
-        print("📍🔴 EXITED geofence: \(region.identifier)")
+        print("📍🔴 EXITED geofence: \(identifier)")
         print("   ⏰ Time: \(Date())")
 
-        handleGeofenceExit(geofenceId: geofenceId)
+        // Dispatch to main actor since EventStore is MainActor-isolated
+        Task { @MainActor in
+            guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
+                print("⚠️ Unknown region identifier on exit: \(identifier)")
+                return
+            }
+            handleGeofenceExit(geofenceId: localId)
+        }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         let stateDescription: String
         switch state {
@@ -441,14 +534,21 @@ extension GeofenceManager: CLLocationManagerDelegate {
         case .unknown:
             stateDescription = "UNKNOWN"
         }
-        
+
         print("📍 Region state determined for \(region.identifier): \(stateDescription)")
-        
+
         // If we're already inside when we start monitoring, trigger entry
-        if state == .inside, let geofenceId = UUID(uuidString: region.identifier) {
-            if activeGeofenceEvents[geofenceId] == nil {
-                print("📍 Already inside geofence, triggering entry event...")
-                handleGeofenceEntry(geofenceId: geofenceId)
+        if state == .inside {
+            // Dispatch to main actor since EventStore is MainActor-isolated
+            Task { @MainActor in
+                guard let localId = eventStore.lookupLocalGeofenceId(from: region.identifier) else {
+                    return
+                }
+
+                if activeGeofenceEvents[localId] == nil {
+                    print("📍 Already inside geofence, triggering entry event...")
+                    handleGeofenceEntry(geofenceId: localId)
+                }
             }
         }
     }
