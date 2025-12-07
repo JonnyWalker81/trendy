@@ -210,6 +210,7 @@ type Geofence struct {
 
 // CreateGeofenceRequest represents the request to create a geofence
 type CreateGeofenceRequest struct {
+	ID                  string  `json:"id" binding:"required"` // Client-provided UUID
 	Name                string  `json:"name" binding:"required"`
 	Latitude            float64 `json:"latitude" binding:"required,min=-90,max=90"`
 	Longitude           float64 `json:"longitude" binding:"required,min=-180,max=180"`
@@ -219,7 +220,6 @@ type CreateGeofenceRequest struct {
 	IsActive            bool    `json:"is_active"`
 	NotifyOnEntry       bool    `json:"notify_on_entry"`
 	NotifyOnExit        bool    `json:"notify_on_exit"`
-	IOSRegionIdentifier *string `json:"ios_region_identifier"`
 }
 
 // UpdateGeofenceRequest represents the request to update a geofence

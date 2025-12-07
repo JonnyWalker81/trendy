@@ -20,6 +20,7 @@ func NewGeofenceRepository(client *supabase.Client) GeofenceRepository {
 
 func (r *geofenceRepository) Create(ctx context.Context, geofence *models.Geofence) (*models.Geofence, error) {
 	data := map[string]interface{}{
+		"id":        geofence.ID, // Client-provided UUID
 		"user_id":   geofence.UserID,
 		"name":      geofence.Name,
 		"latitude":  geofence.Latitude,
@@ -49,9 +50,6 @@ func (r *geofenceRepository) Create(ctx context.Context, geofence *models.Geofen
 	}
 	if geofence.EventTypeExitID != nil {
 		data["event_type_exit_id"] = *geofence.EventTypeExitID
-	}
-	if geofence.IOSRegionIdentifier != nil {
-		data["ios_region_identifier"] = *geofence.IOSRegionIdentifier
 	}
 
 	// Extract user token from context for RLS

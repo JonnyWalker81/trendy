@@ -311,8 +311,9 @@ class EventStore {
                 #endif
             } else {
                 // Check if there's already a local type with the same name (unmapped)
+                // Use case-insensitive matching to be consistent with MigrationManager
                 if let existingByName = existingTypes.first(where: {
-                    $0.name == apiType.name && !currentMappings.keys.contains($0.id)
+                    $0.name.lowercased() == apiType.name.lowercased() && !currentMappings.keys.contains($0.id)
                 }) {
                     // Map existing local type to backend ID
                     existingByName.colorHex = apiType.color
@@ -342,13 +343,26 @@ class EventStore {
         // Save the updated mappings
         eventTypeBackendIds = updatedMappings
 
-        // Delete EventTypes that no longer exist on backend (optional - be careful with this)
-        // For now, we'll keep orphaned types to avoid breaking geofences
-        // for type in existingTypes {
-        //     if let backendId = eventTypeBackendIds[type.id], !processedBackendTypeIds.contains(backendId) {
-        //         modelContext.delete(type)
-        //     }
-        // }
+        // Clean up orphaned local EventTypes that have no backend counterpart
+        // Only delete if they have no events (to avoid breaking relationships)
+        let mappedLocalIds = Set(updatedMappings.keys)
+        for existingType in existingTypes {
+            if !mappedLocalIds.contains(existingType.id) {
+                // This local type has no backend counterpart - it's orphaned
+                if existingType.events?.isEmpty ?? true {
+                    modelContext.delete(existingType)
+                    Log.data.debug("Deleted orphaned local EventType", context: .with { ctx in
+                        ctx.add("name", existingType.name)
+                        ctx.add("localId", existingType.id.uuidString)
+                    })
+                } else {
+                    Log.data.debug("Keeping orphaned EventType with events", context: .with { ctx in
+                        ctx.add("name", existingType.name)
+                        ctx.add("eventCount", existingType.events?.count ?? 0)
+                    })
+                }
+            }
+        }
 
         try modelContext.save()
         
@@ -1216,11 +1230,13 @@ class EventStore {
             let backendEntryTypeId: String? = geofence.eventTypeEntryID.flatMap { eventTypeBackendIds[$0] }
             let backendExitTypeId: String? = geofence.eventTypeExitID.flatMap { eventTypeBackendIds[$0] }
 
-            Log.geofence.info("createGeofence: name=\(geofence.name), useBackend=\(useBackend), isOnline=\(isOnline)")
+            Log.geofence.info("createGeofence: name=\(geofence.name), id=\(geofence.id), useBackend=\(useBackend), isOnline=\(isOnline)")
             Log.geofence.info("createGeofence: localEntryTypeId=\(geofence.eventTypeEntryID?.uuidString ?? "nil"), backendEntryTypeId=\(backendEntryTypeId ?? "nil")")
             Log.geofence.info("createGeofence: isActive=\(geofence.isActive), notifyOnEntry=\(geofence.notifyOnEntry), notifyOnExit=\(geofence.notifyOnExit)")
 
+            // Use the local UUID as the backend ID - same ID everywhere
             let request = CreateGeofenceRequest(
+                id: geofence.id.uuidString,
                 name: geofence.name,
                 latitude: geofence.latitude,
                 longitude: geofence.longitude,
@@ -1229,29 +1245,16 @@ class EventStore {
                 eventTypeExitId: backendExitTypeId,
                 isActive: geofence.isActive,
                 notifyOnEntry: geofence.notifyOnEntry,
-                notifyOnExit: geofence.notifyOnExit,
-                iosRegionIdentifier: nil // Will be set after we get backend ID
+                notifyOnExit: geofence.notifyOnExit
             )
 
             do {
                 if isOnline {
                     Log.geofence.info("createGeofence: calling API...")
-                    let apiGeofence = try await apiClient!.createGeofence(request)
-                    geofenceBackendIds[geofence.id] = apiGeofence.id
-                    Log.geofence.info("createGeofence: success, backendId=\(apiGeofence.id)")
-
-                    // Update backend with ios_region_identifier (use LOCAL UUID as identifier
-                    // so CLLocationManager regions can be matched with local geofences)
-                    let updateRequest = UpdateGeofenceRequest(
-                        name: nil, latitude: nil, longitude: nil, radius: nil,
-                        eventTypeEntryId: nil, eventTypeExitId: nil,
-                        isActive: nil, notifyOnEntry: nil, notifyOnExit: nil,
-                        iosRegionIdentifier: geofence.id.uuidString
-                    )
-                    _ = try? await apiClient!.updateGeofence(id: apiGeofence.id, updateRequest)
-
+                    let _ = try await apiClient!.createGeofence(request)
+                    Log.geofence.info("createGeofence: success, id=\(geofence.id)")
                     #if DEBUG
-                    print("✅ Created geofence on backend: \(geofence.name)")
+                    print("✅ Created geofence on backend: \(geofence.name) (id: \(geofence.id))")
                     #endif
                 } else {
                     Log.geofence.info("createGeofence: offline, queuing for sync")
@@ -1383,15 +1386,12 @@ class EventStore {
     func syncGeofenceToBackend(_ geofence: Geofence) async {
         guard useBackend else { return }
 
-        // Check if already synced
-        if geofenceBackendIds[geofence.id] != nil {
-            return
-        }
-
         let backendEntryTypeId: String? = geofence.eventTypeEntryID.flatMap { eventTypeBackendIds[$0] }
         let backendExitTypeId: String? = geofence.eventTypeExitID.flatMap { eventTypeBackendIds[$0] }
 
+        // Use the local UUID as the backend ID - same ID everywhere
         let request = CreateGeofenceRequest(
+            id: geofence.id.uuidString,
             name: geofence.name,
             latitude: geofence.latitude,
             longitude: geofence.longitude,
@@ -1400,27 +1400,14 @@ class EventStore {
             eventTypeExitId: backendExitTypeId,
             isActive: geofence.isActive,
             notifyOnEntry: geofence.notifyOnEntry,
-            notifyOnExit: geofence.notifyOnExit,
-            iosRegionIdentifier: nil // Will be set after we get backend ID
+            notifyOnExit: geofence.notifyOnExit
         )
 
         do {
             if isOnline {
-                let apiGeofence = try await apiClient!.createGeofence(request)
-                geofenceBackendIds[geofence.id] = apiGeofence.id
-
-                // Update backend with ios_region_identifier (use LOCAL UUID as identifier
-                // so CLLocationManager regions can be matched with local geofences)
-                let updateRequest = UpdateGeofenceRequest(
-                    name: nil, latitude: nil, longitude: nil, radius: nil,
-                    eventTypeEntryId: nil, eventTypeExitId: nil,
-                    isActive: nil, notifyOnEntry: nil, notifyOnExit: nil,
-                    iosRegionIdentifier: geofence.id.uuidString
-                )
-                _ = try? await apiClient!.updateGeofence(id: apiGeofence.id, updateRequest)
-
+                let _ = try await apiClient!.createGeofence(request)
                 #if DEBUG
-                print("✅ Synced geofence to backend: \(geofence.name)")
+                print("✅ Synced geofence to backend: \(geofence.name) (id: \(geofence.id))")
                 #endif
             } else {
                 try? syncQueue?.enqueue(type: .createGeofence, entityId: geofence.id, payload: request)

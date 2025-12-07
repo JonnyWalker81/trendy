@@ -34,17 +34,17 @@ func (s *geofenceService) CreateGeofence(ctx context.Context, userID string, req
 	}
 
 	geofence := &models.Geofence{
-		UserID:              userID,
-		Name:                req.Name,
-		Latitude:            req.Latitude,
-		Longitude:           req.Longitude,
-		Radius:              req.Radius,
-		EventTypeEntryID:    req.EventTypeEntryID,
-		EventTypeExitID:     req.EventTypeExitID,
-		IsActive:            &req.IsActive,
-		NotifyOnEntry:       &req.NotifyOnEntry,
-		NotifyOnExit:        &req.NotifyOnExit,
-		IOSRegionIdentifier: req.IOSRegionIdentifier,
+		ID:               req.ID, // Client-provided UUID
+		UserID:           userID,
+		Name:             req.Name,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
+		Radius:           req.Radius,
+		EventTypeEntryID: req.EventTypeEntryID,
+		EventTypeExitID:  req.EventTypeExitID,
+		IsActive:         &req.IsActive,
+		NotifyOnEntry:    &req.NotifyOnEntry,
+		NotifyOnExit:     &req.NotifyOnExit,
 	}
 
 	return s.geofenceRepo.Create(ctx, geofence)

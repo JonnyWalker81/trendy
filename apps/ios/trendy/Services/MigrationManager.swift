@@ -171,6 +171,25 @@ class MigrationManager {
                 self.currentOperation = "Synced \(index + 1)/\(self.totalEventTypes) event types"
             }
         }
+
+        // Persist mappings to UserDefaults so EventStore can use them
+        persistEventTypeMappingsToUserDefaults()
+    }
+
+    /// Persist event type mappings to UserDefaults for EventStore to use
+    /// This ensures EventStore can link local types to backend IDs after migration
+    private func persistEventTypeMappingsToUserDefaults() {
+        // Convert [UUID: String] to [String: String] for JSON encoding (same format as EventStore)
+        let stringKeyedMapping = eventTypeMapping.reduce(into: [String: String]()) { result, pair in
+            result[pair.key.uuidString] = pair.value
+        }
+
+        if let data = try? JSONEncoder().encode(stringKeyedMapping) {
+            UserDefaults.standard.set(data, forKey: "eventTypeBackendIds")
+            Log.migration.info("Persisted \(eventTypeMapping.count) event type mappings to UserDefaults")
+        } else {
+            Log.migration.error("Failed to persist event type mappings to UserDefaults")
+        }
     }
 
     // MARK: - PropertyDefinition Migration

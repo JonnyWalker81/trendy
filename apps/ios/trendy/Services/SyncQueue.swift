@@ -190,7 +190,11 @@ class SyncQueue {
 
         case OperationType.createGeofence.rawValue:
             let request = try decoder.decode(CreateGeofenceRequest.self, from: operation.payload)
+            // ID is already included in the request - same ID used locally and on backend
             let _ = try await apiClient.createGeofence(request)
+            Log.sync.info("Queued geofence synced", context: .with { ctx in
+                ctx.add("id", operation.entityId.uuidString)
+            })
 
         case OperationType.updateGeofence.rawValue:
             let queuedUpdate = try decoder.decode(QueuedGeofenceUpdate.self, from: operation.payload)
@@ -227,4 +231,5 @@ class SyncQueue {
         try modelContext.save()
         updatePendingCount()
     }
+
 }

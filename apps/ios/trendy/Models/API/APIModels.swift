@@ -458,6 +458,7 @@ struct APIGeofence: Codable, Identifiable {
 
 /// Request model for creating geofences
 struct CreateGeofenceRequest: Codable {
+    let id: String  // Client-provided UUID (same ID used locally and on backend)
     let name: String
     let latitude: Double
     let longitude: Double
@@ -467,9 +468,9 @@ struct CreateGeofenceRequest: Codable {
     let isActive: Bool
     let notifyOnEntry: Bool
     let notifyOnExit: Bool
-    let iosRegionIdentifier: String?
 
     enum CodingKeys: String, CodingKey {
+        case id
         case name
         case latitude
         case longitude
@@ -479,7 +480,6 @@ struct CreateGeofenceRequest: Codable {
         case isActive = "is_active"
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
-        case iosRegionIdentifier = "ios_region_identifier"
     }
 }
 
