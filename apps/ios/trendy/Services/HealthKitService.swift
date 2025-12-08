@@ -1018,10 +1018,8 @@ class HealthKitService: NSObject {
             // Send notification if configured
             await sendNotificationIfEnabled(for: category, eventTypeName: eventType.name, details: notes)
 
-            // Sync to backend if using backend mode
-            if eventStore.useBackend {
-                await eventStore.syncEventToBackend(event)
-            }
+            // Sync to backend (SyncEngine handles offline queueing)
+            await eventStore.syncEventToBackend(event)
 
         } catch {
             print("Failed to save HealthKit event: \(error.localizedDescription)")
@@ -1092,10 +1090,8 @@ class HealthKitService: NSObject {
             return nil
         }
 
-        // 4. Sync to backend if needed
-        if eventStore.useBackend {
-            await eventStore.syncEventTypeToBackend(newEventType)
-        }
+        // 4. Sync to backend (SyncEngine handles offline queueing)
+        await eventStore.syncEventTypeToBackend(newEventType)
 
         // 5. Link new EventType to settings
         settings.setEventTypeId(newEventType.id, for: category)

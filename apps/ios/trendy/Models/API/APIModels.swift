@@ -109,7 +109,7 @@ struct CreateEventRequest: Codable {
     let locationLatitude: Double?
     let locationLongitude: Double?
     let locationName: String?
-    let properties: [String: APIPropertyValue]?
+    let properties: [String: APIPropertyValue]  // Required - backend rejects null
 
     enum CodingKeys: String, CodingKey {
         case eventTypeId = "event_type_id"
@@ -477,8 +477,9 @@ struct APIGeofence: Codable, Identifiable {
 }
 
 /// Request model for creating geofences
+/// NOTE: id is optional - backend generates the ID if not provided
 struct CreateGeofenceRequest: Codable {
-    let id: String  // Client-provided UUID (same ID used locally and on backend)
+    let id: String?  // Optional - backend generates ID if not provided
     let name: String
     let latitude: Double
     let longitude: Double
@@ -500,6 +501,34 @@ struct CreateGeofenceRequest: Codable {
         case isActive = "is_active"
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
+    }
+
+    /// Convenience initializer without id (backend generates)
+    init(name: String, latitude: Double, longitude: Double, radius: Double, eventTypeEntryId: String?, eventTypeExitId: String?, isActive: Bool, notifyOnEntry: Bool, notifyOnExit: Bool) {
+        self.id = nil
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+        self.radius = radius
+        self.eventTypeEntryId = eventTypeEntryId
+        self.eventTypeExitId = eventTypeExitId
+        self.isActive = isActive
+        self.notifyOnEntry = notifyOnEntry
+        self.notifyOnExit = notifyOnExit
+    }
+
+    /// Full initializer with optional id
+    init(id: String?, name: String, latitude: Double, longitude: Double, radius: Double, eventTypeEntryId: String?, eventTypeExitId: String?, isActive: Bool, notifyOnEntry: Bool, notifyOnExit: Bool) {
+        self.id = id
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+        self.radius = radius
+        self.eventTypeEntryId = eventTypeEntryId
+        self.eventTypeExitId = eventTypeExitId
+        self.isActive = isActive
+        self.notifyOnEntry = notifyOnEntry
+        self.notifyOnExit = notifyOnExit
     }
 }
 

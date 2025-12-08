@@ -121,7 +121,8 @@ struct APIModelFixture {
     static func makeCreateEventRequest(
         eventTypeId: String = "type-1",
         timestamp: Date = Date(timeIntervalSince1970: 1704067200),
-        notes: String? = "Test event"
+        notes: String? = "Test event",
+        properties: [String: APIPropertyValue] = [:]
     ) -> CreateEventRequest {
         CreateEventRequest(
             eventTypeId: eventTypeId,
@@ -132,7 +133,11 @@ struct APIModelFixture {
             sourceType: "manual",
             externalId: nil,
             originalTitle: nil,
-            properties: nil
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            properties: properties
         )
     }
 }

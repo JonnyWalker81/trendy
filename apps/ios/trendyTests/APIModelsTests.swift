@@ -95,7 +95,11 @@ struct APIModelsTests {
             sourceType: "manual",
             externalId: nil,
             originalTitle: nil,
-            properties: nil
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            properties: [:]
         )
 
         let encoded = try encoder.encode(request)
@@ -123,6 +127,10 @@ struct APIModelsTests {
             sourceType: "manual",
             externalId: nil,
             originalTitle: nil,
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
             properties: properties
         )
 
@@ -374,7 +382,11 @@ struct APIModelsTests {
             sourceType: "manual",
             externalId: nil,
             originalTitle: nil,
-            properties: nil
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            properties: [:]
         )
 
         let encoded = try encoder.encode(request)
@@ -427,7 +439,11 @@ struct APIModelsTests {
                     sourceType: "manual",
                     externalId: nil,
                     originalTitle: nil,
-                    properties: nil
+                    geofenceId: nil,
+                    locationLatitude: nil,
+                    locationLongitude: nil,
+                    locationName: nil,
+                    properties: [:]
                 )
 
                 _ = try? encoder.encode(request)

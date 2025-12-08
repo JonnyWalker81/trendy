@@ -268,7 +268,11 @@ struct EventSourceTypeAPICompatibilityTests {
             sourceType: "manual",  // String in API model
             externalId: nil,
             originalTitle: nil,
-            properties: nil
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            properties: [:]
         )
 
         let encoded = try encoder.encode(request)
@@ -288,7 +292,11 @@ struct EventSourceTypeAPICompatibilityTests {
             sourceType: "imported",  // String in API model
             externalId: "cal-456",
             originalTitle: "Imported",
-            properties: nil
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            properties: [:]
         )
 
         let encoded = try encoder.encode(request)

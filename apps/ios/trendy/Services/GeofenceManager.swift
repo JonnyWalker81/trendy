@@ -150,7 +150,8 @@ class GeofenceManager: NSObject {
     /// Stop monitoring a specific geofence
     /// - Parameter geofence: The geofence to stop monitoring
     func stopMonitoring(geofence: Geofence) {
-        let identifier = geofence.id.uuidString
+        // Use regionIdentifier which prefers backendId when available
+        let identifier = geofence.regionIdentifier
 
         if let region = locationManager.monitoredRegions.first(where: { $0.identifier == identifier }) {
             locationManager.stopMonitoring(for: region)
@@ -337,13 +338,14 @@ class GeofenceManager: NSObject {
         let entryProperties: [String: PropertyValue] = [
             "Entered At": PropertyValue(type: .date, value: entryTime)
         ]
-        
+
+        // Use backend ID for geofenceId (String) - this is the canonical ID for sync
         let event = Event(
             timestamp: entryTime,
             eventType: eventType,
             notes: "Auto-logged by geofence: \(geofence.name)",
             sourceType: .geofence,
-            geofenceId: geofenceId,
+            geofenceId: geofence.backendId,  // Uses backend ID (String) for consistency
             locationLatitude: geofence.latitude,
             locationLongitude: geofence.longitude,
             locationName: geofence.name,
@@ -378,11 +380,9 @@ class GeofenceManager: NSObject {
                 }
             }
 
-            // Sync to backend if using backend mode
+            // Sync to backend (SyncEngine handles offline queueing)
             Task { @MainActor in
-                if eventStore.useBackend {
-                    await eventStore.syncEventToBackend(event)
-                }
+                await eventStore.syncEventToBackend(event)
             }
 
         } catch {
@@ -461,11 +461,9 @@ class GeofenceManager: NSObject {
                 }
             }
 
-            // Sync to backend if using backend mode
+            // Sync to backend (SyncEngine handles offline queueing)
             Task { @MainActor in
-                if eventStore.useBackend {
-                    await eventStore.syncEventToBackend(event)
-                }
+                await eventStore.syncEventToBackend(event)
             }
 
         } catch {

@@ -89,10 +89,10 @@ struct MainTabView: View {
                     }
                 }
 
-                // Sync local geofences to backend if not yet synced
-                if let store = eventStore, store.useBackend {
+                // Trigger sync when app becomes active
+                if let store = eventStore {
                     Task {
-                        await syncUnsyncedGeofences(store: store)
+                        await store.fetchData()
                     }
                 }
             }
@@ -159,9 +159,6 @@ struct MainTabView: View {
         let store = EventStore()
         store.setModelContext(modelContext)
         store.setCalendarManager(calendarManager)
-
-        // Disable backend mode - use local SwiftData only
-        store.useBackend = false
 
         eventStore = store
 
@@ -241,13 +238,4 @@ struct MainTabView: View {
         }
     }
 
-    /// Sync any local geofences that haven't been synced to the backend yet
-    private func syncUnsyncedGeofences(store: EventStore) async {
-        let descriptor = FetchDescriptor<Geofence>()
-        guard let geofences = try? modelContext.fetch(descriptor) else { return }
-
-        for geofence in geofences {
-            await store.syncGeofenceToBackend(geofence)
-        }
-    }
 }

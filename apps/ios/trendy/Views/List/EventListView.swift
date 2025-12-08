@@ -47,34 +47,45 @@ struct EventListView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                if !eventStore.eventTypes.isEmpty {
-                    filterSection
-                }
-                
-                if filteredEvents.isEmpty {
-                    if eventStore.isLoading && !eventStore.hasLoadedOnce {
-                        // Initial loading - show loading indicator
-                        ProgressView("Loading...")
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 50)
-                            .listRowBackground(Color.clear)
-                    } else {
-                        // Truly empty after loading completed
-                        emptyStateView
+            VStack(spacing: 0) {
+                // Sync status banner at top
+                SyncStatusBanner(
+                    syncState: eventStore.syncState,
+                    progress: eventStore.syncProgress,
+                    onRetry: {
+                        await eventStore.fetchData(force: true)
                     }
-                } else {
-                    ForEach(sortedDates, id: \.self) { date in
-                        Section {
-                            ForEach(groupedEvents[date] ?? []) { event in
-                                EventRowView(event: event)
+                )
+
+                List {
+                    if !eventStore.eventTypes.isEmpty {
+                        filterSection
+                    }
+
+                    if filteredEvents.isEmpty {
+                        if eventStore.isLoading && !eventStore.hasLoadedOnce {
+                            // Initial loading - show loading indicator
+                            ProgressView("Loading...")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 50)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            // Truly empty after loading completed
+                            emptyStateView
+                        }
+                    } else {
+                        ForEach(sortedDates, id: \.self) { date in
+                            Section {
+                                ForEach(groupedEvents[date] ?? []) { event in
+                                    EventRowView(event: event)
+                                }
+                                .onDelete { indexSet in
+                                    deleteEvents(at: indexSet, for: date)
+                                }
+                            } header: {
+                                Text(date, format: .dateTime.weekday().month().day().year())
+                                    .font(.headline)
                             }
-                            .onDelete { indexSet in
-                                deleteEvents(at: indexSet, for: date)
-                            }
-                        } header: {
-                            Text(date, format: .dateTime.weekday().month().day().year())
-                                .font(.headline)
                         }
                     }
                 }

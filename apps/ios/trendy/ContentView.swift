@@ -11,7 +11,6 @@ import SwiftData
 struct ContentView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("migration_completed") private var migrationCompleted = false
 
     #if DEBUG
     /// Check if running in screenshot mode for UI tests
@@ -24,7 +23,7 @@ struct ContentView: View {
         Group {
             #if DEBUG
             if isScreenshotMode {
-                // Screenshot mode: skip auth and migration, go directly to main app
+                // Screenshot mode: skip auth, go directly to main app
                 MainTabView()
                     .onAppear {
                         setupScreenshotMode()
@@ -41,13 +40,9 @@ struct ContentView: View {
     @ViewBuilder
     private var authenticatedContent: some View {
         if authViewModel.isAuthenticated {
-            if migrationCompleted {
-                // Migration done, show main app
-                MainTabView()
-            } else {
-                // Show migration view (will be created next)
-                MigrationView()
-            }
+            // Authenticated - show main app
+            // Sync is handled automatically by SyncEngine on first load
+            MainTabView()
         } else {
             // Not authenticated, show login
             LoginView()
@@ -57,9 +52,6 @@ struct ContentView: View {
     #if DEBUG
     /// Set up screenshot mode with mock data
     private func setupScreenshotMode() {
-        // Mark migration as completed to bypass migration view
-        migrationCompleted = true
-
         // Inject mock data for screenshots
         ScreenshotMockData.injectMockData(into: modelContext)
     }

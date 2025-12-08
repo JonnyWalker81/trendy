@@ -16,12 +16,16 @@ final class Geofence {
     var latitude: Double
     var longitude: Double
     var radius: Double // in meters
-    
+
+    /// Backend ID - nil until synced to backend, then this IS the canonical ID.
+    /// Used for CLLocationManager region identifier and event references.
+    var backendId: String?
+
     // Store EventType IDs instead of direct relationships to avoid invalidation issues
     // when EventTypes are deleted/recreated during backend sync
     var eventTypeEntryID: UUID?
     var eventTypeExitID: UUID?
-    
+
     var isActive: Bool
     var notifyOnEntry: Bool
     var notifyOnExit: Bool
@@ -61,9 +65,14 @@ final class Geofence {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
+    /// Region identifier for CLLocationManager - uses backendId if synced, otherwise local UUID
+    var regionIdentifier: String {
+        backendId ?? id.uuidString
+    }
+
     // Computed property to create CLCircularRegion for monitoring
     var circularRegion: CLCircularRegion {
-        let region = CLCircularRegion(center: coordinate, radius: radius, identifier: id.uuidString)
+        let region = CLCircularRegion(center: coordinate, radius: radius, identifier: regionIdentifier)
         region.notifyOnEntry = true
         region.notifyOnExit = true
         return region

@@ -28,7 +28,8 @@ final class Event {
     var isAllDay: Bool = false
     var endDate: Date?
     var calendarEventId: String?
-    var geofenceId: UUID?
+    /// Backend geofence ID (String) - references Geofence.backendId
+    var geofenceId: String?
     var locationLatitude: Double?
     var locationLongitude: Double?
     var locationName: String?
@@ -91,7 +92,7 @@ final class Event {
         }
     }
 
-    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, geofenceId: UUID? = nil, locationLatitude: Double? = nil, locationLongitude: Double? = nil, locationName: String? = nil, healthKitSampleId: String? = nil, healthKitCategory: String? = nil, properties: [String: PropertyValue] = [:]) {
+    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, geofenceId: String? = nil, locationLatitude: Double? = nil, locationLongitude: Double? = nil, locationName: String? = nil, healthKitSampleId: String? = nil, healthKitCategory: String? = nil, properties: [String: PropertyValue] = [:]) {
         self.id = UUID()
         self.timestamp = timestamp
         self.eventType = eventType
