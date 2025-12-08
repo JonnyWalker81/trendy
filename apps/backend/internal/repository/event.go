@@ -61,6 +61,55 @@ func (r *eventRepository) Create(ctx context.Context, event *models.Event) (*mod
 	return &events[0], nil
 }
 
+func (r *eventRepository) CreateBatch(ctx context.Context, events []models.Event) ([]models.Event, error) {
+	if len(events) == 0 {
+		return []models.Event{}, nil
+	}
+
+	// Convert events to insert format
+	// IMPORTANT: PostgREST requires all objects to have identical keys for batch insert
+	// So we must include ALL keys for every object, using nil for missing values
+	insertData := make([]map[string]interface{}, 0, len(events))
+	for _, event := range events {
+		data := map[string]interface{}{
+			"user_id":            event.UserID,
+			"event_type_id":      event.EventTypeID,
+			"timestamp":          event.Timestamp,
+			"is_all_day":         event.IsAllDay,
+			"source_type":        event.SourceType,
+			"notes":              event.Notes,
+			"end_date":           event.EndDate,
+			"external_id":        event.ExternalID,
+			"original_title":     event.OriginalTitle,
+			"geofence_id":        event.GeofenceID,
+			"location_latitude":  event.LocationLatitude,
+			"location_longitude": event.LocationLongitude,
+			"location_name":      event.LocationName,
+		}
+
+		// Properties column has NOT NULL constraint - use empty object {} if no properties
+		if event.Properties != nil && len(event.Properties) > 0 {
+			data["properties"] = event.Properties
+		} else {
+			data["properties"] = map[string]interface{}{}
+		}
+
+		insertData = append(insertData, data)
+	}
+
+	body, err := r.client.Insert("events", insertData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch create events: %w", err)
+	}
+
+	var createdEvents []models.Event
+	if err := json.Unmarshal(body, &createdEvents); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return createdEvents, nil
+}
+
 func (r *eventRepository) GetByID(ctx context.Context, id string) (*models.Event, error) {
 	query := map[string]interface{}{
 		"id":     fmt.Sprintf("eq.%s", id),

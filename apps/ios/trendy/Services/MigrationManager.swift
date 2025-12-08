@@ -256,80 +256,102 @@ class MigrationManager {
         let descriptor = FetchDescriptor<Event>()
         let localEvents = try modelContext.fetch(descriptor)
 
-        // Process events in batches to avoid timeout
-        let batchSize = 50
-        var batch: [Event] = []
+        // Pre-fetch all existing backend events to check for duplicates efficiently
+        // This avoids N+1 API calls for duplicate checking
+        let existingBackendEvents = try await apiClient.getAllEvents()
+        let existingExternalIds = Set(existingBackendEvents.compactMap { $0.externalId })
 
-        for (index, localEvent) in localEvents.enumerated() {
-            batch.append(localEvent)
+        Log.migration.info("Pre-fetched \(existingBackendEvents.count) backend events for deduplication", context: .with { ctx in
+            ctx.add("external_ids_count", existingExternalIds.count)
+        })
 
-            // Process batch when full or at end
-            if batch.count >= batchSize || index == localEvents.count - 1 {
-                try await processBatch(batch)
-                batch.removeAll()
+        // Prepare all events for batch creation
+        var eventsToCreate: [CreateEventRequest] = []
+        var skippedCount = 0
+
+        for localEvent in localEvents {
+            // Skip events without event type
+            guard let eventType = localEvent.eventType,
+                  let backendEventTypeId = eventTypeMapping[eventType.id] else {
+                Log.migration.debug("Skipping event without event type", context: .with { ctx in
+                    ctx.add("event_id", localEvent.id)
+                })
+                skippedCount += 1
+                continue
             }
 
-            await MainActor.run {
-                self.migratedEvents = index + 1
-                self.currentOperation = "Synced \(index + 1)/\(self.totalEvents) events"
-            }
-        }
-    }
-
-    private func processBatch(_ events: [Event]) async throws {
-        for event in events {
-            try await migrateEvent(event)
-        }
-    }
-
-    private func migrateEvent(_ localEvent: Event) async throws {
-        // Skip events without event type
-        guard let eventType = localEvent.eventType,
-              let backendEventTypeId = eventTypeMapping[eventType.id] else {
-            Log.migration.debug("Skipping event without event type", context: .with { ctx in
-                ctx.add("event_id", localEvent.id)
-            })
-            return
-        }
-
-        // Check for duplicate by externalId (if it's an imported event)
-        if let externalId = localEvent.externalId {
-            let existing = try? await apiClient.getEventByExternalId(externalId)
-            if existing != nil {
+            // Check for duplicate by externalId using pre-fetched data (no API call!)
+            if let externalId = localEvent.externalId, existingExternalIds.contains(externalId) {
                 Log.migration.debug("Event with externalId already exists, skipping", context: .with { ctx in
                     ctx.add("external_id", externalId)
                 })
-                return
+                skippedCount += 1
+                continue
+            }
+
+            // Convert properties to API format
+            let apiProperties: [String: APIPropertyValue]? = localEvent.properties.isEmpty ? nil : localEvent.properties.mapValues { propValue in
+                APIPropertyValue(
+                    type: propValue.type.rawValue,
+                    value: propValue.value
+                )
+            }
+
+            // Create request
+            let request = CreateEventRequest(
+                eventTypeId: backendEventTypeId,
+                timestamp: localEvent.timestamp,
+                notes: localEvent.notes,
+                isAllDay: localEvent.isAllDay,
+                endDate: localEvent.endDate,
+                sourceType: localEvent.sourceType.rawValue,
+                externalId: localEvent.externalId,
+                originalTitle: localEvent.originalTitle,
+                geofenceId: nil,
+                locationLatitude: nil,
+                locationLongitude: nil,
+                locationName: nil,
+                properties: apiProperties
+            )
+            eventsToCreate.append(request)
+        }
+
+        Log.migration.info("Prepared events for batch creation", context: .with { ctx in
+            ctx.add("to_create", eventsToCreate.count)
+            ctx.add("skipped", skippedCount)
+        })
+
+        // Batch create events (up to 100 at a time to be safe)
+        let batchSize = 100
+        var createdCount = 0
+
+        for batchStart in stride(from: 0, to: eventsToCreate.count, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize, eventsToCreate.count)
+            let batch = Array(eventsToCreate[batchStart..<batchEnd])
+
+            let response = try await apiClient.createEventsBatch(batch)
+            createdCount += response.success
+
+            if response.failed > 0 {
+                Log.migration.warning("Batch had failures", context: .with { ctx in
+                    ctx.add("success", response.success)
+                    ctx.add("failed", response.failed)
+                    if let errors = response.errors {
+                        ctx.add("first_error", errors.first?.message ?? "unknown")
+                    }
+                })
+            }
+
+            await MainActor.run {
+                self.migratedEvents = min(batchEnd, self.totalEvents)
+                self.currentOperation = "Synced \(batchEnd)/\(eventsToCreate.count) events"
             }
         }
 
-        // Convert properties to API format
-        let apiProperties: [String: APIPropertyValue]? = localEvent.properties.isEmpty ? nil : localEvent.properties.mapValues { propValue in
-            APIPropertyValue(
-                type: propValue.type.rawValue,
-                value: propValue.value
-            )
-        }
-
-        // Create request
-        let request = CreateEventRequest(
-            eventTypeId: backendEventTypeId,
-            timestamp: localEvent.timestamp,
-            notes: localEvent.notes,
-            isAllDay: localEvent.isAllDay,
-            endDate: localEvent.endDate,
-            sourceType: localEvent.sourceType.rawValue,
-            externalId: localEvent.externalId,
-            originalTitle: localEvent.originalTitle,
-            geofenceId: nil,
-            locationLatitude: nil,
-            locationLongitude: nil,
-            locationName: nil,
-            properties: apiProperties
-        )
-
-        // Create on backend
-        let _ = try await apiClient.createEvent(request)
+        Log.migration.info("Event migration complete", context: .with { ctx in
+            ctx.add("created", createdCount)
+            ctx.add("skipped", skippedCount)
+        })
     }
 
     // MARK: - Retry Logic

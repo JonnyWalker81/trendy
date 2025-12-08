@@ -10,6 +10,7 @@ import (
 // EventService defines the interface for event business logic
 type EventService interface {
 	CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, error)
+	CreateEventsBatch(ctx context.Context, userID string, req *models.BatchCreateEventsRequest) (*models.BatchCreateEventsResponse, error)
 	GetEvent(ctx context.Context, userID, eventID string) (*models.Event, error)
 	GetUserEvents(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)
 	ExportEvents(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error)

@@ -13,6 +13,10 @@ class APIClient {
     private let session: URLSession
     private let supabaseService: SupabaseService
 
+    // Retry configuration for rate limiting
+    private let maxRetries = 3
+    private let baseRetryDelay: TimeInterval = 1.0 // Start with 1 second
+
     // JSON encoder/decoder with ISO8601 date strategy
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -55,12 +59,13 @@ class APIClient {
         ]
     }
 
-    /// Perform HTTP request with automatic auth header injection
+    /// Perform HTTP request with automatic auth header injection and retry logic
     private func request<T: Decodable>(
         _ method: String,
         endpoint: String,
         body: Encodable? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        retryCount: Int = 0
     ) async throws -> T {
         let startTime = Date()
         var urlRequest = URLRequest(url: url(for: endpoint))
@@ -77,13 +82,14 @@ class APIClient {
         }
 
         // Add body if provided
+        var encodedBody: Data?
         if let body = body {
-            let encodedBody = try encoder.encode(body)
+            encodedBody = try encoder.encode(body)
             urlRequest.httpBody = encodedBody
 
             // Log request body for event updates (works in all builds for debugging)
             if endpoint.contains("/events/") && method == "PUT" {
-                if let bodyString = String(data: encodedBody, encoding: .utf8) {
+                if let bodyString = String(data: encodedBody!, encoding: .utf8) {
                     Log.api.info("PUT /events request body", context: .with { ctx in
                         ctx.add("body", bodyString)
                     })
@@ -105,6 +111,18 @@ class APIClient {
         }
 
         Log.api.response(method, path: endpoint, statusCode: httpResponse.statusCode, duration: duration)
+
+        // Handle rate limiting with exponential backoff
+        if httpResponse.statusCode == 429 && retryCount < maxRetries {
+            let delay = baseRetryDelay * pow(2.0, Double(retryCount))
+            Log.api.warning("Rate limited, retrying", context: .with { ctx in
+                ctx.add("endpoint", endpoint)
+                ctx.add("retry_count", retryCount + 1)
+                ctx.add("delay_seconds", delay)
+            })
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            return try await request(method, endpoint: endpoint, body: body, requiresAuth: requiresAuth, retryCount: retryCount + 1)
+        }
 
         // Log response body for event updates (works in all builds for debugging)
         if endpoint.contains("/events") && method == "PUT" {
@@ -148,12 +166,13 @@ class APIClient {
         }
     }
 
-    /// Perform HTTP request without response body (for DELETE)
+    /// Perform HTTP request without response body (for DELETE) with retry logic
     private func requestWithoutResponse(
         _ method: String,
         endpoint: String,
         body: Encodable? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        retryCount: Int = 0
     ) async throws {
         var urlRequest = URLRequest(url: url(for: endpoint))
         urlRequest.httpMethod = method
@@ -177,6 +196,18 @@ class APIClient {
         // Check HTTP status
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
+        }
+
+        // Handle rate limiting with exponential backoff
+        if httpResponse.statusCode == 429 && retryCount < maxRetries {
+            let delay = baseRetryDelay * pow(2.0, Double(retryCount))
+            Log.api.warning("Rate limited, retrying", context: .with { ctx in
+                ctx.add("endpoint", endpoint)
+                ctx.add("retry_count", retryCount + 1)
+                ctx.add("delay_seconds", delay)
+            })
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            return try await requestWithoutResponse(method, endpoint: endpoint, body: body, requiresAuth: requiresAuth, retryCount: retryCount + 1)
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -271,6 +302,12 @@ class APIClient {
     /// Delete event
     func deleteEvent(id: String) async throws {
         try await requestWithoutResponse("DELETE", endpoint: "/events/\(id)")
+    }
+
+    /// Batch create events (up to 500 at a time)
+    func createEventsBatch(_ events: [CreateEventRequest]) async throws -> BatchCreateEventsResponse {
+        let request = BatchCreateEventsRequest(events: events)
+        return try await self.request("POST", endpoint: "/events/batch", body: request)
     }
 
     /// Get events by external ID (for duplicate detection during migration)

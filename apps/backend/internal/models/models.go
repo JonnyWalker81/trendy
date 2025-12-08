@@ -77,6 +77,26 @@ type UpdateEventRequest struct {
 	Properties        *map[string]PropertyValue `json:"properties,omitempty"`
 }
 
+// BatchCreateEventsRequest represents a batch of events to create
+type BatchCreateEventsRequest struct {
+	Events []CreateEventRequest `json:"events" binding:"required,min=1,max=500"`
+}
+
+// BatchCreateEventsResponse represents the response from batch event creation
+type BatchCreateEventsResponse struct {
+	Created []Event       `json:"created"`
+	Errors  []BatchError  `json:"errors,omitempty"`
+	Total   int           `json:"total"`
+	Success int           `json:"success"`
+	Failed  int           `json:"failed"`
+}
+
+// BatchError represents an error for a specific item in a batch operation
+type BatchError struct {
+	Index   int    `json:"index"`
+	Message string `json:"message"`
+}
+
 // CreateEventTypeRequest represents the request to create an event type
 type CreateEventTypeRequest struct {
 	Name  string `json:"name" binding:"required"`

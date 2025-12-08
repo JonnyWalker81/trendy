@@ -55,6 +55,77 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 	return s.eventRepo.Create(ctx, event)
 }
 
+func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req *models.BatchCreateEventsRequest) (*models.BatchCreateEventsResponse, error) {
+	response := &models.BatchCreateEventsResponse{
+		Created: []models.Event{},
+		Errors:  []models.BatchError{},
+		Total:   len(req.Events),
+	}
+
+	// First, get all user's event types for validation
+	eventTypes, err := s.eventTypeRepo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event types: %w", err)
+	}
+
+	// Build a map for quick lookup
+	eventTypeMap := make(map[string]bool)
+	for _, et := range eventTypes {
+		eventTypeMap[et.ID] = true
+	}
+
+	// Validate and prepare events
+	validEvents := make([]models.Event, 0, len(req.Events))
+	for i, eventReq := range req.Events {
+		// Validate event type
+		if !eventTypeMap[eventReq.EventTypeID] {
+			response.Errors = append(response.Errors, models.BatchError{
+				Index:   i,
+				Message: fmt.Sprintf("invalid event type: %s", eventReq.EventTypeID),
+			})
+			continue
+		}
+
+		// Set default source_type if not provided
+		sourceType := eventReq.SourceType
+		if sourceType == "" {
+			sourceType = "manual"
+		}
+
+		event := models.Event{
+			UserID:            userID,
+			EventTypeID:       eventReq.EventTypeID,
+			Timestamp:         eventReq.Timestamp,
+			Notes:             eventReq.Notes,
+			IsAllDay:          eventReq.IsAllDay,
+			EndDate:           eventReq.EndDate,
+			SourceType:        sourceType,
+			ExternalID:        eventReq.ExternalID,
+			OriginalTitle:     eventReq.OriginalTitle,
+			GeofenceID:        eventReq.GeofenceID,
+			LocationLatitude:  eventReq.LocationLatitude,
+			LocationLongitude: eventReq.LocationLongitude,
+			LocationName:      eventReq.LocationName,
+			Properties:        eventReq.Properties,
+		}
+		validEvents = append(validEvents, event)
+	}
+
+	// Batch insert valid events
+	if len(validEvents) > 0 {
+		created, err := s.eventRepo.CreateBatch(ctx, validEvents)
+		if err != nil {
+			return nil, fmt.Errorf("failed to batch create events: %w", err)
+		}
+		response.Created = created
+	}
+
+	response.Success = len(response.Created)
+	response.Failed = len(response.Errors)
+
+	return response, nil
+}
+
 func (s *eventService) GetEvent(ctx context.Context, userID, eventID string) (*models.Event, error) {
 	event, err := s.eventRepo.GetByID(ctx, eventID)
 	if err != nil {

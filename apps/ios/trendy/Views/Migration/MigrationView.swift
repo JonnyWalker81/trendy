@@ -134,33 +134,10 @@ struct MigrationView: View {
     private func startMigration() {
         hasMigrationStarted = true
 
-        // Get API client from environment
-        guard let apiClient = apiClient else {
-            print("Error: APIClient not available in environment")
-            return
-        }
-
-        // Create migration manager
-        let manager = MigrationManager(modelContext: modelContext, apiClient: apiClient)
-        self.migrationManager = manager
-
-        // Start migration
-        Task {
-            do {
-                try await manager.performMigration()
-
-                // If migration completes successfully and there was no data, auto-continue
-                if manager.isComplete && manager.totalEventTypes == 0 && manager.totalEvents == 0 {
-                    // No data to migrate, complete immediately
-                    try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay for UX
-                    await MainActor.run {
-                        completeMigration()
-                    }
-                }
-            } catch {
-                print("Migration error: \(error.localizedDescription)")
-            }
-        }
+        // Backend is the source of truth - skip any "migration" (upload) logic
+        // Just mark as complete and let EventStore.fetchFromBackend() download the data
+        Log.migration.info("Backend is source of truth - skipping local upload, will download from backend")
+        completeMigration()
     }
 
     private func completeMigration() {

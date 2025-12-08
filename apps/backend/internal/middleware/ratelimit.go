@@ -103,9 +103,10 @@ func (rl *RateLimiter) isAllowed(ip string) (bool, int) {
 }
 
 // RateLimit returns a middleware handler that limits requests per IP
-// Default: 100 requests per minute for general endpoints
+// Default: 300 requests per minute for general endpoints
+// Increased from 100 to support iOS full-sync with many events
 func RateLimit() gin.HandlerFunc {
-	limiter := NewRateLimiter(100, time.Minute, "general")
+	limiter := NewRateLimiter(300, time.Minute, "general")
 	return rateLimitMiddleware(limiter)
 }
 

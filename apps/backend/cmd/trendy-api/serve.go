@@ -133,6 +133,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/events", eventHandler.GetEvents)
 			protected.GET("/events/export", eventHandler.ExportEvents)
 			protected.POST("/events", eventHandler.CreateEvent)
+			protected.POST("/events/batch", eventHandler.CreateEventsBatch)
 			protected.GET("/events/:id", eventHandler.GetEvent)
 			protected.PUT("/events/:id", eventHandler.UpdateEvent)
 			protected.DELETE("/events/:id", eventHandler.DeleteEvent)

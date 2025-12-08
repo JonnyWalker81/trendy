@@ -10,6 +10,7 @@ import (
 // EventRepository defines the interface for event data access
 type EventRepository interface {
 	Create(ctx context.Context, event *models.Event) (*models.Event, error)
+	CreateBatch(ctx context.Context, events []models.Event) ([]models.Event, error)
 	GetByID(ctx context.Context, id string) (*models.Event, error)
 	GetByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)
 	GetByUserIDAndDateRange(ctx context.Context, userID string, startDate, endDate time.Time) ([]models.Event, error)

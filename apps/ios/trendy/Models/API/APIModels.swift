@@ -128,6 +128,26 @@ struct CreateEventRequest: Codable {
     }
 }
 
+/// Request model for batch creating events
+struct BatchCreateEventsRequest: Codable {
+    let events: [CreateEventRequest]
+}
+
+/// Response model for batch event creation
+struct BatchCreateEventsResponse: Codable {
+    let created: [APIEvent]
+    let errors: [BatchError]?
+    let total: Int
+    let success: Int
+    let failed: Int
+}
+
+/// Error for a specific item in a batch operation
+struct BatchError: Codable {
+    let index: Int
+    let message: String
+}
+
 /// Request model for updating events
 struct UpdateEventRequest: Codable {
     let eventTypeId: String?

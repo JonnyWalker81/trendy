@@ -45,6 +45,41 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 	c.JSON(http.StatusCreated, event)
 }
 
+// CreateEventsBatch handles POST /api/v1/events/batch
+func (h *EventHandler) CreateEventsBatch(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	var req models.BatchCreateEventsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	response, err := h.eventService.CreateEventsBatch(c.Request.Context(), userID.(string), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return 207 Multi-Status if there were partial failures
+	if response.Failed > 0 && response.Success > 0 {
+		c.JSON(http.StatusMultiStatus, response)
+		return
+	}
+
+	// Return 400 if all failed
+	if response.Failed > 0 && response.Success == 0 {
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 // GetEvents handles GET /api/v1/events
 func (h *EventHandler) GetEvents(c *gin.Context) {
 	userID, exists := c.Get("user_id")
