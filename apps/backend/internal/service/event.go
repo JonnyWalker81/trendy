@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 )
@@ -12,13 +13,15 @@ import (
 type eventService struct {
 	eventRepo     repository.EventRepository
 	eventTypeRepo repository.EventTypeRepository
+	changeLogRepo repository.ChangeLogRepository
 }
 
 // NewEventService creates a new event service
-func NewEventService(eventRepo repository.EventRepository, eventTypeRepo repository.EventTypeRepository) EventService {
+func NewEventService(eventRepo repository.EventRepository, eventTypeRepo repository.EventTypeRepository, changeLogRepo repository.ChangeLogRepository) EventService {
 	return &eventService{
 		eventRepo:     eventRepo,
 		eventTypeRepo: eventTypeRepo,
+		changeLogRepo: changeLogRepo,
 	}
 }
 
@@ -52,7 +55,25 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 		Properties:    req.Properties,
 	}
 
-	return s.eventRepo.Create(ctx, event)
+	created, err := s.eventRepo.Create(ctx, event)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEvent,
+		Operation:  models.OperationCreate,
+		EntityID:   created.ID,
+		UserID:     userID,
+		Data:       created,
+	}); err != nil {
+		// Log but don't fail - the event was created successfully
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append to change log", logger.Err(err), logger.String("event_id", created.ID))
+	}
+
+	return created, nil
 }
 
 func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req *models.BatchCreateEventsRequest) (*models.BatchCreateEventsResponse, error) {
@@ -118,6 +139,20 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 			return nil, fmt.Errorf("failed to batch create events: %w", err)
 		}
 		response.Created = created
+
+		// Append to change log for each created event
+		log := logger.FromContext(ctx)
+		for _, event := range created {
+			if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+				EntityType: models.EntityTypeEvent,
+				Operation:  models.OperationCreate,
+				EntityID:   event.ID,
+				UserID:     userID,
+				Data:       event,
+			}); err != nil {
+				log.Warn("failed to append batch event to change log", logger.Err(err), logger.String("event_id", event.ID))
+			}
+		}
 	}
 
 	response.Success = len(response.Created)
@@ -210,7 +245,24 @@ func (s *eventService) UpdateEvent(ctx context.Context, userID, eventID string, 
 		update.Properties = *req.Properties
 	}
 
-	return s.eventRepo.Update(ctx, eventID, update)
+	updated, err := s.eventRepo.Update(ctx, eventID, update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEvent,
+		Operation:  models.OperationUpdate,
+		EntityID:   updated.ID,
+		UserID:     userID,
+		Data:       updated,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append update to change log", logger.Err(err), logger.String("event_id", updated.ID))
+	}
+
+	return updated, nil
 }
 
 func (s *eventService) DeleteEvent(ctx context.Context, userID, eventID string) error {
@@ -224,5 +276,22 @@ func (s *eventService) DeleteEvent(ctx context.Context, userID, eventID string) 
 		return fmt.Errorf("event not found")
 	}
 
-	return s.eventRepo.Delete(ctx, eventID)
+	if err := s.eventRepo.Delete(ctx, eventID); err != nil {
+		return err
+	}
+
+	// Append to change log
+	now := time.Now()
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEvent,
+		Operation:  models.OperationDelete,
+		EntityID:   eventID,
+		UserID:     userID,
+		DeletedAt:  &now,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append delete to change log", logger.Err(err), logger.String("event_id", eventID))
+	}
+
+	return nil
 }

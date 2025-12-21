@@ -3,19 +3,23 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 )
 
 type eventTypeService struct {
 	eventTypeRepo repository.EventTypeRepository
+	changeLogRepo repository.ChangeLogRepository
 }
 
 // NewEventTypeService creates a new event type service
-func NewEventTypeService(eventTypeRepo repository.EventTypeRepository) EventTypeService {
+func NewEventTypeService(eventTypeRepo repository.EventTypeRepository, changeLogRepo repository.ChangeLogRepository) EventTypeService {
 	return &eventTypeService{
 		eventTypeRepo: eventTypeRepo,
+		changeLogRepo: changeLogRepo,
 	}
 }
 
@@ -27,7 +31,24 @@ func (s *eventTypeService) CreateEventType(ctx context.Context, userID string, r
 		Icon:   req.Icon,
 	}
 
-	return s.eventTypeRepo.Create(ctx, eventType)
+	created, err := s.eventTypeRepo.Create(ctx, eventType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEventType,
+		Operation:  models.OperationCreate,
+		EntityID:   created.ID,
+		UserID:     userID,
+		Data:       created,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append to change log", logger.Err(err), logger.String("event_type_id", created.ID))
+	}
+
+	return created, nil
 }
 
 func (s *eventTypeService) GetEventType(ctx context.Context, userID, eventTypeID string) (*models.EventType, error) {
@@ -71,7 +92,24 @@ func (s *eventTypeService) UpdateEventType(ctx context.Context, userID, eventTyp
 		update.Icon = *req.Icon
 	}
 
-	return s.eventTypeRepo.Update(ctx, eventTypeID, update)
+	updated, err := s.eventTypeRepo.Update(ctx, eventTypeID, update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEventType,
+		Operation:  models.OperationUpdate,
+		EntityID:   updated.ID,
+		UserID:     userID,
+		Data:       updated,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append update to change log", logger.Err(err), logger.String("event_type_id", updated.ID))
+	}
+
+	return updated, nil
 }
 
 func (s *eventTypeService) DeleteEventType(ctx context.Context, userID, eventTypeID string) error {
@@ -85,5 +123,22 @@ func (s *eventTypeService) DeleteEventType(ctx context.Context, userID, eventTyp
 		return fmt.Errorf("event type not found")
 	}
 
-	return s.eventTypeRepo.Delete(ctx, eventTypeID)
+	if err := s.eventTypeRepo.Delete(ctx, eventTypeID); err != nil {
+		return err
+	}
+
+	// Append to change log
+	now := time.Now()
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeEventType,
+		Operation:  models.OperationDelete,
+		EntityID:   eventTypeID,
+		UserID:     userID,
+		DeletedAt:  &now,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append delete to change log", logger.Err(err), logger.String("event_type_id", eventTypeID))
+	}
+
+	return nil
 }

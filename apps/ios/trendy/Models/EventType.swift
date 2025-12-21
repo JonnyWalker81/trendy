@@ -17,26 +17,46 @@ extension UUID: @retroactive Identifiable {
 @Model
 final class EventType {
     var id: UUID
+    /// Server-generated ID - unique constraint ensures no duplicates
+    @Attribute(.unique) var serverId: String?
+    /// Sync status with the backend
+    var syncStatusRaw: String = SyncStatus.pending.rawValue
     var name: String
     var colorHex: String
     var iconName: String
     var createdAt: Date
-    
+
     @Relationship(deleteRule: .cascade, inverse: \Event.eventType)
     var events: [Event]?
 
     @Relationship(deleteRule: .cascade, inverse: \PropertyDefinition.eventType)
     var propertyDefinitions: [PropertyDefinition]?
 
-    init(name: String, colorHex: String = "#007AFF", iconName: String = "circle.fill") {
+    // MARK: - Computed Properties
+
+    /// Sync status computed property for convenient access
+    @Transient var syncStatus: SyncStatus {
+        get { SyncStatus(rawValue: syncStatusRaw) ?? .pending }
+        set { syncStatusRaw = newValue.rawValue }
+    }
+
+    init(
+        name: String,
+        colorHex: String = "#007AFF",
+        iconName: String = "circle.fill",
+        serverId: String? = nil,
+        syncStatus: SyncStatus = .pending
+    ) {
         self.id = UUID()
+        self.serverId = serverId
+        self.syncStatusRaw = syncStatus.rawValue
         self.name = name
         self.colorHex = colorHex
         self.iconName = iconName
         self.createdAt = Date()
         self.events = []
     }
-    
+
     var color: Color {
         Color(hex: colorHex) ?? .blue
     }

@@ -14,8 +14,8 @@ CURRENT_PROJECT_VERSION = 1
 INFOPLIST_FILE = trendy/trendy-Info.plist
 
 // MARK: - Bundle Identifier
-// Must match App Store bundle ID for TestFlight distribution
-PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight
+// Different bundle ID allows side-by-side installation with Production
+PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.beta
 
 // MARK: - Display Name
 // Shows "Trendy Beta" in app name to distinguish from production

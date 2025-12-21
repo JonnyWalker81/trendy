@@ -18,6 +18,10 @@ enum EventSourceType: String, Codable, CaseIterable {
 @Model
 final class Event {
     var id: UUID
+    /// Server-generated ID - unique constraint ensures no duplicates
+    @Attribute(.unique) var serverId: String?
+    /// Sync status with the backend
+    var syncStatusRaw: String = SyncStatus.pending.rawValue
     var timestamp: Date
     var notes: String?
     var eventType: EventType?
@@ -28,14 +32,26 @@ final class Event {
     var isAllDay: Bool = false
     var endDate: Date?
     var calendarEventId: String?
-    /// Backend geofence ID (String) - references Geofence.backendId
+    /// Backend geofence ID (String) - references Geofence.serverId
     var geofenceId: String?
+    /// Server ID of the event type - used for sync to resolve relationships
+    var eventTypeServerId: String?
+    /// Server ID of the geofence - used for sync (alias for geofenceId)
+    var geofenceServerId: String?
     var locationLatitude: Double?
     var locationLongitude: Double?
     var locationName: String?
     var healthKitSampleId: String?    // HealthKit sample UUID for deduplication
     var healthKitCategory: String?     // e.g., "workout", "sleep", "steps"
     var propertiesData: Data? // Encoded [String: PropertyValue]
+
+    // MARK: - Computed Properties
+
+    /// Sync status computed property for convenient access
+    @Transient var syncStatus: SyncStatus {
+        get { SyncStatus(rawValue: syncStatusRaw) ?? .pending }
+        set { syncStatusRaw = newValue.rawValue }
+    }
 
     // Computed property for convenient enum access
     @Transient var sourceType: EventSourceType {
@@ -92,8 +108,29 @@ final class Event {
         }
     }
 
-    init(timestamp: Date = Date(), eventType: EventType? = nil, notes: String? = nil, sourceType: EventSourceType = .manual, externalId: String? = nil, originalTitle: String? = nil, isAllDay: Bool = false, endDate: Date? = nil, calendarEventId: String? = nil, geofenceId: String? = nil, locationLatitude: Double? = nil, locationLongitude: Double? = nil, locationName: String? = nil, healthKitSampleId: String? = nil, healthKitCategory: String? = nil, properties: [String: PropertyValue] = [:]) {
+    init(
+        timestamp: Date = Date(),
+        eventType: EventType? = nil,
+        notes: String? = nil,
+        sourceType: EventSourceType = .manual,
+        externalId: String? = nil,
+        originalTitle: String? = nil,
+        isAllDay: Bool = false,
+        endDate: Date? = nil,
+        calendarEventId: String? = nil,
+        geofenceId: String? = nil,
+        locationLatitude: Double? = nil,
+        locationLongitude: Double? = nil,
+        locationName: String? = nil,
+        healthKitSampleId: String? = nil,
+        healthKitCategory: String? = nil,
+        properties: [String: PropertyValue] = [:],
+        serverId: String? = nil,
+        syncStatus: SyncStatus = .pending
+    ) {
         self.id = UUID()
+        self.serverId = serverId
+        self.syncStatusRaw = syncStatus.rawValue
         self.timestamp = timestamp
         self.eventType = eventType
         self.notes = notes

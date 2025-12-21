@@ -38,6 +38,10 @@ class APIClient {
         self.baseURL = configuration.baseURL
         self.session = URLSession.shared
         self.supabaseService = supabaseService
+
+        Log.api.info("APIClient initialized", context: .with { ctx in
+            ctx.add("base_url", configuration.baseURL)
+        })
     }
 
     // MARK: - Helper Methods
@@ -401,6 +405,119 @@ class APIClient {
         try await requestWithoutResponse("DELETE", endpoint: "/geofences/\(id)")
     }
 
+    // MARK: - Change Feed
+
+    /// Get changes since a cursor for incremental sync
+    /// - Parameters:
+    ///   - since: Cursor to start from (0 for initial sync)
+    ///   - limit: Maximum number of changes to return
+    /// - Returns: Change feed response with changes and next cursor
+    func getChanges(since cursor: Int64, limit: Int = 100) async throws -> ChangeFeedResponse {
+        return try await request("GET", endpoint: "/changes?since=\(cursor)&limit=\(limit)")
+    }
+
+    /// Get the latest cursor (max change_log ID) for the current user.
+    /// Useful after bootstrap to skip all existing change_log entries.
+    func getLatestCursor() async throws -> Int64 {
+        struct CursorResponse: Decodable {
+            let cursor: Int64
+        }
+        let response: CursorResponse = try await request("GET", endpoint: "/changes/latest-cursor")
+        return response.cursor
+    }
+
+    // MARK: - Idempotent Create Operations
+
+    /// Create event with idempotency key for exactly-once semantics
+    func createEventWithIdempotency(_ request: CreateEventRequest, idempotencyKey: String) async throws -> APIEvent {
+        return try await requestWithIdempotency("POST", endpoint: "/events", body: request, idempotencyKey: idempotencyKey)
+    }
+
+    /// Create event type with idempotency key for exactly-once semantics
+    func createEventTypeWithIdempotency(_ request: CreateEventTypeRequest, idempotencyKey: String) async throws -> APIEventType {
+        return try await requestWithIdempotency("POST", endpoint: "/event-types", body: request, idempotencyKey: idempotencyKey)
+    }
+
+    /// Create geofence with idempotency key for exactly-once semantics
+    func createGeofenceWithIdempotency(_ request: CreateGeofenceRequest, idempotencyKey: String) async throws -> APIGeofence {
+        return try await requestWithIdempotency("POST", endpoint: "/geofences", body: request, idempotencyKey: idempotencyKey)
+    }
+
+    /// Generic request with idempotency key header
+    private func requestWithIdempotency<T: Decodable>(
+        _ method: String,
+        endpoint: String,
+        body: Encodable,
+        idempotencyKey: String,
+        retryCount: Int = 0
+    ) async throws -> T {
+        let startTime = Date()
+        var urlRequest = URLRequest(url: url(for: endpoint))
+        urlRequest.httpMethod = method
+
+        Log.api.request(method, path: endpoint)
+
+        // Add headers including idempotency key
+        let headers = try await authHeaders()
+        headers.forEach { urlRequest.setValue($1, forHTTPHeaderField: $0) }
+        urlRequest.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+
+        // Add body
+        let encodedBody = try encoder.encode(body)
+        urlRequest.httpBody = encodedBody
+
+        // Perform request
+        let (data, response) = try await session.data(for: urlRequest)
+        let duration = Date().timeIntervalSince(startTime)
+
+        // Check HTTP status
+        guard let httpResponse = response as? HTTPURLResponse else {
+            Log.api.error("Invalid response", context: .with { ctx in
+                ctx.add("method", method)
+                ctx.add("endpoint", endpoint)
+            })
+            throw APIError.invalidResponse
+        }
+
+        Log.api.response(method, path: endpoint, statusCode: httpResponse.statusCode, duration: duration)
+
+        // Handle rate limiting with exponential backoff
+        if httpResponse.statusCode == 429 && retryCount < maxRetries {
+            let delay = baseRetryDelay * pow(2.0, Double(retryCount))
+            Log.api.warning("Rate limited, retrying", context: .with { ctx in
+                ctx.add("endpoint", endpoint)
+                ctx.add("retry_count", retryCount + 1)
+                ctx.add("delay_seconds", delay)
+            })
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            return try await requestWithIdempotency(method, endpoint: endpoint, body: body, idempotencyKey: idempotencyKey, retryCount: retryCount + 1)
+        }
+
+        // Handle error responses
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                Log.api.warning("Server error response", context: .with { ctx in
+                    ctx.add("endpoint", endpoint)
+                    ctx.add("status", httpResponse.statusCode)
+                    ctx.add("error_message", errorResponse.error)
+                })
+                throw APIError.serverError(errorResponse.error, httpResponse.statusCode)
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        // Decode response
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            Log.api.error("Decoding error", error: error, context: .with { ctx in
+                ctx.add("endpoint", endpoint)
+                ctx.add("response_size", data.count)
+            })
+            throw APIError.decodingError(error)
+        }
+    }
+
     // MARK: - Health Check
 
     /// Check if API is reachable
@@ -452,6 +569,7 @@ enum APIError: LocalizedError {
     case decodingError(Error)
     case networkError(Error)
     case noConnection
+    case duplicateEvent  // Unique constraint violation - event already exists
 
     var errorDescription: String? {
         switch self {
@@ -467,6 +585,23 @@ enum APIError: LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .noConnection:
             return "No internet connection"
+        case .duplicateEvent:
+            return "Event already exists"
+        }
+    }
+
+    /// Check if this error indicates a duplicate/conflict that should not be retried
+    var isDuplicateError: Bool {
+        switch self {
+        case .duplicateEvent:
+            return true
+        case .serverError(let message, let code):
+            // 409 Conflict or unique constraint violations
+            return code == 409 || message.lowercased().contains("duplicate") || message.lowercased().contains("unique")
+        case .httpError(let code):
+            return code == 409
+        default:
+            return false
         }
     }
 }

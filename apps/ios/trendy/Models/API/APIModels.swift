@@ -809,3 +809,347 @@ struct APICorrelationsResponse: Codable {
         case computedAt = "computed_at"
     }
 }
+
+// MARK: - Change Feed Models
+
+/// Represents a single entry in the change feed
+struct ChangeEntry: Codable {
+    /// Monotonic cursor ID for pagination
+    let id: Int64
+    /// Type of entity: "event", "event_type", "geofence", "property_definition"
+    let entityType: String
+    /// Operation type: "create", "update", "delete"
+    let operation: String
+    /// Server ID of the affected entity
+    let entityId: String
+    /// Full entity data for create/update operations
+    let data: ChangeEntryData?
+    /// Timestamp for delete operations
+    let deletedAt: Date?
+    /// When the change was recorded
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case entityType = "entity_type"
+        case operation
+        case entityId = "entity_id"
+        case data
+        case deletedAt = "deleted_at"
+        case createdAt = "created_at"
+    }
+}
+
+/// Wrapper for flexible JSON data in change entries
+struct ChangeEntryData: Codable {
+    let rawData: [String: AnyCodableValue]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        rawData = try container.decode([String: AnyCodableValue].self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawData)
+    }
+
+    // MARK: - Full Entity Decoders
+
+    /// Extract an Event from the change data
+    func asEvent(decoder: JSONDecoder) -> APIEvent? {
+        guard let jsonData = try? JSONEncoder().encode(rawData) else { return nil }
+        return try? decoder.decode(APIEvent.self, from: jsonData)
+    }
+
+    /// Extract an EventType from the change data
+    func asEventType(decoder: JSONDecoder) -> APIEventType? {
+        guard let jsonData = try? JSONEncoder().encode(rawData) else { return nil }
+        return try? decoder.decode(APIEventType.self, from: jsonData)
+    }
+
+    /// Extract a Geofence from the change data
+    func asGeofence(decoder: JSONDecoder) -> APIGeofence? {
+        guard let jsonData = try? JSONEncoder().encode(rawData) else { return nil }
+        return try? decoder.decode(APIGeofence.self, from: jsonData)
+    }
+
+    /// Extract a PropertyDefinition from the change data
+    func asPropertyDefinition(decoder: JSONDecoder) -> APIPropertyDefinition? {
+        guard let jsonData = try? JSONEncoder().encode(rawData) else { return nil }
+        return try? decoder.decode(APIPropertyDefinition.self, from: jsonData)
+    }
+
+    // MARK: - Individual Field Accessors
+
+    var timestamp: Date? {
+        guard case .string(let str) = rawData["timestamp"] else { return nil }
+        return ISO8601DateFormatter().date(from: str)
+    }
+
+    var notes: String? {
+        guard case .string(let str) = rawData["notes"] else { return nil }
+        return str
+    }
+
+    var isAllDay: Bool? {
+        guard case .bool(let val) = rawData["is_all_day"] else { return nil }
+        return val
+    }
+
+    var endDate: Date? {
+        guard case .string(let str) = rawData["end_date"] else { return nil }
+        return ISO8601DateFormatter().date(from: str)
+    }
+
+    var eventTypeId: String? {
+        guard case .string(let str) = rawData["event_type_id"] else { return nil }
+        return str
+    }
+
+    var sourceType: String? {
+        guard case .string(let str) = rawData["source_type"] else { return nil }
+        return str
+    }
+
+    var externalId: String? {
+        guard case .string(let str) = rawData["external_id"] else { return nil }
+        return str
+    }
+
+    var originalTitle: String? {
+        guard case .string(let str) = rawData["original_title"] else { return nil }
+        return str
+    }
+
+    var geofenceId: String? {
+        guard case .string(let str) = rawData["geofence_id"] else { return nil }
+        return str
+    }
+
+    var locationLatitude: Double? {
+        switch rawData["location_latitude"] {
+        case .double(let val): return val
+        case .int(let val): return Double(val)
+        default: return nil
+        }
+    }
+
+    var locationLongitude: Double? {
+        switch rawData["location_longitude"] {
+        case .double(let val): return val
+        case .int(let val): return Double(val)
+        default: return nil
+        }
+    }
+
+    var locationName: String? {
+        guard case .string(let str) = rawData["location_name"] else { return nil }
+        return str
+    }
+
+    var name: String? {
+        guard case .string(let str) = rawData["name"] else { return nil }
+        return str
+    }
+
+    var color: String? {
+        guard case .string(let str) = rawData["color"] else { return nil }
+        return str
+    }
+
+    var icon: String? {
+        guard case .string(let str) = rawData["icon"] else { return nil }
+        return str
+    }
+
+    var latitude: Double? {
+        switch rawData["latitude"] {
+        case .double(let val): return val
+        case .int(let val): return Double(val)
+        default: return nil
+        }
+    }
+
+    var longitude: Double? {
+        switch rawData["longitude"] {
+        case .double(let val): return val
+        case .int(let val): return Double(val)
+        default: return nil
+        }
+    }
+
+    var radius: Double? {
+        switch rawData["radius"] {
+        case .double(let val): return val
+        case .int(let val): return Double(val)
+        default: return nil
+        }
+    }
+
+    var isActive: Bool? {
+        guard case .bool(let val) = rawData["is_active"] else { return nil }
+        return val
+    }
+
+    var notifyOnEntry: Bool? {
+        guard case .bool(let val) = rawData["notify_on_entry"] else { return nil }
+        return val
+    }
+
+    var notifyOnExit: Bool? {
+        guard case .bool(let val) = rawData["notify_on_exit"] else { return nil }
+        return val
+    }
+
+    var eventTypeEntryId: String? {
+        guard case .string(let str) = rawData["event_type_entry_id"] else { return nil }
+        return str
+    }
+
+    var eventTypeExitId: String? {
+        guard case .string(let str) = rawData["event_type_exit_id"] else { return nil }
+        return str
+    }
+
+    var key: String? {
+        guard case .string(let str) = rawData["key"] else { return nil }
+        return str
+    }
+
+    var label: String? {
+        guard case .string(let str) = rawData["label"] else { return nil }
+        return str
+    }
+
+    var propertyType: String? {
+        guard case .string(let str) = rawData["property_type"] else { return nil }
+        return str
+    }
+
+    var displayOrder: Int? {
+        guard case .int(let val) = rawData["display_order"] else { return nil }
+        return val
+    }
+
+    var options: [String]? {
+        guard case .array(let arr) = rawData["options"] else { return nil }
+        return arr.compactMap { value -> String? in
+            guard case .string(let str) = value else { return nil }
+            return str
+        }
+    }
+
+    /// Extract properties dictionary from change data
+    /// Properties are stored as {"key": {"type": "...", "value": ...}}
+    var properties: [String: APIPropertyValue]? {
+        guard case .dictionary(let dict) = rawData["properties"] else { return nil }
+        var result: [String: APIPropertyValue] = [:]
+        for (key, value) in dict {
+            guard case .dictionary(let propDict) = value else { continue }
+            guard case .string(let typeStr) = propDict["type"] else { continue }
+            guard let valueData = propDict["value"] else { continue }
+
+            // Convert AnyCodableValue to AnyCodable for APIPropertyValue
+            let anyCodableValue: AnyCodable
+            switch valueData {
+            case .string(let s): anyCodableValue = AnyCodable(s)
+            case .int(let i): anyCodableValue = AnyCodable(i)
+            case .double(let d): anyCodableValue = AnyCodable(d)
+            case .bool(let b): anyCodableValue = AnyCodable(b)
+            case .null: anyCodableValue = AnyCodable(NSNull())
+            case .array(let arr):
+                // Convert array - simplified, assuming simple types
+                let converted = arr.compactMap { item -> Any? in
+                    switch item {
+                    case .string(let s): return s
+                    case .int(let i): return i
+                    case .double(let d): return d
+                    case .bool(let b): return b
+                    default: return nil
+                    }
+                }
+                anyCodableValue = AnyCodable(converted)
+            case .dictionary:
+                // Nested dictionaries - skip for now
+                continue
+            }
+
+            result[key] = APIPropertyValue(type: typeStr, value: anyCodableValue)
+        }
+        return result.isEmpty ? nil : result
+    }
+}
+
+/// Response from the change feed endpoint
+struct ChangeFeedResponse: Codable {
+    /// Array of changes since the provided cursor
+    let changes: [ChangeEntry]
+    /// Cursor for the next page (0 if no more changes)
+    let nextCursor: Int64
+    /// Whether there are more changes to fetch
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case changes
+        case nextCursor = "next_cursor"
+        case hasMore = "has_more"
+    }
+}
+
+/// Flexible JSON value for change entry data
+enum AnyCodableValue: Codable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case array([AnyCodableValue])
+    case dictionary([String: AnyCodableValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if container.decodeNil() {
+            self = .null
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let int = try? container.decode(Int.self) {
+            self = .int(int)
+        } else if let double = try? container.decode(Double.self) {
+            self = .double(double)
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let array = try? container.decode([AnyCodableValue].self) {
+            self = .array(array)
+        } else if let dictionary = try? container.decode([String: AnyCodableValue].self) {
+            self = .dictionary(dictionary)
+        } else {
+            throw DecodingError.typeMismatch(
+                AnyCodableValue.self,
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unsupported type")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .int(let value):
+            try container.encode(value)
+        case .double(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        case .dictionary(let value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
+        }
+    }
+}

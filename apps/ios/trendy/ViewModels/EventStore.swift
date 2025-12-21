@@ -29,6 +29,7 @@ class EventStore {
     private let fetchDebounceInterval: TimeInterval = 5.0
 
     private var modelContext: ModelContext?
+    private var modelContainer: ModelContainer?
     private var calendarManager: CalendarManager?
     var syncWithCalendar = true
 
@@ -36,18 +37,22 @@ class EventStore {
     private let apiClient: APIClient?
     private var syncEngine: SyncEngine?
 
+    // Network monitoring
+    private let monitor = NWPathMonitor()
+    private(set) var isOnline = false
+
     // MARK: - Sync State (delegated from SyncEngine)
 
-    var syncState: SyncEngine.SyncState {
-        syncEngine?.state ?? .idle
+    var syncState: SyncState {
+        get async {
+            await syncEngine?.state ?? .idle
+        }
     }
 
-    var syncProgress: SyncProgress {
-        syncEngine?.progress ?? SyncProgress()
-    }
-
-    var isOnline: Bool {
-        syncEngine?.isOnline ?? false
+    var pendingCount: Int {
+        get async {
+            await syncEngine?.pendingCount ?? 0
+        }
     }
 
     // MARK: - Initialization
@@ -56,6 +61,7 @@ class EventStore {
     /// - Parameter apiClient: API client for backend communication
     init(apiClient: APIClient) {
         self.apiClient = apiClient
+        setupNetworkMonitor()
     }
 
     #if DEBUG
@@ -63,8 +69,34 @@ class EventStore {
     /// No network calls, uses SwiftData directly
     init() {
         self.apiClient = nil
+        setupNetworkMonitor()
     }
     #endif
+
+    private func setupNetworkMonitor() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                let wasOffline = !(self?.isOnline ?? false)
+                self?.isOnline = (path.status == .satisfied)
+
+                // Auto-sync when coming back online
+                if wasOffline && (self?.isOnline ?? false) {
+                    await self?.handleNetworkRestored()
+                }
+            }
+        }
+        let queue = DispatchQueue(label: "com.trendy.eventstore-network-monitor")
+        monitor.start(queue: queue)
+    }
+
+    deinit {
+        monitor.cancel()
+    }
+
+    private func handleNetworkRestored() async {
+        Log.sync.info("Network restored - starting sync")
+        await performSync()
+    }
 
     // MARK: - Widget Integration
 
@@ -108,15 +140,41 @@ class EventStore {
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+        self.modelContainer = context.container
 
         // Initialize SyncEngine if we have an API client
         if let apiClient = apiClient {
-            self.syncEngine = SyncEngine(apiClient: apiClient, modelContext: context)
+            self.syncEngine = SyncEngine(apiClient: apiClient, modelContainer: context.container)
         }
     }
 
     func setCalendarManager(_ manager: CalendarManager) {
         self.calendarManager = manager
+    }
+
+    // MARK: - Sync
+
+    /// Trigger a sync with the backend
+    func performSync() async {
+        guard let syncEngine = syncEngine else { return }
+        await syncEngine.performSync()
+        // Refresh local data after sync
+        try? await fetchFromLocal()
+    }
+
+    /// Force a full resync by resetting the cursor and re-fetching all data from the backend.
+    /// This will remove any stale local data that doesn't exist on the backend.
+    func forceFullResync() async {
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("forceFullResync: no syncEngine available")
+            return
+        }
+        isLoading = true
+        Log.sync.info("Starting force full resync")
+        await syncEngine.forceFullResync()
+        try? await fetchFromLocal()
+        isLoading = false
+        Log.sync.info("Force full resync completed")
     }
 
     // MARK: - Data Fetching
@@ -137,8 +195,15 @@ class EventStore {
 
         do {
             // Sync with backend if we have a SyncEngine and are online
-            if let syncEngine = syncEngine, syncEngine.isOnline {
-                try await syncEngine.performFullSync()
+            Log.sync.info("fetchData: checking sync conditions", context: .with { ctx in
+                ctx.add("has_sync_engine", syncEngine != nil)
+                ctx.add("is_online", isOnline)
+            })
+            if let syncEngine = syncEngine, isOnline {
+                Log.sync.info("fetchData: calling performSync")
+                await syncEngine.performSync()
+            } else {
+                Log.sync.warning("fetchData: skipping sync - syncEngine=\(syncEngine != nil), isOnline=\(isOnline)")
             }
 
             // Always load from local cache after sync
@@ -156,7 +221,11 @@ class EventStore {
     }
 
     private func fetchFromLocal() async throws {
-        guard let modelContext else { return }
+        guard let modelContainer else { return }
+
+        // Create a fresh context to ensure we see the latest persisted data
+        // This is necessary because SyncEngine uses its own context for sync operations
+        let freshContext = ModelContext(modelContainer)
 
         let eventDescriptor = FetchDescriptor<Event>(
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
@@ -165,8 +234,17 @@ class EventStore {
             sortBy: [SortDescriptor(\.name)]
         )
 
-        events = try modelContext.fetch(eventDescriptor)
-        eventTypes = try modelContext.fetch(typeDescriptor)
+        events = try freshContext.fetch(eventDescriptor)
+        eventTypes = try freshContext.fetch(typeDescriptor)
+
+        Log.sync.info("fetchFromLocal: loaded data", context: .with { ctx in
+            ctx.add("events_count", events.count)
+            ctx.add("event_types_count", eventTypes.count)
+            // Log first few items
+            for (index, et) in eventTypes.prefix(3).enumerated() {
+                ctx.add("type_\(index)", "\(et.name) (serverId: \(et.serverId ?? "nil"))")
+            }
+        })
 
         hasLoadedOnce = true
     }
@@ -192,7 +270,7 @@ class EventStore {
             }
         }
 
-        // Create event locally
+        // Create event locally with pending status
         let newEvent = Event(
             timestamp: timestamp,
             eventType: type,
@@ -200,16 +278,48 @@ class EventStore {
             sourceType: .manual,
             isAllDay: isAllDay,
             endDate: endDate,
-            properties: properties
+            properties: properties,
+            syncStatus: .pending
         )
         newEvent.calendarEventId = calendarEventId
+        newEvent.eventTypeServerId = type.serverId
         modelContext.insert(newEvent)
 
         do {
             try modelContext.save()
             reloadWidgets()
 
-            // Refresh data (will sync to backend if online)
+            // Queue mutation for sync if we have a sync engine
+            if let syncEngine = syncEngine, let eventTypeServerId = type.serverId {
+                let request = CreateEventRequest(
+                    eventTypeId: eventTypeServerId,
+                    timestamp: timestamp,
+                    notes: notes,
+                    isAllDay: isAllDay,
+                    endDate: endDate,
+                    sourceType: "manual",
+                    externalId: nil,
+                    originalTitle: nil,
+                    geofenceId: nil,
+                    locationLatitude: nil,
+                    locationLongitude: nil,
+                    locationName: nil,
+                    properties: convertLocalPropertiesToAPI(properties)
+                )
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .event,
+                    operation: .create,
+                    localEntityId: newEvent.id,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -241,6 +351,39 @@ class EventStore {
         do {
             try modelContext.save()
             reloadWidgets()
+
+            // Queue mutation for sync if we have a sync engine and server ID
+            if let syncEngine = syncEngine, let serverId = event.serverId {
+                let request = UpdateEventRequest(
+                    eventTypeId: event.eventType?.serverId,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    properties: convertLocalPropertiesToAPI(event.properties)
+                )
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .event,
+                    operation: .update,
+                    localEntityId: event.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -262,12 +405,34 @@ class EventStore {
             }
         }
 
+        // Queue deletion mutation before deleting locally
+        if let syncEngine = syncEngine, let serverId = event.serverId {
+            do {
+                let payload = Data() // No payload needed for delete
+                try await syncEngine.queueMutation(
+                    entityType: .event,
+                    operation: .delete,
+                    localEntityId: event.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+            } catch {
+                Log.sync.error("Failed to queue delete mutation", error: error)
+            }
+        }
+
         // Delete locally
         modelContext.delete(event)
 
         do {
             try modelContext.save()
             reloadWidgets()
+
+            // Trigger sync if online
+            if let syncEngine = syncEngine, isOnline {
+                await syncEngine.performSync()
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.deleteFailed.localizedDescription
@@ -280,11 +445,30 @@ class EventStore {
         guard let modelContext else { return }
 
         let newType = EventType(name: name, colorHex: colorHex, iconName: iconName)
+        newType.syncStatus = .pending
         modelContext.insert(newType)
 
         do {
             try modelContext.save()
             reloadWidgets()
+
+            // Queue mutation for sync
+            if let syncEngine = syncEngine {
+                let request = CreateEventTypeRequest(name: name, color: colorHex, icon: iconName)
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .eventType,
+                    operation: .create,
+                    localEntityId: newType.id,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -301,6 +485,25 @@ class EventStore {
         do {
             try modelContext.save()
             reloadWidgets()
+
+            // Queue mutation for sync if we have server ID
+            if let syncEngine = syncEngine, let serverId = eventType.serverId {
+                let request = UpdateEventTypeRequest(name: name, color: colorHex, icon: iconName)
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .eventType,
+                    operation: .update,
+                    localEntityId: eventType.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -310,11 +513,33 @@ class EventStore {
     func deleteEventType(_ eventType: EventType) async {
         guard let modelContext else { return }
 
+        // Queue deletion mutation before deleting locally
+        if let syncEngine = syncEngine, let serverId = eventType.serverId {
+            do {
+                let payload = Data()
+                try await syncEngine.queueMutation(
+                    entityType: .eventType,
+                    operation: .delete,
+                    localEntityId: eventType.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+            } catch {
+                Log.sync.error("Failed to queue delete mutation", error: error)
+            }
+        }
+
         modelContext.delete(eventType)
 
         do {
             try modelContext.save()
             reloadWidgets()
+
+            // Trigger sync if online
+            if let syncEngine = syncEngine, isOnline {
+                await syncEngine.performSync()
+            }
+
             await fetchData()
         } catch {
             errorMessage = EventError.deleteFailed.localizedDescription
@@ -357,10 +582,39 @@ class EventStore {
             return false
         }
 
+        geofence.syncStatus = .pending
         modelContext.insert(geofence)
 
         do {
             try modelContext.save()
+
+            // Queue mutation for sync
+            if let syncEngine = syncEngine {
+                let request = CreateGeofenceRequest(
+                    name: geofence.name,
+                    latitude: geofence.latitude,
+                    longitude: geofence.longitude,
+                    radius: geofence.radius,
+                    eventTypeEntryId: nil, // TODO: lookup server IDs
+                    eventTypeExitId: nil,
+                    isActive: geofence.isActive,
+                    notifyOnEntry: geofence.notifyOnEntry,
+                    notifyOnExit: geofence.notifyOnExit
+                )
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .geofence,
+                    operation: .create,
+                    localEntityId: geofence.id,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
+
             return true
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
@@ -373,6 +627,35 @@ class EventStore {
 
         do {
             try modelContext.save()
+
+            // Queue mutation for sync if we have server ID
+            if let syncEngine = syncEngine, let serverId = geofence.serverId {
+                let request = UpdateGeofenceRequest(
+                    name: geofence.name,
+                    latitude: geofence.latitude,
+                    longitude: geofence.longitude,
+                    radius: geofence.radius,
+                    eventTypeEntryId: nil, // TODO: lookup server IDs
+                    eventTypeExitId: nil,
+                    isActive: geofence.isActive,
+                    notifyOnEntry: geofence.notifyOnEntry,
+                    notifyOnExit: geofence.notifyOnExit,
+                    iosRegionIdentifier: geofence.regionIdentifier
+                )
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .geofence,
+                    operation: .update,
+                    localEntityId: geofence.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+
+                // Trigger sync if online
+                if isOnline {
+                    await syncEngine.performSync()
+                }
+            }
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
         }
@@ -381,10 +664,31 @@ class EventStore {
     func deleteGeofence(_ geofence: Geofence) async {
         guard let modelContext else { return }
 
+        // Queue deletion mutation before deleting locally
+        if let syncEngine = syncEngine, let serverId = geofence.serverId {
+            do {
+                let payload = Data()
+                try await syncEngine.queueMutation(
+                    entityType: .geofence,
+                    operation: .delete,
+                    localEntityId: geofence.id,
+                    serverEntityId: serverId,
+                    payload: payload
+                )
+            } catch {
+                Log.sync.error("Failed to queue delete mutation", error: error)
+            }
+        }
+
         modelContext.delete(geofence)
 
         do {
             try modelContext.save()
+
+            // Trigger sync if online
+            if let syncEngine = syncEngine, isOnline {
+                await syncEngine.performSync()
+            }
         } catch {
             errorMessage = "Failed to delete geofence: \(error.localizedDescription)"
         }
@@ -392,18 +696,18 @@ class EventStore {
 
     // MARK: - Geofence Reconciliation
 
-    /// Look up local Geofence UUID from a region identifier (which is the backendId or local UUID)
+    /// Look up local Geofence UUID from a region identifier (which is the serverId or local UUID)
     func lookupLocalGeofenceId(from identifier: String) -> UUID? {
         guard let modelContext else {
             return UUID(uuidString: identifier)
         }
 
-        // First, try to find a geofence with matching backendId
-        let targetBackendId = identifier
-        let backendIdDescriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.backendId == targetBackendId }
+        // First, try to find a geofence with matching serverId
+        let targetServerId = identifier
+        let serverIdDescriptor = FetchDescriptor<Geofence>(
+            predicate: #Predicate { $0.serverId == targetServerId }
         )
-        if let geofence = try? modelContext.fetch(backendIdDescriptor).first {
+        if let geofence = try? modelContext.fetch(serverIdDescriptor).first {
             return geofence.id
         }
 
@@ -423,16 +727,16 @@ class EventStore {
     /// Reconciles local geofences with backend state.
     /// Returns definitions for CLLocationManager to monitor.
     func reconcileGeofencesWithBackend(forceRefresh: Bool = false) async -> [GeofenceDefinition] {
-        guard let modelContext else { return [] }
+        guard modelContext != nil else { return [] }
 
         // If offline, return local definitions
-        guard let syncEngine = syncEngine, syncEngine.isOnline else {
+        guard let syncEngine = syncEngine, isOnline else {
             return getLocalGeofenceDefinitions()
         }
 
         // Sync first to ensure we have latest data
         if forceRefresh {
-            try? await syncEngine.performFullSync()
+            await syncEngine.performSync()
         }
 
         return getLocalGeofenceDefinitions()
@@ -453,10 +757,10 @@ class EventStore {
 
         let limited = Array(geofences.prefix(20))
 
-        // Use backendId field directly - no mapping needed
+        // Use serverId field directly - no mapping needed
         return limited.map { geofence -> GeofenceDefinition in
-            if let backendId = geofence.backendId {
-                return GeofenceDefinition(from: geofence, backendId: backendId)
+            if let serverId = geofence.serverId {
+                return GeofenceDefinition(from: geofence, backendId: serverId)
             } else {
                 return GeofenceDefinition(fromLocal: geofence)
             }
@@ -484,5 +788,26 @@ class EventStore {
         // Just save locally - SyncEngine will upload on next sync
         guard let modelContext else { return }
         try? modelContext.save()
+    }
+
+    // MARK: - Property Conversion Helpers
+
+    private func convertLocalPropertiesToAPI(_ properties: [String: PropertyValue]) -> [String: APIPropertyValue] {
+        return properties.mapValues { propValue in
+            APIPropertyValue(
+                type: propValue.type.rawValue,
+                value: propValue.value
+            )
+        }
+    }
+
+    // MARK: - Debug Methods
+
+    /// Test method to directly fetch geofences from the API (for debugging)
+    func testFetchGeofences() async throws -> [APIGeofence] {
+        guard let apiClient else {
+            throw NSError(domain: "EventStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "API client not available"])
+        }
+        return try await apiClient.getGeofences()
     }
 }

@@ -28,6 +28,10 @@ enum PropertyType: String, Codable, CaseIterable {
 @Model
 final class PropertyDefinition {
     var id: UUID
+    /// Server-generated ID - unique constraint ensures no duplicates
+    @Attribute(.unique) var serverId: String?
+    /// Sync status with the backend
+    var syncStatusRaw: String = SyncStatus.pending.rawValue
     var eventTypeId: UUID
     var key: String
     var label: String
@@ -40,7 +44,14 @@ final class PropertyDefinition {
 
     var eventType: EventType?
 
-    // Computed properties for convenience
+    // MARK: - Computed Properties
+
+    /// Sync status computed property for convenient access
+    @Transient var syncStatus: SyncStatus {
+        get { SyncStatus(rawValue: syncStatusRaw) ?? .pending }
+        set { syncStatusRaw = newValue.rawValue }
+    }
+
     var options: [String] {
         get {
             guard let data = optionsData else { return [] }
@@ -71,9 +82,13 @@ final class PropertyDefinition {
         defaultValue: AnyCodable? = nil,
         displayOrder: Int = 0,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        serverId: String? = nil,
+        syncStatus: SyncStatus = .pending
     ) {
         self.id = id
+        self.serverId = serverId
+        self.syncStatusRaw = syncStatus.rawValue
         self.eventTypeId = eventTypeId
         self.key = key
         self.label = label

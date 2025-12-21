@@ -3,19 +3,23 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 )
 
 type geofenceService struct {
-	geofenceRepo repository.GeofenceRepository
+	geofenceRepo  repository.GeofenceRepository
+	changeLogRepo repository.ChangeLogRepository
 }
 
 // NewGeofenceService creates a new geofence service
-func NewGeofenceService(geofenceRepo repository.GeofenceRepository) GeofenceService {
+func NewGeofenceService(geofenceRepo repository.GeofenceRepository, changeLogRepo repository.ChangeLogRepository) GeofenceService {
 	return &geofenceService{
-		geofenceRepo: geofenceRepo,
+		geofenceRepo:  geofenceRepo,
+		changeLogRepo: changeLogRepo,
 	}
 }
 
@@ -47,7 +51,24 @@ func (s *geofenceService) CreateGeofence(ctx context.Context, userID string, req
 		NotifyOnExit:     &req.NotifyOnExit,
 	}
 
-	return s.geofenceRepo.Create(ctx, geofence)
+	created, err := s.geofenceRepo.Create(ctx, geofence)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeGeofence,
+		Operation:  models.OperationCreate,
+		EntityID:   created.ID,
+		UserID:     userID,
+		Data:       created,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append to change log", logger.Err(err), logger.String("geofence_id", created.ID))
+	}
+
+	return created, nil
 }
 
 func (s *geofenceService) GetGeofence(ctx context.Context, userID, geofenceID string) (*models.Geofence, error) {
@@ -133,7 +154,24 @@ func (s *geofenceService) UpdateGeofence(ctx context.Context, userID, geofenceID
 		update.IOSRegionIdentifier = req.IOSRegionIdentifier
 	}
 
-	return s.geofenceRepo.Update(ctx, geofenceID, update)
+	updated, err := s.geofenceRepo.Update(ctx, geofenceID, update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeGeofence,
+		Operation:  models.OperationUpdate,
+		EntityID:   updated.ID,
+		UserID:     userID,
+		Data:       updated,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append update to change log", logger.Err(err), logger.String("geofence_id", updated.ID))
+	}
+
+	return updated, nil
 }
 
 func (s *geofenceService) DeleteGeofence(ctx context.Context, userID, geofenceID string) error {
@@ -147,5 +185,22 @@ func (s *geofenceService) DeleteGeofence(ctx context.Context, userID, geofenceID
 		return fmt.Errorf("geofence not found")
 	}
 
-	return s.geofenceRepo.Delete(ctx, geofenceID)
+	if err := s.geofenceRepo.Delete(ctx, geofenceID); err != nil {
+		return err
+	}
+
+	// Append to change log
+	now := time.Now()
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypeGeofence,
+		Operation:  models.OperationDelete,
+		EntityID:   geofenceID,
+		UserID:     userID,
+		DeletedAt:  &now,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append delete to change log", logger.Err(err), logger.String("geofence_id", geofenceID))
+	}
+
+	return nil
 }

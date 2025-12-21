@@ -90,6 +90,18 @@ struct EventTypeSettingsView: View {
                     .accessibilityIdentifier("healthTrackingLink")
                 }
                 .accessibilityIdentifier("actionsSection")
+
+                // TODO: Re-add #if DEBUG after cleanup
+                Section {
+                    NavigationLink {
+                        DebugStorageView()
+                    } label: {
+                        Label("Debug Storage", systemImage: "externaldrive.fill")
+                    }
+                    .accessibilityIdentifier("debugStorageLink")
+                } header: {
+                    Text("Developer")
+                }
             }
             .navigationTitle("Settings")
             .toolbar {

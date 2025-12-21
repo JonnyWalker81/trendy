@@ -38,20 +38,46 @@ struct trendyApp: App {
     // MARK: - SwiftData
 
     var sharedModelContainer: ModelContainer = {
+        // Check if we need to clear container data (set by DebugStorageView)
+        if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
+            print("🗑️ Debug: Clearing App Group container on launch...")
+            UserDefaults.standard.removeObject(forKey: "debug_clear_container_on_launch")
+            UserDefaults.standard.synchronize()
+
+            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+                let fileManager = FileManager.default
+                if let contents = try? fileManager.contentsOfDirectory(at: appGroupURL, includingPropertiesForKeys: nil) {
+                    for item in contents {
+                        do {
+                            try fileManager.removeItem(at: item)
+                            print("   Deleted: \(item.lastPathComponent)")
+                        } catch {
+                            print("   Failed to delete \(item.lastPathComponent): \(error)")
+                        }
+                    }
+                }
+                print("🗑️ Debug: Container cleared")
+            }
+        }
+
         let schema = Schema([
             Event.self,
             EventType.self,
             QueuedOperation.self,
+            PendingMutation.self,
             Geofence.self,
             PropertyDefinition.self,
             HealthKitConfiguration.self
         ])
 
         // Use App Group container for widget sharing
+        // Explicitly disable CloudKit sync - we use our own backend for sync
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
-            groupContainer: .identifier(appGroupIdentifier)
+            allowsSave: true,
+            groupContainer: .identifier(appGroupIdentifier),
+            cloudKitDatabase: .none  // Disable iCloud/CloudKit sync
         )
 
         // Try to create the container, with fallback to reset if schema is corrupted
@@ -91,6 +117,7 @@ struct trendyApp: App {
             _ = try context.fetchCount(FetchDescriptor<EventType>())
             _ = try context.fetchCount(FetchDescriptor<Event>())
             _ = try context.fetchCount(FetchDescriptor<QueuedOperation>())
+            _ = try context.fetchCount(FetchDescriptor<PendingMutation>())
             _ = try context.fetchCount(FetchDescriptor<Geofence>())
             _ = try context.fetchCount(FetchDescriptor<PropertyDefinition>())
             _ = try context.fetchCount(FetchDescriptor<HealthKitConfiguration>())

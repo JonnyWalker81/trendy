@@ -2,25 +2,29 @@
 //  SyncStatusBanner.swift
 //  trendy
 //
-//  Displays sync status and progress during data synchronization.
+//  Displays sync status and pending mutation count during data synchronization.
 //
 
 import SwiftUI
 
-/// A banner that displays sync status and progress at the top of list views.
+/// A banner that displays sync status and pending mutation count at the top of list views.
 struct SyncStatusBanner: View {
-    let syncState: SyncEngine.SyncState
-    let progress: SyncProgress
+    let syncState: SyncState
+    let pendingCount: Int
     var onRetry: (() async -> Void)?
 
     var body: some View {
         Group {
             switch syncState {
             case .idle:
-                EmptyView()
+                if pendingCount > 0 {
+                    pendingBanner()
+                } else {
+                    EmptyView()
+                }
 
-            case .syncing(let phase):
-                syncingBanner(phase: phase)
+            case .syncing:
+                syncingBanner()
 
             case .error(let message):
                 errorBanner(message: message)
@@ -29,24 +33,44 @@ struct SyncStatusBanner: View {
     }
 
     @ViewBuilder
-    private func syncingBanner(phase: SyncEngine.SyncPhase) -> some View {
+    private func pendingBanner() -> some View {
         HStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(0.8)
-                .tint(.secondary)
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.orange)
 
-            Text(phase.description)
+            Text("\(pendingCount) pending change\(pendingCount == 1 ? "" : "s")")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             Spacer()
 
-            if progress.total > 0 {
-                Text("\(progress.completed)/\(progress.total)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
+            if let onRetry = onRetry {
+                Button("Sync Now") {
+                    Task {
+                        await onRetry()
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.blue)
             }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private func syncingBanner() -> some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(0.8)
+                .tint(.secondary)
+
+            Text("Syncing...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -91,8 +115,18 @@ struct SyncStatusBanner: View {
 #Preview("Syncing") {
     VStack(spacing: 0) {
         SyncStatusBanner(
-            syncState: .syncing(.downloading),
-            progress: SyncProgress(total: 150, completed: 45, phase: "Downloading events...")
+            syncState: .syncing,
+            pendingCount: 0
+        )
+        Spacer()
+    }
+}
+
+#Preview("Pending") {
+    VStack(spacing: 0) {
+        SyncStatusBanner(
+            syncState: .idle,
+            pendingCount: 3
         )
         Spacer()
     }
@@ -102,7 +136,7 @@ struct SyncStatusBanner: View {
     VStack(spacing: 0) {
         SyncStatusBanner(
             syncState: .error("Network connection lost"),
-            progress: SyncProgress(),
+            pendingCount: 0,
             onRetry: { }
         )
         Spacer()
@@ -113,7 +147,7 @@ struct SyncStatusBanner: View {
     VStack(spacing: 0) {
         SyncStatusBanner(
             syncState: .idle,
-            progress: SyncProgress()
+            pendingCount: 0
         )
         Spacer()
     }

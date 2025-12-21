@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 )
@@ -11,16 +13,19 @@ import (
 type propertyDefinitionService struct {
 	propertyDefRepo repository.PropertyDefinitionRepository
 	eventTypeRepo   repository.EventTypeRepository
+	changeLogRepo   repository.ChangeLogRepository
 }
 
 // NewPropertyDefinitionService creates a new property definition service
 func NewPropertyDefinitionService(
 	propertyDefRepo repository.PropertyDefinitionRepository,
 	eventTypeRepo repository.EventTypeRepository,
+	changeLogRepo repository.ChangeLogRepository,
 ) PropertyDefinitionService {
 	return &propertyDefinitionService{
 		propertyDefRepo: propertyDefRepo,
 		eventTypeRepo:   eventTypeRepo,
+		changeLogRepo:   changeLogRepo,
 	}
 }
 
@@ -51,7 +56,24 @@ func (s *propertyDefinitionService) CreatePropertyDefinition(ctx context.Context
 		DisplayOrder: req.DisplayOrder,
 	}
 
-	return s.propertyDefRepo.Create(ctx, propertyDef)
+	created, err := s.propertyDefRepo.Create(ctx, propertyDef)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypePropertyDefinition,
+		Operation:  models.OperationCreate,
+		EntityID:   created.ID,
+		UserID:     userID,
+		Data:       created,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append to change log", logger.Err(err), logger.String("property_def_id", created.ID))
+	}
+
+	return created, nil
 }
 
 func (s *propertyDefinitionService) GetPropertyDefinition(ctx context.Context, userID, propertyDefID string) (*models.PropertyDefinition, error) {
@@ -121,7 +143,24 @@ func (s *propertyDefinitionService) UpdatePropertyDefinition(ctx context.Context
 		update.DisplayOrder = *req.DisplayOrder
 	}
 
-	return s.propertyDefRepo.Update(ctx, propertyDefID, update)
+	updated, err := s.propertyDefRepo.Update(ctx, propertyDefID, update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Append to change log
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypePropertyDefinition,
+		Operation:  models.OperationUpdate,
+		EntityID:   updated.ID,
+		UserID:     userID,
+		Data:       updated,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append update to change log", logger.Err(err), logger.String("property_def_id", updated.ID))
+	}
+
+	return updated, nil
 }
 
 func (s *propertyDefinitionService) DeletePropertyDefinition(ctx context.Context, userID, propertyDefID string) error {
@@ -135,5 +174,22 @@ func (s *propertyDefinitionService) DeletePropertyDefinition(ctx context.Context
 		return fmt.Errorf("property definition not found")
 	}
 
-	return s.propertyDefRepo.Delete(ctx, propertyDefID)
+	if err := s.propertyDefRepo.Delete(ctx, propertyDefID); err != nil {
+		return err
+	}
+
+	// Append to change log
+	now := time.Now()
+	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+		EntityType: models.EntityTypePropertyDefinition,
+		Operation:  models.OperationDelete,
+		EntityID:   propertyDefID,
+		UserID:     userID,
+		DeletedAt:  &now,
+	}); err != nil {
+		log := logger.FromContext(ctx)
+		log.Warn("failed to append delete to change log", logger.Err(err), logger.String("property_def_id", propertyDefID))
+	}
+
+	return nil
 }

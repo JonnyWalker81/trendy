@@ -38,6 +38,12 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 
 	event, err := h.eventService.CreateEvent(c.Request.Context(), userID.(string), &req)
 	if err != nil {
+		// Check for unique constraint violation (duplicate event)
+		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") ||
+			strings.Contains(err.Error(), "23505") { // PostgreSQL unique violation code
+			c.JSON(http.StatusConflict, gin.H{"error": "duplicate event: an event with this type and timestamp already exists"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

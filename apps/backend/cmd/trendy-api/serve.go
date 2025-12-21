@@ -71,14 +71,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 	insightRepo := repository.NewInsightRepository(supabaseClient)
 	aggregateRepo := repository.NewDailyAggregateRepository(supabaseClient)
 	streakRepo := repository.NewStreakRepository(supabaseClient)
+	changeLogRepo := repository.NewChangeLogRepository(supabaseClient)
+	idempotencyRepo := repository.NewIdempotencyRepository(supabaseClient)
 
 	// Initialize services
-	eventService := service.NewEventService(eventRepo, eventTypeRepo)
-	eventTypeService := service.NewEventTypeService(eventTypeRepo)
+	eventService := service.NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+	eventTypeService := service.NewEventTypeService(eventTypeRepo, changeLogRepo)
 	analyticsService := service.NewAnalyticsService(eventRepo)
 	authService := service.NewAuthService(supabaseClient, userRepo)
-	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo)
-	geofenceService := service.NewGeofenceService(geofenceRepo)
+	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo, changeLogRepo)
+	geofenceService := service.NewGeofenceService(geofenceRepo, changeLogRepo)
 	intelligenceService := service.NewIntelligenceService(eventRepo, eventTypeRepo, insightRepo, aggregateRepo, streakRepo)
 
 	// Initialize handlers
@@ -89,6 +91,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	propertyDefHandler := handlers.NewPropertyDefinitionHandler(propertyDefService)
 	geofenceHandler := handlers.NewGeofenceHandler(geofenceService)
 	insightsHandler := handlers.NewInsightsHandler(intelligenceService)
+	changesHandler := handlers.NewChangesHandler(changeLogRepo)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -129,27 +132,31 @@ func runServe(cmd *cobra.Command, args []string) error {
 		protected := v1.Group("")
 		protected.Use(middleware.Auth(supabaseClient))
 		{
-			// Event routes
+			// Change feed routes (for sync)
+			protected.GET("/changes", changesHandler.GetChanges)
+			protected.GET("/changes/latest-cursor", changesHandler.GetLatestCursor)
+
+			// Event routes - with idempotency for mutations
 			protected.GET("/events", eventHandler.GetEvents)
 			protected.GET("/events/export", eventHandler.ExportEvents)
-			protected.POST("/events", eventHandler.CreateEvent)
-			protected.POST("/events/batch", eventHandler.CreateEventsBatch)
+			protected.POST("/events", middleware.Idempotency(idempotencyRepo), eventHandler.CreateEvent)
+			protected.POST("/events/batch", middleware.Idempotency(idempotencyRepo), eventHandler.CreateEventsBatch)
 			protected.GET("/events/:id", eventHandler.GetEvent)
-			protected.PUT("/events/:id", eventHandler.UpdateEvent)
+			protected.PUT("/events/:id", middleware.Idempotency(idempotencyRepo), eventHandler.UpdateEvent)
 			protected.DELETE("/events/:id", eventHandler.DeleteEvent)
 
-			// Event type routes
+			// Event type routes - with idempotency for mutations
 			protected.GET("/event-types", eventTypeHandler.GetEventTypes)
-			protected.POST("/event-types", eventTypeHandler.CreateEventType)
+			protected.POST("/event-types", middleware.Idempotency(idempotencyRepo), eventTypeHandler.CreateEventType)
 			protected.GET("/event-types/:id", eventTypeHandler.GetEventType)
-			protected.PUT("/event-types/:id", eventTypeHandler.UpdateEventType)
+			protected.PUT("/event-types/:id", middleware.Idempotency(idempotencyRepo), eventTypeHandler.UpdateEventType)
 			protected.DELETE("/event-types/:id", eventTypeHandler.DeleteEventType)
 
-			// Property definition routes
+			// Property definition routes - with idempotency for mutations
 			protected.GET("/event-types/:id/properties", propertyDefHandler.GetPropertyDefinitionsByEventType)
-			protected.POST("/event-types/:id/properties", propertyDefHandler.CreatePropertyDefinition)
+			protected.POST("/event-types/:id/properties", middleware.Idempotency(idempotencyRepo), propertyDefHandler.CreatePropertyDefinition)
 			protected.GET("/property-definitions/:id", propertyDefHandler.GetPropertyDefinition)
-			protected.PUT("/property-definitions/:id", propertyDefHandler.UpdatePropertyDefinition)
+			protected.PUT("/property-definitions/:id", middleware.Idempotency(idempotencyRepo), propertyDefHandler.UpdatePropertyDefinition)
 			protected.DELETE("/property-definitions/:id", propertyDefHandler.DeletePropertyDefinition)
 
 			// Analytics routes
@@ -157,11 +164,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/analytics/trends", analyticsHandler.GetTrends)
 			protected.GET("/analytics/event-type/:id", analyticsHandler.GetEventTypeAnalytics)
 
-			// Geofence routes
+			// Geofence routes - with idempotency for mutations
 			protected.GET("/geofences", geofenceHandler.GetGeofences)
-			protected.POST("/geofences", geofenceHandler.CreateGeofence)
+			protected.POST("/geofences", middleware.Idempotency(idempotencyRepo), geofenceHandler.CreateGeofence)
 			protected.GET("/geofences/:id", geofenceHandler.GetGeofence)
-			protected.PUT("/geofences/:id", geofenceHandler.UpdateGeofence)
+			protected.PUT("/geofences/:id", middleware.Idempotency(idempotencyRepo), geofenceHandler.UpdateGeofence)
 			protected.DELETE("/geofences/:id", geofenceHandler.DeleteGeofence)
 
 			// Insights/Intelligence routes

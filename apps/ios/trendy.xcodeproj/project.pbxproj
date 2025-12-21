@@ -90,6 +90,7 @@
 				Models/EventType.swift,
 				Models/PropertyDefinition.swift,
 				Models/PropertyValue.swift,
+				Models/SyncStatus.swift,
 			);
 			target = DE6E7D112ED7CEA8006CA4DD /* TrendyWidgetsExtension */;
 		};
