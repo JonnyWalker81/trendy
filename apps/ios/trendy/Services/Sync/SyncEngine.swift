@@ -95,18 +95,19 @@ actor SyncEngine {
             }
 
             // Step 3: Pull incremental changes from the server
-            // SKIP pullChanges after a FORCED bootstrap - we already have current state
+            // SKIP pullChanges after ANY bootstrap - we already have current state
             // from direct API calls, and the change_log may have stale entries that
             // would re-create deleted events.
-            if wasForceBootstrap {
-                // After forced bootstrap, get the latest cursor (max change_log ID) from the backend.
+            if shouldBootstrap {
+                // After bootstrap, get the latest cursor (max change_log ID) from the backend.
                 // This ensures we skip ALL existing change_log entries, only pulling truly new changes.
                 do {
                     let latestCursor = try await apiClient.getLatestCursor()
                     lastSyncCursor = latestCursor
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
-                    Log.sync.info("Skipped pullChanges after forced bootstrap, cursor set to latest", context: .with { ctx in
+                    Log.sync.info("Skipped pullChanges after bootstrap, cursor set to latest", context: .with { ctx in
                         ctx.add("latest_cursor", Int(latestCursor))
+                        ctx.add("was_forced", wasForceBootstrap)
                     })
                 } catch {
                     // Fallback: if we can't get the latest cursor, use a high value
@@ -758,28 +759,46 @@ actor SyncEngine {
         let allGeofences = FetchDescriptor<Geofence>()
         let localGeofences = try context.fetch(allGeofences)
         var staleGeofenceCount = 0
+        var nilServerIdGeofenceCount = 0
         for geofence in localGeofences {
-            if let serverId = geofence.serverId, !validGeofenceIds.contains(serverId) {
+            if let serverId = geofence.serverId {
+                if !validGeofenceIds.contains(serverId) {
+                    context.delete(geofence)
+                    staleGeofenceCount += 1
+                }
+            } else {
+                // Also delete geofences with nil serverId (orphaned)
                 context.delete(geofence)
-                staleGeofenceCount += 1
+                nilServerIdGeofenceCount += 1
             }
         }
         Log.sync.info("Cleanup: removing stale geofences", context: .with { ctx in
-            ctx.add("count", staleGeofenceCount)
+            ctx.add("stale_count", staleGeofenceCount)
+            ctx.add("nil_serverId_count", nilServerIdGeofenceCount)
+            ctx.add("total_deleted", staleGeofenceCount + nilServerIdGeofenceCount)
         })
 
         // Remove stale PropertyDefinitions
         let allPropDefs = FetchDescriptor<PropertyDefinition>()
         let localPropDefs = try context.fetch(allPropDefs)
         var stalePropDefCount = 0
+        var nilServerIdPropDefCount = 0
         for propDef in localPropDefs {
-            if let serverId = propDef.serverId, !validPropertyDefinitionIds.contains(serverId) {
+            if let serverId = propDef.serverId {
+                if !validPropertyDefinitionIds.contains(serverId) {
+                    context.delete(propDef)
+                    stalePropDefCount += 1
+                }
+            } else {
+                // Also delete property definitions with nil serverId (orphaned)
                 context.delete(propDef)
-                stalePropDefCount += 1
+                nilServerIdPropDefCount += 1
             }
         }
         Log.sync.info("Cleanup: removing stale property definitions", context: .with { ctx in
-            ctx.add("count", stalePropDefCount)
+            ctx.add("stale_count", stalePropDefCount)
+            ctx.add("nil_serverId_count", nilServerIdPropDefCount)
+            ctx.add("total_deleted", stalePropDefCount + nilServerIdPropDefCount)
         })
 
         try context.save()
@@ -794,9 +813,54 @@ actor SyncEngine {
         let context = ModelContext(modelContainer)
         let localStore = LocalStore(modelContext: context)
 
-        // First, clean up any orphaned local entities (those without serverId)
-        // This prevents duplicates when backend data is fetched
-        try cleanupOrphanedEntities(context: context)
+        // NUCLEAR CLEANUP: Delete ALL local data before repopulating from backend.
+        // This ensures a completely clean slate and prevents any duplicate accumulation.
+        // This is safe because bootstrap is only called when we want a fresh sync.
+        Log.sync.info("Bootstrap: Starting nuclear cleanup of all local data")
+
+        // Delete all Events first (they reference EventTypes)
+        let allEventsDescriptor = FetchDescriptor<Event>()
+        let allLocalEvents = try context.fetch(allEventsDescriptor)
+        Log.sync.info("Bootstrap: Deleting all local events", context: .with { ctx in
+            ctx.add("count", allLocalEvents.count)
+        })
+        for event in allLocalEvents {
+            context.delete(event)
+        }
+
+        // Delete all Geofences
+        let allGeofencesDescriptor = FetchDescriptor<Geofence>()
+        let allLocalGeofences = try context.fetch(allGeofencesDescriptor)
+        Log.sync.info("Bootstrap: Deleting all local geofences", context: .with { ctx in
+            ctx.add("count", allLocalGeofences.count)
+        })
+        for geofence in allLocalGeofences {
+            context.delete(geofence)
+        }
+
+        // Delete all PropertyDefinitions
+        let allPropDefsDescriptor = FetchDescriptor<PropertyDefinition>()
+        let allLocalPropDefs = try context.fetch(allPropDefsDescriptor)
+        Log.sync.info("Bootstrap: Deleting all local property definitions", context: .with { ctx in
+            ctx.add("count", allLocalPropDefs.count)
+        })
+        for propDef in allLocalPropDefs {
+            context.delete(propDef)
+        }
+
+        // Delete all EventTypes last (other entities may reference them)
+        let allEventTypesDescriptor = FetchDescriptor<EventType>()
+        let allLocalEventTypes = try context.fetch(allEventTypesDescriptor)
+        Log.sync.info("Bootstrap: Deleting all local event types", context: .with { ctx in
+            ctx.add("count", allLocalEventTypes.count)
+        })
+        for eventType in allLocalEventTypes {
+            context.delete(eventType)
+        }
+
+        // Save the deletions
+        try context.save()
+        Log.sync.info("Bootstrap: Nuclear cleanup completed - all local data deleted")
 
         // Step 1: Fetch and upsert all EventTypes first (Events reference them)
         Log.sync.info("Bootstrap: fetching event types")
@@ -815,6 +879,12 @@ actor SyncEngine {
                 eventType.iconName = apiEventType.icon
             }
         }
+
+        // Save EventTypes immediately to ensure they're persisted before Geofences reference them
+        try context.save()
+        Log.sync.info("Bootstrap: Saved event types", context: .with { ctx in
+            ctx.add("count", eventTypes.count)
+        })
 
         // Step 2: Fetch and upsert all Geofences (Events may reference them)
         Log.sync.info("Bootstrap: fetching geofences")
@@ -845,6 +915,12 @@ actor SyncEngine {
                 }
             }
         }
+
+        // Save Geofences immediately to ensure they're persisted before Events reference them
+        try context.save()
+        Log.sync.info("Bootstrap: Saved geofences", context: .with { ctx in
+            ctx.add("count", geofences.count)
+        })
 
         // Step 3: Fetch and upsert all Events
         Log.sync.info("Bootstrap: fetching events")
@@ -880,6 +956,12 @@ actor SyncEngine {
                 event.eventType = localEventType
             }
         }
+
+        // Save Events immediately to ensure they're persisted
+        try context.save()
+        Log.sync.info("Bootstrap: Saved events", context: .with { ctx in
+            ctx.add("count", events.count)
+        })
 
         // Step 4: Fetch property definitions for each event type
         Log.sync.info("Bootstrap: fetching property definitions")
