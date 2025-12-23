@@ -209,6 +209,10 @@ class EventStore {
             // Always load from local cache after sync
             try await fetchFromLocal()
 
+            // Migrate HealthKit settings from local UUIDs to serverIds
+            // This ensures HealthKit links survive across syncs
+            HealthKitSettings.shared.migrateToServerIds(eventTypes: eventTypes)
+
         } catch {
             Log.data.error("Fetch error", error: error)
             errorMessage = "Failed to sync. Showing cached data."
@@ -769,25 +773,151 @@ class EventStore {
 
     // MARK: - Sync Helpers for External Services
 
-    /// Sync an existing event to the backend (used by GeofenceManager)
+    /// Sync an existing event to the backend (used by GeofenceManager, HealthKitService)
     func syncEventToBackend(_ event: Event) async {
-        // Just save locally - SyncEngine will upload on next sync
         guard let modelContext else { return }
-        try? modelContext.save()
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("syncEventToBackend: no syncEngine available")
+            return
+        }
+        guard let eventTypeServerId = event.eventTypeServerId ?? event.eventType?.serverId else {
+            Log.sync.warning("syncEventToBackend: event has no eventTypeServerId")
+            return
+        }
+
+        do {
+            try modelContext.save()
+
+            let request = CreateEventRequest(
+                eventTypeId: eventTypeServerId,
+                timestamp: event.timestamp,
+                notes: event.notes,
+                isAllDay: event.isAllDay,
+                endDate: event.endDate,
+                sourceType: event.sourceType.rawValue,
+                externalId: event.externalId,
+                originalTitle: event.originalTitle,
+                geofenceId: event.geofenceServerId,
+                locationLatitude: event.locationLatitude,
+                locationLongitude: event.locationLongitude,
+                locationName: event.locationName,
+                properties: convertLocalPropertiesToAPI(event.properties)
+            )
+            let payload = try JSONEncoder().encode(request)
+            try await syncEngine.queueMutation(
+                entityType: .event,
+                operation: .create,
+                localEntityId: event.id,
+                payload: payload
+            )
+
+            Log.sync.info("Queued event for sync", context: .with { ctx in
+                ctx.add("event_id", event.id.uuidString)
+                ctx.add("source_type", event.sourceType.rawValue)
+            })
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+        } catch {
+            Log.sync.error("Failed to queue event for sync", error: error)
+        }
     }
 
     /// Sync an auto-created EventType to the backend (used by HealthKitService)
     func syncEventTypeToBackend(_ eventType: EventType) async {
-        // Just save locally - SyncEngine will upload on next sync
         guard let modelContext else { return }
-        try? modelContext.save()
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("syncEventTypeToBackend: no syncEngine available")
+            return
+        }
+
+        do {
+            try modelContext.save()
+
+            let request = CreateEventTypeRequest(
+                name: eventType.name,
+                color: eventType.colorHex,
+                icon: eventType.iconName
+            )
+            let payload = try JSONEncoder().encode(request)
+            try await syncEngine.queueMutation(
+                entityType: .eventType,
+                operation: .create,
+                localEntityId: eventType.id,
+                payload: payload
+            )
+
+            Log.sync.info("Queued event type for sync", context: .with { ctx in
+                ctx.add("event_type_id", eventType.id.uuidString)
+                ctx.add("name", eventType.name)
+            })
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+        } catch {
+            Log.sync.error("Failed to queue event type for sync", error: error)
+        }
     }
 
     /// Sync a geofence to the backend
     func syncGeofenceToBackend(_ geofence: Geofence) async {
-        // Just save locally - SyncEngine will upload on next sync
         guard let modelContext else { return }
-        try? modelContext.save()
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("syncGeofenceToBackend: no syncEngine available")
+            return
+        }
+
+        do {
+            try modelContext.save()
+
+            // Look up serverId for entry/exit event types
+            var entryServerId: String?
+            var exitServerId: String?
+            if let entryId = geofence.eventTypeEntryID {
+                let descriptor = FetchDescriptor<EventType>(predicate: #Predicate { $0.id == entryId })
+                entryServerId = try? modelContext.fetch(descriptor).first?.serverId
+            }
+            if let exitId = geofence.eventTypeExitID {
+                let descriptor = FetchDescriptor<EventType>(predicate: #Predicate { $0.id == exitId })
+                exitServerId = try? modelContext.fetch(descriptor).first?.serverId
+            }
+
+            let request = CreateGeofenceRequest(
+                id: nil,
+                name: geofence.name,
+                latitude: geofence.latitude,
+                longitude: geofence.longitude,
+                radius: geofence.radius,
+                eventTypeEntryId: entryServerId,
+                eventTypeExitId: exitServerId,
+                isActive: geofence.isActive,
+                notifyOnEntry: geofence.notifyOnEntry,
+                notifyOnExit: geofence.notifyOnExit
+            )
+            let payload = try JSONEncoder().encode(request)
+            try await syncEngine.queueMutation(
+                entityType: .geofence,
+                operation: .create,
+                localEntityId: geofence.id,
+                payload: payload
+            )
+
+            Log.sync.info("Queued geofence for sync", context: .with { ctx in
+                ctx.add("geofence_id", geofence.id.uuidString)
+                ctx.add("name", geofence.name)
+            })
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+        } catch {
+            Log.sync.error("Failed to queue geofence for sync", error: error)
+        }
     }
 
     // MARK: - Property Conversion Helpers

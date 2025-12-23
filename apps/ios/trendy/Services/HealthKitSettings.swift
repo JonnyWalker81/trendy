@@ -100,26 +100,59 @@ final class HealthKitSettings {
         defaults.set(notify, forKey: key)
     }
 
-    // MARK: - Event Type Links
+    // MARK: - Event Type Links (using serverId for sync stability)
 
-    /// Get the linked EventType ID for a category (if any)
-    func eventTypeId(for category: HealthDataCategory) -> UUID? {
+    /// Get the linked EventType serverId for a category (if any)
+    /// Returns the backend server ID which is stable across syncs
+    func eventTypeServerId(for category: HealthDataCategory) -> String? {
         guard let links = defaults.dictionary(forKey: eventTypeLinksKey) as? [String: String],
-              let uuidString = links[category.rawValue] else {
+              let serverId = links[category.rawValue] else {
             return nil
         }
-        return UUID(uuidString: uuidString)
+        return serverId
     }
 
-    /// Link a category to a specific EventType
-    func setEventTypeId(_ id: UUID?, for category: HealthDataCategory) {
+    /// Link a category to a specific EventType using its serverId
+    /// The serverId is the backend UUID which remains stable across syncs
+    func setEventTypeServerId(_ serverId: String?, for category: HealthDataCategory) {
         var links = (defaults.dictionary(forKey: eventTypeLinksKey) as? [String: String]) ?? [:]
-        if let id = id {
-            links[category.rawValue] = id.uuidString
+        if let serverId = serverId {
+            links[category.rawValue] = serverId
         } else {
             links.removeValue(forKey: category.rawValue)
         }
         defaults.set(links, forKey: eventTypeLinksKey)
+    }
+
+    // MARK: - Legacy Migration (for existing local UUID links)
+
+    /// Migrate old local UUID links to serverIds
+    /// Call this after sync when EventTypes have their serverIds populated
+    func migrateToServerIds(eventTypes: [any EventTypeProtocol]) {
+        var links = (defaults.dictionary(forKey: eventTypeLinksKey) as? [String: String]) ?? [:]
+        var migrated = 0
+
+        for category in HealthDataCategory.allCases {
+            guard let storedValue = links[category.rawValue] else { continue }
+
+            // Check if this looks like a local UUID (not yet migrated)
+            // Local UUIDs are uppercase, serverIds from backend are lowercase
+            if let localUUID = UUID(uuidString: storedValue) {
+                // Find the EventType with this local ID and get its serverId
+                if let eventType = eventTypes.first(where: { $0.localId == localUUID }),
+                   let serverId = eventType.backendServerId {
+                    links[category.rawValue] = serverId
+                    migrated += 1
+                    print("📱 HealthKitSettings: Migrated \(category.displayName) from local UUID to serverId")
+                }
+            }
+            // If it's already a serverId (lowercase UUID string), leave it alone
+        }
+
+        if migrated > 0 {
+            defaults.set(links, forKey: eventTypeLinksKey)
+            print("📱 HealthKitSettings: Migrated \(migrated) event type links to serverIds")
+        }
     }
 
     // MARK: - Convenience
@@ -135,7 +168,7 @@ final class HealthKitSettings {
         let category: HealthDataCategory
         let isEnabled: Bool
         let notifyOnDetection: Bool
-        let linkedEventTypeId: UUID?
+        let linkedEventTypeServerId: String?
     }
 
     func config(for category: HealthDataCategory) -> CategoryConfig {
@@ -143,7 +176,7 @@ final class HealthKitSettings {
             category: category,
             isEnabled: isEnabled(category),
             notifyOnDetection: notifyOnDetection(for: category),
-            linkedEventTypeId: eventTypeId(for: category)
+            linkedEventTypeServerId: eventTypeServerId(for: category)
         )
     }
 
@@ -159,8 +192,8 @@ final class HealthKitSettings {
         print("   Enabled categories: \(enabledCategories.map { $0.displayName }.joined(separator: ", "))")
         for category in enabledCategories {
             let notify = notifyOnDetection(for: category) ? "yes" : "no"
-            let linked = eventTypeId(for: category)?.uuidString.prefix(8) ?? "auto"
-            print("   - \(category.displayName): notify=\(notify), eventType=\(linked)")
+            let linked = eventTypeServerId(for: category)?.prefix(8) ?? "auto"
+            print("   - \(category.displayName): notify=\(notify), eventTypeServerId=\(linked)")
         }
     }
 }

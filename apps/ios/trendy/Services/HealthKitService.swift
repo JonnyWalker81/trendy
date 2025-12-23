@@ -1053,14 +1053,16 @@ class HealthKitService: NSObject {
     private func ensureEventType(for category: HealthDataCategory) async -> EventType? {
         let settings = HealthKitSettings.shared
 
-        // 1. Check if settings already has a linked EventType
-        if let eventTypeID = settings.eventTypeId(for: category) {
+        // 1. Check if settings already has a linked EventType (by serverId)
+        if let serverId = settings.eventTypeServerId(for: category) {
             let eventTypeDescriptor = FetchDescriptor<EventType>(
-                predicate: #Predicate { eventType in eventType.id == eventTypeID }
+                predicate: #Predicate { eventType in eventType.serverId == serverId }
             )
             if let eventType = try? modelContext.fetch(eventTypeDescriptor).first {
                 return eventType
             }
+            // ServerId stored but EventType not found locally - might need sync
+            print("⚠️ HealthKit: EventType with serverId \(serverId) not found locally for \(category.displayName)")
         }
 
         // 2. Check if an EventType with the default name already exists
@@ -1070,8 +1072,10 @@ class HealthKitService: NSObject {
         )
 
         if let existing = try? modelContext.fetch(existingDescriptor).first {
-            // Link existing EventType to settings
-            settings.setEventTypeId(existing.id, for: category)
+            // Link existing EventType to settings using serverId
+            if let serverId = existing.serverId {
+                settings.setEventTypeServerId(serverId, for: category)
+            }
             return existing
         }
 
@@ -1093,8 +1097,11 @@ class HealthKitService: NSObject {
         // 4. Sync to backend (SyncEngine handles offline queueing)
         await eventStore.syncEventTypeToBackend(newEventType)
 
-        // 5. Link new EventType to settings
-        settings.setEventTypeId(newEventType.id, for: category)
+        // 5. Link new EventType to settings using serverId (will be set after sync)
+        // Note: serverId may not be available immediately if offline
+        if let serverId = newEventType.serverId {
+            settings.setEventTypeServerId(serverId, for: category)
+        }
 
         print("Auto-created EventType '\(newEventType.name)' for \(category.rawValue)")
         return newEventType

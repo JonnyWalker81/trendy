@@ -62,6 +62,20 @@ final class EventType {
     }
 }
 
+// MARK: - EventTypeProtocol for HealthKit Settings Migration
+
+/// Protocol to abstract EventType for HealthKit settings migration
+/// This allows HealthKitSettings to migrate from local UUID links to serverIds
+protocol EventTypeProtocol {
+    var localId: UUID { get }
+    var backendServerId: String? { get }
+}
+
+extension EventType: EventTypeProtocol {
+    var localId: UUID { id }
+    var backendServerId: String? { serverId }
+}
+
 extension Color {
     init?(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
