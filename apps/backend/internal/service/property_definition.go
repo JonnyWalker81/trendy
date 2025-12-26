@@ -56,6 +56,11 @@ func (s *propertyDefinitionService) CreatePropertyDefinition(ctx context.Context
 		DisplayOrder: req.DisplayOrder,
 	}
 
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if req.ID != nil && *req.ID != "" {
+		propertyDef.ID = *req.ID
+	}
+
 	created, err := s.propertyDefRepo.Create(ctx, propertyDef)
 	if err != nil {
 		return nil, err

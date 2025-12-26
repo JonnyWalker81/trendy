@@ -9,16 +9,16 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-// Allow UUID to be used with .sheet(item:) binding
-extension UUID: @retroactive Identifiable {
-    public var id: UUID { self }
+// Allow String to be used with .sheet(item:) binding for UUIDv7 IDs
+extension String: @retroactive Identifiable {
+    public var id: String { self }
 }
 
 @Model
 final class EventType {
-    var id: UUID
-    /// Server-generated ID - unique constraint ensures no duplicates
-    @Attribute(.unique) var serverId: String?
+    /// UUIDv7 identifier - client-generated, globally unique, time-ordered
+    /// This is THE canonical ID used both locally and on the server
+    @Attribute(.unique) var id: String
     /// Sync status with the backend
     var syncStatusRaw: String = SyncStatus.pending.rawValue
     var name: String
@@ -41,14 +41,13 @@ final class EventType {
     }
 
     init(
+        id: String = UUIDv7.generate(),
         name: String,
         colorHex: String = "#007AFF",
         iconName: String = "circle.fill",
-        serverId: String? = nil,
         syncStatus: SyncStatus = .pending
     ) {
-        self.id = UUID()
-        self.serverId = serverId
+        self.id = id
         self.syncStatusRaw = syncStatus.rawValue
         self.name = name
         self.colorHex = colorHex
@@ -62,47 +61,33 @@ final class EventType {
     }
 }
 
-// MARK: - EventTypeProtocol for HealthKit Settings Migration
-
-/// Protocol to abstract EventType for HealthKit settings migration
-/// This allows HealthKitSettings to migrate from local UUID links to serverIds
-protocol EventTypeProtocol {
-    var localId: UUID { get }
-    var backendServerId: String? { get }
-}
-
-extension EventType: EventTypeProtocol {
-    var localId: UUID { id }
-    var backendServerId: String? { serverId }
-}
-
 extension Color {
     init?(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-        
+
         var rgb: UInt64 = 0
-        
+
         guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
-        
+
         let red = Double((rgb & 0xFF0000) >> 16) / 255.0
         let green = Double((rgb & 0x00FF00) >> 8) / 255.0
         let blue = Double(rgb & 0x0000FF) / 255.0
-        
+
         self.init(red: red, green: green, blue: blue)
     }
-    
+
     var hexString: String {
         let uiColor = UIColor(self)
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
-        
+
         uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        
+
         let rgb: Int = (Int)(red * 255) << 16 | (Int)(green * 255) << 8 | (Int)(blue * 255)
-        
+
         return String(format: "#%06x", rgb)
     }
 }

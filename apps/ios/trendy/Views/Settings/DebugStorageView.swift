@@ -31,12 +31,17 @@ struct DebugStorageView: View {
     @State private var propertyDefinitionCount = 0
     @State private var healthKitConfigCount = 0
 
-    // Duplicate diagnostics
-    @State private var duplicateInfo: DuplicateInfo?
-    @State private var isAnalyzingDuplicates = false
-    @State private var showingCleanupConfirmation = false
-    @State private var showingCleanupSuccess = false
-    @State private var cleanupResult: String?
+    // Error messages for failed model counts
+    @State private var modelErrors: [String: String] = [:]
+
+    // Sync status diagnostics
+    @State private var syncStatusInfo: SyncStatusInfo?
+    @State private var isAnalyzingSyncStatus = false
+
+    // Sync geofences
+    @State private var isSyncingGeofences = false
+    @State private var showingGeofenceSyncSuccess = false
+    @State private var geofenceSyncResult: String?
 
     // User info
     @State private var currentUserId: String = "Loading..."
@@ -115,29 +120,14 @@ struct DebugStorageView: View {
         } message: {
             Text("All data has been re-synced from the backend. Stale local data has been removed.")
         }
-        .confirmationDialog(
-            "Clean Up Duplicates?",
-            isPresented: $showingCleanupConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clean Up", role: .destructive) {
-                Task {
-                    await cleanupDuplicates()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will remove orphaned records (without serverId) and merge records with duplicate serverIds. This cannot be undone.")
-        }
-        .alert("Cleanup Complete", isPresented: $showingCleanupSuccess) {
+        .alert("Geofence Sync Complete", isPresented: $showingGeofenceSyncSuccess) {
             Button("OK") {
                 Task {
-                    await analyzeDuplicates()
                     await loadSwiftDataCounts()
                 }
             }
         } message: {
-            Text(cleanupResult ?? "Duplicate records have been cleaned up.")
+            Text(geofenceSyncResult ?? "Geofences have been synced from the server.")
         }
     }
 
@@ -174,7 +164,7 @@ struct DebugStorageView: View {
         userInfoSection
         appGroupSection(info)
         swiftDataCountsSection
-        duplicateDiagnosticsSection
+        syncStatusDiagnosticsSection
         filesSection(info)
         noteSection
         syncActionsSection
@@ -209,6 +199,19 @@ struct DebugStorageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            LabeledContent("Sync Cursor Key") {
+                let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+                Text(cursorKey)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            LabeledContent("Sync Cursor Value") {
+                let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+                let cursorValue = UserDefaults.standard.integer(forKey: cursorKey)
+                Text("\(cursorValue)")
+                    .font(.caption)
+                    .foregroundStyle(cursorValue > 0 ? .green : .orange)
+            }
         } header: {
             Text("Authentication & Environment")
         }
@@ -228,17 +231,41 @@ struct DebugStorageView: View {
 
     private var swiftDataCountsSection: some View {
         Section {
-            LabeledContent("Events", value: "\(eventCount)")
-            LabeledContent("Event Types", value: "\(eventTypeCount)")
-            LabeledContent("Geofences", value: "\(geofenceCount)")
-            LabeledContent("Property Definitions", value: "\(propertyDefinitionCount)")
-            LabeledContent("HealthKit Configs", value: "\(healthKitConfigCount)")
-            LabeledContent("Pending Mutations", value: "\(pendingMutationCount)")
-            LabeledContent("Queued Operations", value: "\(queuedOperationCount)")
+            countRow("Events", count: eventCount, errorKey: "Event")
+            countRow("Event Types", count: eventTypeCount, errorKey: "EventType")
+            countRow("Geofences", count: geofenceCount, errorKey: "Geofence")
+            countRow("Property Definitions", count: propertyDefinitionCount, errorKey: "PropertyDefinition")
+            countRow("HealthKit Configs", count: healthKitConfigCount, errorKey: "HealthKitConfiguration")
+            countRow("Pending Mutations", count: pendingMutationCount, errorKey: "PendingMutation")
+            countRow("Queued Operations", count: queuedOperationCount, errorKey: "QueuedOperation")
         } header: {
             Text("SwiftData Records")
         } footer: {
-            Text("These are the number of records in the local SwiftData database.")
+            if !modelErrors.isEmpty {
+                Text("Errors indicate schema mismatch. Use 'Force Full Resync' to fix.")
+            } else {
+                Text("These are the number of records in the local SwiftData database.")
+            }
+        }
+    }
+
+    /// Helper to display count with error handling for corrupted tables
+    private func countRow(_ label: String, count: Int, errorKey: String? = nil) -> some View {
+        LabeledContent(label) {
+            if count < 0 {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Error")
+                        .foregroundStyle(.red)
+                    if let key = errorKey, let errorMsg = modelErrors[key] {
+                        Text(errorMsg)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            } else {
+                Text("\(count)")
+            }
         }
     }
 
@@ -310,10 +337,45 @@ struct DebugStorageView: View {
                     .font(.caption)
                     .foregroundStyle(result.contains("Error") ? .red : .green)
             }
+
+            // Sync geofences from server
+            Button {
+                Task {
+                    await syncGeofencesFromServer()
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "location.north.circle")
+                    Text("Sync Geofences from Server")
+                    Spacer()
+                    if isSyncingGeofences {
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isSyncingGeofences || isSyncing)
         } header: {
             Text("Sync Actions")
         } footer: {
-            Text("Resets the sync cursor and re-downloads all data from the backend. This will remove any stale local data that doesn't exist on the server.")
+            Text("'Sync Geofences' fetches geofences from the server without a full resync. 'Force Full Resync' re-downloads all data and removes stale local data.")
+        }
+    }
+
+    private func syncGeofencesFromServer() async {
+        isSyncingGeofences = true
+        defer { isSyncingGeofences = false }
+
+        do {
+            let count = try await eventStore.syncGeofencesFromServer()
+            if count > 0 {
+                geofenceSyncResult = "Successfully synced \(count) geofence(s) from the server."
+            } else {
+                geofenceSyncResult = "No geofences found on the server, or you are offline."
+            }
+            showingGeofenceSyncSuccess = true
+        } catch {
+            geofenceSyncResult = "Error: \(error.localizedDescription)"
+            showingGeofenceSyncSuccess = true
         }
     }
 
@@ -358,54 +420,54 @@ struct DebugStorageView: View {
         }
     }
 
-    // MARK: - Extracted Subviews
+    // MARK: - Sync Status Diagnostics
 
     @ViewBuilder
-    private var duplicateDiagnosticsSection: some View {
+    private var syncStatusDiagnosticsSection: some View {
         Section {
-            if isAnalyzingDuplicates {
+            if isAnalyzingSyncStatus {
                 HStack {
                     ProgressView()
-                    Text("Analyzing duplicates...")
+                    Text("Analyzing sync status...")
                         .foregroundStyle(.secondary)
                 }
-            } else if let info = duplicateInfo {
-                duplicateInfoContent(info)
+            } else if let info = syncStatusInfo {
+                syncStatusInfoContent(info)
             } else {
                 analyzeButton
             }
         } header: {
-            Text("Duplicate Diagnostics")
+            Text("Sync Status Diagnostics")
         } footer: {
-            duplicateDiagnosticsFooter
+            syncStatusDiagnosticsFooter
         }
     }
 
     @ViewBuilder
-    private func duplicateInfoContent(_ info: DuplicateInfo) -> some View {
-        LabeledContent("Events without serverId") {
-            Text("\(info.eventsWithNilServerId)")
-                .foregroundStyle(info.eventsWithNilServerId > 0 ? .orange : .secondary)
+    private func syncStatusInfoContent(_ info: SyncStatusInfo) -> some View {
+        LabeledContent("Events pending sync") {
+            Text("\(info.eventsPending)")
+                .foregroundStyle(info.eventsPending > 0 ? .orange : .secondary)
         }
 
-        LabeledContent("Duplicate serverIds (Events)") {
-            Text("\(info.duplicateEventServerIds)")
-                .foregroundStyle(info.duplicateEventServerIds > 0 ? .red : .secondary)
+        LabeledContent("Events synced") {
+            Text("\(info.eventsSynced)")
+                .foregroundStyle(.secondary)
         }
 
-        LabeledContent("Same timestamp+type") {
-            Text("\(info.eventsWithSameTimestampAndType)")
-                .foregroundStyle(info.eventsWithSameTimestampAndType > 0 ? .orange : .secondary)
+        LabeledContent("Events failed") {
+            Text("\(info.eventsFailed)")
+                .foregroundStyle(info.eventsFailed > 0 ? .red : .secondary)
         }
 
-        LabeledContent("EventTypes without serverId") {
-            Text("\(info.eventTypesWithNilServerId)")
-                .foregroundStyle(info.eventTypesWithNilServerId > 0 ? .orange : .secondary)
+        LabeledContent("EventTypes pending sync") {
+            Text("\(info.eventTypesPending)")
+                .foregroundStyle(info.eventTypesPending > 0 ? .orange : .secondary)
         }
 
-        LabeledContent("Duplicate serverIds (Types)") {
-            Text("\(info.duplicateEventTypeServerIds)")
-                .foregroundStyle(info.duplicateEventTypeServerIds > 0 ? .red : .secondary)
+        LabeledContent("EventTypes synced") {
+            Text("\(info.eventTypesSynced)")
+                .foregroundStyle(.secondary)
         }
 
         LabeledContent("Same name EventTypes") {
@@ -413,52 +475,40 @@ struct DebugStorageView: View {
                 .foregroundStyle(info.eventTypesWithSameName > 0 ? .orange : .secondary)
         }
 
-        if !info.duplicateDetails.isEmpty {
-            DisclosureGroup("Duplicate Details") {
-                ForEach(info.duplicateDetails, id: \.self) { detail in
+        if !info.details.isEmpty {
+            DisclosureGroup("Details") {
+                ForEach(info.details, id: \.self) { detail in
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-
-        if info.hasDuplicates {
-            Button {
-                showingCleanupConfirmation = true
-            } label: {
-                HStack {
-                    Image(systemName: "wand.and.stars")
-                    Text("Clean Up Duplicates")
-                }
-            }
-            .foregroundStyle(.orange)
-        }
     }
 
     private var analyzeButton: some View {
         Button {
             Task {
-                await analyzeDuplicates()
+                await analyzeSyncStatus()
             }
         } label: {
             HStack {
                 Image(systemName: "magnifyingglass")
-                Text("Analyze for Duplicates")
+                Text("Analyze Sync Status")
             }
         }
     }
 
     @ViewBuilder
-    private var duplicateDiagnosticsFooter: some View {
-        if let info = duplicateInfo {
-            if info.hasDuplicates {
-                Text("Duplicates detected. Use 'Clean Up Duplicates' to remove orphaned records and merge duplicate serverIds.")
+    private var syncStatusDiagnosticsFooter: some View {
+        if let info = syncStatusInfo {
+            if info.hasPendingItems {
+                Text("Some items are pending sync. They will sync when the app is online.")
             } else {
-                Text("No duplicates detected.")
+                Text("All items are synced.")
             }
         } else {
-            Text("Tap 'Analyze' to check for duplicate records in the local database.")
+            Text("Tap 'Analyze' to check sync status in the local database.")
         }
     }
 
@@ -527,22 +577,36 @@ struct DebugStorageView: View {
     }
 
     private func loadSwiftDataCounts() async {
-        do {
-            // Create a fresh context to ensure we see the latest persisted data
-            // This is necessary because SyncEngine uses its own context, and the
-            // Environment's modelContext may have stale cached data
-            let freshContext = ModelContext(modelContext.container)
+        // Create a fresh context to ensure we see the latest persisted data
+        // This is necessary because SyncEngine uses its own context, and the
+        // Environment's modelContext may have stale cached data
+        let freshContext = ModelContext(modelContext.container)
 
-            eventCount = try freshContext.fetchCount(FetchDescriptor<Event>())
-            eventTypeCount = try freshContext.fetchCount(FetchDescriptor<EventType>())
-            geofenceCount = try freshContext.fetchCount(FetchDescriptor<Geofence>())
-            pendingMutationCount = try freshContext.fetchCount(FetchDescriptor<PendingMutation>())
-            queuedOperationCount = try freshContext.fetchCount(FetchDescriptor<QueuedOperation>())
-            propertyDefinitionCount = try freshContext.fetchCount(FetchDescriptor<PropertyDefinition>())
-            healthKitConfigCount = try freshContext.fetchCount(FetchDescriptor<HealthKitConfiguration>())
-        } catch {
-            print("Error loading SwiftData counts: \(error)")
+        // Clear previous errors
+        modelErrors.removeAll()
+
+        // Helper to safely get count and capture errors
+        func safeCount<T: PersistentModel>(_ type: T.Type, name: String) -> Int {
+            do {
+                let count = try freshContext.fetchCount(FetchDescriptor<T>())
+                guard count >= 0 && count < 10_000_000 else {
+                    modelErrors[name] = "Invalid count: \(count)"
+                    return -1
+                }
+                return count
+            } catch {
+                modelErrors[name] = String(describing: error).prefix(100).description
+                return -1
+            }
         }
+
+        eventCount = safeCount(Event.self, name: "Event")
+        eventTypeCount = safeCount(EventType.self, name: "EventType")
+        geofenceCount = safeCount(Geofence.self, name: "Geofence")
+        pendingMutationCount = safeCount(PendingMutation.self, name: "PendingMutation")
+        queuedOperationCount = safeCount(QueuedOperation.self, name: "QueuedOperation")
+        propertyDefinitionCount = safeCount(PropertyDefinition.self, name: "PropertyDefinition")
+        healthKitConfigCount = safeCount(HealthKitConfiguration.self, name: "HealthKitConfiguration")
     }
 
     // MARK: - Clear Data
@@ -626,233 +690,89 @@ struct FileInfo {
     }
 }
 
-struct DuplicateInfo {
+struct SyncStatusInfo {
     // Events
-    var eventsWithNilServerId: Int = 0
-    var duplicateEventServerIds: Int = 0
-    var eventsWithSameTimestampAndType: Int = 0
+    var eventsPending: Int = 0
+    var eventsSynced: Int = 0
+    var eventsFailed: Int = 0
 
     // EventTypes
-    var eventTypesWithNilServerId: Int = 0
-    var duplicateEventTypeServerIds: Int = 0
+    var eventTypesPending: Int = 0
+    var eventTypesSynced: Int = 0
     var eventTypesWithSameName: Int = 0
 
     // Details for display
-    var duplicateDetails: [String] = []
+    var details: [String] = []
 
-    var hasDuplicates: Bool {
-        eventsWithNilServerId > 0 ||
-        duplicateEventServerIds > 0 ||
-        eventsWithSameTimestampAndType > 0 ||
-        eventTypesWithNilServerId > 0 ||
-        duplicateEventTypeServerIds > 0 ||
-        eventTypesWithSameName > 0
+    var hasPendingItems: Bool {
+        eventsPending > 0 || eventTypesPending > 0 || eventsFailed > 0
     }
 }
 
-// MARK: - Duplicate Analysis Extension
+// MARK: - Sync Status Analysis Extension
 
 extension DebugStorageView {
-    func analyzeDuplicates() async {
-        isAnalyzingDuplicates = true
-        defer { isAnalyzingDuplicates = false }
+    func analyzeSyncStatus() async {
+        isAnalyzingSyncStatus = true
+        defer { isAnalyzingSyncStatus = false }
 
         let freshContext = ModelContext(modelContext.container)
-        var info = DuplicateInfo()
+        var info = SyncStatusInfo()
 
         do {
             // Fetch all events
             let allEvents = try freshContext.fetch(FetchDescriptor<Event>())
 
-            // 1. Events with nil serverId
-            let eventsNilServerId = allEvents.filter { $0.serverId == nil }
-            info.eventsWithNilServerId = eventsNilServerId.count
+            // Count by sync status
+            let pendingStatus = SyncStatus.pending.rawValue
+            let syncedStatus = SyncStatus.synced.rawValue
+            let failedStatus = SyncStatus.failed.rawValue
 
-            if info.eventsWithNilServerId > 0 {
-                info.duplicateDetails.append("Events without serverId: \(info.eventsWithNilServerId)")
-                for event in eventsNilServerId.prefix(5) {
+            info.eventsPending = allEvents.filter { $0.syncStatusRaw == pendingStatus }.count
+            info.eventsSynced = allEvents.filter { $0.syncStatusRaw == syncedStatus }.count
+            info.eventsFailed = allEvents.filter { $0.syncStatusRaw == failedStatus }.count
+
+            if info.eventsPending > 0 {
+                info.details.append("Events pending sync: \(info.eventsPending)")
+                let pendingEvents = allEvents.filter { $0.syncStatusRaw == pendingStatus }
+                for event in pendingEvents.prefix(5) {
                     let typeName = event.eventType?.name ?? "Unknown"
                     let dateStr = event.timestamp.formatted(date: .abbreviated, time: .shortened)
-                    info.duplicateDetails.append("  - \(typeName) @ \(dateStr)")
+                    info.details.append("  - \(typeName) @ \(dateStr)")
                 }
-                if eventsNilServerId.count > 5 {
-                    info.duplicateDetails.append("  ... and \(eventsNilServerId.count - 5) more")
-                }
-            }
-
-            // 2. Events with duplicate serverId
-            let eventsByServerId = Dictionary(grouping: allEvents.filter { $0.serverId != nil }) { $0.serverId! }
-            let duplicateServerIdGroups = eventsByServerId.filter { $0.value.count > 1 }
-            info.duplicateEventServerIds = duplicateServerIdGroups.values.reduce(0) { $0 + $1.count - 1 }
-
-            if !duplicateServerIdGroups.isEmpty {
-                info.duplicateDetails.append("Duplicate serverId groups: \(duplicateServerIdGroups.count)")
-                for (serverId, events) in duplicateServerIdGroups.prefix(3) {
-                    info.duplicateDetails.append("  - serverId \(serverId.prefix(8))...: \(events.count) copies")
+                if info.eventsPending > 5 {
+                    info.details.append("  ... and \(info.eventsPending - 5) more")
                 }
             }
 
-            // 3. Events with same timestamp + eventType (potential content duplicates)
-            let eventsByContent = Dictionary(grouping: allEvents) { event -> String in
-                let typeId = event.eventType?.id.uuidString ?? "nil"
-                let timestamp = event.timestamp.timeIntervalSince1970
-                return "\(typeId)-\(timestamp)"
-            }
-            let contentDuplicates = eventsByContent.filter { $0.value.count > 1 }
-            info.eventsWithSameTimestampAndType = contentDuplicates.values.reduce(0) { $0 + $1.count - 1 }
-
-            if !contentDuplicates.isEmpty {
-                info.duplicateDetails.append("Same timestamp+type groups: \(contentDuplicates.count)")
-                for (_, events) in contentDuplicates.prefix(3) {
-                    if let first = events.first {
-                        let typeName = first.eventType?.name ?? "Unknown"
-                        let dateStr = first.timestamp.formatted(date: .abbreviated, time: .shortened)
-                        info.duplicateDetails.append("  - \(typeName) @ \(dateStr): \(events.count) copies")
-                    }
-                }
+            if info.eventsFailed > 0 {
+                info.details.append("Events failed to sync: \(info.eventsFailed)")
             }
 
             // Fetch all event types
             let allEventTypes = try freshContext.fetch(FetchDescriptor<EventType>())
 
-            // 4. EventTypes with nil serverId
-            let typesNilServerId = allEventTypes.filter { $0.serverId == nil }
-            info.eventTypesWithNilServerId = typesNilServerId.count
+            info.eventTypesPending = allEventTypes.filter { $0.syncStatusRaw == pendingStatus }.count
+            info.eventTypesSynced = allEventTypes.filter { $0.syncStatusRaw == syncedStatus }.count
 
-            if info.eventTypesWithNilServerId > 0 {
-                info.duplicateDetails.append("EventTypes without serverId: \(info.eventTypesWithNilServerId)")
-                for eventType in typesNilServerId.prefix(5) {
-                    info.duplicateDetails.append("  - \(eventType.name)")
-                }
-            }
-
-            // 5. EventTypes with duplicate serverId
-            let typesByServerId = Dictionary(grouping: allEventTypes.filter { $0.serverId != nil }) { $0.serverId! }
-            let duplicateTypeServerIdGroups = typesByServerId.filter { $0.value.count > 1 }
-            info.duplicateEventTypeServerIds = duplicateTypeServerIdGroups.values.reduce(0) { $0 + $1.count - 1 }
-
-            // 6. EventTypes with same name
+            // Check for EventTypes with same name (potential duplicates)
             let typesByName = Dictionary(grouping: allEventTypes) { $0.name }
             let sameNameGroups = typesByName.filter { $0.value.count > 1 }
             info.eventTypesWithSameName = sameNameGroups.values.reduce(0) { $0 + $1.count - 1 }
 
             if !sameNameGroups.isEmpty {
-                info.duplicateDetails.append("Same name EventType groups: \(sameNameGroups.count)")
+                info.details.append("Same name EventType groups: \(sameNameGroups.count)")
                 for (name, types) in sameNameGroups.prefix(5) {
-                    let serverIds = types.compactMap { $0.serverId?.prefix(8) }.joined(separator: ", ")
-                    info.duplicateDetails.append("  - \"\(name)\": \(types.count) copies (serverIds: \(serverIds.isEmpty ? "nil" : serverIds))")
+                    let ids = types.map { $0.id.prefix(8) }.joined(separator: ", ")
+                    info.details.append("  - \"\(name)\": \(types.count) copies (ids: \(ids))")
                 }
             }
 
         } catch {
-            info.duplicateDetails.append("Error analyzing: \(error.localizedDescription)")
+            info.details.append("Error analyzing: \(error.localizedDescription)")
         }
 
-        duplicateInfo = info
-    }
-
-    func cleanupDuplicates() async {
-        let freshContext = ModelContext(modelContext.container)
-        var deletedEvents = 0
-        var deletedEventTypes = 0
-
-        do {
-            // Fetch all events
-            let allEvents = try freshContext.fetch(FetchDescriptor<Event>())
-
-            // 1. Delete events without serverId (orphaned - never synced)
-            let eventsNilServerId = allEvents.filter { $0.serverId == nil }
-            for event in eventsNilServerId {
-                freshContext.delete(event)
-                deletedEvents += 1
-            }
-
-            // 2. Merge events with duplicate serverId (keep first, delete rest)
-            let eventsByServerId = Dictionary(grouping: allEvents.filter { $0.serverId != nil }) { $0.serverId! }
-            for (_, events) in eventsByServerId where events.count > 1 {
-                // Keep the first one (usually the oldest), delete the rest
-                for event in events.dropFirst() {
-                    freshContext.delete(event)
-                    deletedEvents += 1
-                }
-            }
-
-            // 3. Merge events with same timestamp + eventType (keep one with serverId if possible)
-            // Re-fetch after deletions
-            let remainingEvents = try freshContext.fetch(FetchDescriptor<Event>())
-            let eventsByContent = Dictionary(grouping: remainingEvents) { event -> String in
-                let typeId = event.eventType?.id.uuidString ?? "nil"
-                let timestamp = event.timestamp.timeIntervalSince1970
-                return "\(typeId)-\(timestamp)"
-            }
-            for (_, events) in eventsByContent where events.count > 1 {
-                // Prefer keeping the one with a serverId
-                let sorted = events.sorted { ($0.serverId != nil ? 0 : 1) < ($1.serverId != nil ? 0 : 1) }
-                for event in sorted.dropFirst() {
-                    freshContext.delete(event)
-                    deletedEvents += 1
-                }
-            }
-
-            // Fetch all event types
-            let allEventTypes = try freshContext.fetch(FetchDescriptor<EventType>())
-
-            // 4. Delete event types without serverId (but only if they have no events)
-            let typesNilServerId = allEventTypes.filter { $0.serverId == nil }
-            for eventType in typesNilServerId {
-                let eventCount = eventType.events?.count ?? 0
-                if eventCount == 0 {
-                    freshContext.delete(eventType)
-                    deletedEventTypes += 1
-                }
-            }
-
-            // 5. Merge event types with duplicate serverId
-            let typesByServerId = Dictionary(grouping: allEventTypes.filter { $0.serverId != nil }) { $0.serverId! }
-            for (_, types) in typesByServerId where types.count > 1 {
-                // Keep the first one, migrate events from others, then delete
-                guard let keeper = types.first else { continue }
-                for eventType in types.dropFirst() {
-                    // Migrate events to the keeper
-                    if let events = eventType.events {
-                        for event in events {
-                            event.eventType = keeper
-                        }
-                    }
-                    freshContext.delete(eventType)
-                    deletedEventTypes += 1
-                }
-            }
-
-            // 6. Merge event types with same name (prefer one with serverId)
-            // Re-fetch after deletions
-            let remainingTypes = try freshContext.fetch(FetchDescriptor<EventType>())
-            let typesByName = Dictionary(grouping: remainingTypes) { $0.name }
-            for (_, types) in typesByName where types.count > 1 {
-                // Prefer keeping the one with a serverId
-                let sorted = types.sorted { ($0.serverId != nil ? 0 : 1) < ($1.serverId != nil ? 0 : 1) }
-                guard let keeper = sorted.first else { continue }
-                for eventType in sorted.dropFirst() {
-                    // Migrate events to the keeper
-                    if let events = eventType.events {
-                        for event in events {
-                            event.eventType = keeper
-                        }
-                    }
-                    freshContext.delete(eventType)
-                    deletedEventTypes += 1
-                }
-            }
-
-            try freshContext.save()
-
-            cleanupResult = "Deleted \(deletedEvents) duplicate events and \(deletedEventTypes) duplicate event types."
-            showingCleanupSuccess = true
-
-        } catch {
-            cleanupResult = "Error during cleanup: \(error.localizedDescription)"
-            showingCleanupSuccess = true
-        }
+        syncStatusInfo = info
     }
 }
 

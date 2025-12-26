@@ -2,30 +2,53 @@
 //  LocalStore.swift
 //  trendy
 //
-//  Utilities for local SwiftData operations, including idempotent upsert by server ID.
+//  Utilities for local SwiftData operations with UUIDv7 ID scheme.
+//  Since IDs are now client-generated UUIDv7, there's no server/local ID distinction.
 //
 
 import Foundation
 import SwiftData
 
+/// Errors that can occur in LocalStore operations
+enum LocalStoreError: LocalizedError {
+    case eventNotFound(id: String)
+    case eventTypeNotFound(id: String)
+    case geofenceNotFound(id: String)
+    case propertyDefinitionNotFound(id: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .eventNotFound(let id):
+            return "Event not found with ID: \(id)"
+        case .eventTypeNotFound(let id):
+            return "EventType not found with ID: \(id)"
+        case .geofenceNotFound(let id):
+            return "Geofence not found with ID: \(id)"
+        case .propertyDefinitionNotFound(let id):
+            return "PropertyDefinition not found with ID: \(id)"
+        }
+    }
+}
+
 /// Utilities for local SwiftData operations with sync support.
 /// Provides idempotent upsert operations that prevent duplicates.
+/// Uses UUIDv7 as the canonical ID - same ID is used locally and on server.
 struct LocalStore {
     let modelContext: ModelContext
 
     // MARK: - Upsert Operations
 
-    /// Upsert an Event by server ID - creates if not exists, updates if exists.
-    /// This is idempotent - calling multiple times with the same serverId has no effect.
+    /// Upsert an Event by ID - creates if not exists, updates if exists.
+    /// This is idempotent - calling multiple times with the same ID has no effect.
     ///
     /// - Parameters:
-    ///   - serverId: The server-generated ID
+    ///   - id: The UUIDv7 ID (same on client and server)
     ///   - configure: Closure to configure the entity's properties
     /// - Returns: The created or updated Event
     @discardableResult
-    func upsertEvent(serverId: String, configure: (Event) -> Void) throws -> Event {
+    func upsertEvent(id: String, configure: (Event) -> Void) throws -> Event {
         let descriptor = FetchDescriptor<Event>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -33,8 +56,7 @@ struct LocalStore {
             existing.syncStatus = .synced
             return existing
         } else {
-            let new = Event()
-            new.serverId = serverId
+            let new = Event(id: id)
             new.syncStatus = .synced
             configure(new)
             modelContext.insert(new)
@@ -42,11 +64,11 @@ struct LocalStore {
         }
     }
 
-    /// Upsert an EventType by server ID
+    /// Upsert an EventType by ID
     @discardableResult
-    func upsertEventType(serverId: String, configure: (EventType) -> Void) throws -> EventType {
+    func upsertEventType(id: String, configure: (EventType) -> Void) throws -> EventType {
         let descriptor = FetchDescriptor<EventType>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -54,8 +76,7 @@ struct LocalStore {
             existing.syncStatus = .synced
             return existing
         } else {
-            let new = EventType(name: "Placeholder")
-            new.serverId = serverId
+            let new = EventType(id: id, name: "Placeholder")
             new.syncStatus = .synced
             configure(new)
             modelContext.insert(new)
@@ -63,11 +84,11 @@ struct LocalStore {
         }
     }
 
-    /// Upsert a Geofence by server ID
+    /// Upsert a Geofence by ID
     @discardableResult
-    func upsertGeofence(serverId: String, configure: (Geofence) -> Void) throws -> Geofence {
+    func upsertGeofence(id: String, configure: (Geofence) -> Void) throws -> Geofence {
         let descriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -75,8 +96,7 @@ struct LocalStore {
             existing.syncStatus = .synced
             return existing
         } else {
-            let new = Geofence(name: "Placeholder", latitude: 0, longitude: 0, radius: 100.0, eventTypeEntryID: nil, eventTypeExitID: nil)
-            new.serverId = serverId
+            let new = Geofence(id: id, name: "Placeholder", latitude: 0, longitude: 0, radius: 100.0, eventTypeEntryID: nil, eventTypeExitID: nil)
             new.syncStatus = .synced
             configure(new)
             modelContext.insert(new)
@@ -84,11 +104,11 @@ struct LocalStore {
         }
     }
 
-    /// Upsert a PropertyDefinition by server ID
+    /// Upsert a PropertyDefinition by ID
     @discardableResult
-    func upsertPropertyDefinition(serverId: String, eventTypeId: UUID, configure: (PropertyDefinition) -> Void) throws -> PropertyDefinition {
+    func upsertPropertyDefinition(id: String, eventTypeId: String, configure: (PropertyDefinition) -> Void) throws -> PropertyDefinition {
         let descriptor = FetchDescriptor<PropertyDefinition>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -97,12 +117,12 @@ struct LocalStore {
             return existing
         } else {
             let new = PropertyDefinition(
+                id: id,
                 eventTypeId: eventTypeId,
                 key: "placeholder",
                 label: "Placeholder",
                 propertyType: .text
             )
-            new.serverId = serverId
             new.syncStatus = .synced
             configure(new)
             modelContext.insert(new)
@@ -112,10 +132,10 @@ struct LocalStore {
 
     // MARK: - Delete Operations
 
-    /// Delete an Event by server ID
-    func deleteEventByServerId(_ serverId: String) throws {
+    /// Delete an Event by ID
+    func deleteEvent(id: String) throws {
         let descriptor = FetchDescriptor<Event>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -123,10 +143,10 @@ struct LocalStore {
         }
     }
 
-    /// Delete an EventType by server ID
-    func deleteEventTypeByServerId(_ serverId: String) throws {
+    /// Delete an EventType by ID
+    func deleteEventType(id: String) throws {
         let descriptor = FetchDescriptor<EventType>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -134,10 +154,10 @@ struct LocalStore {
         }
     }
 
-    /// Delete a Geofence by server ID
-    func deleteGeofenceByServerId(_ serverId: String) throws {
+    /// Delete a Geofence by ID
+    func deleteGeofence(id: String) throws {
         let descriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -145,10 +165,10 @@ struct LocalStore {
         }
     }
 
-    /// Delete a PropertyDefinition by server ID
-    func deletePropertyDefinitionByServerId(_ serverId: String) throws {
+    /// Delete a PropertyDefinition by ID
+    func deletePropertyDefinition(id: String) throws {
         let descriptor = FetchDescriptor<PropertyDefinition>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
 
         if let existing = try modelContext.fetch(descriptor).first {
@@ -158,34 +178,34 @@ struct LocalStore {
 
     // MARK: - Lookup Operations
 
-    /// Find an Event by local UUID
-    func findEvent(byLocalId id: UUID) throws -> Event? {
+    /// Find an Event by ID
+    func findEvent(id: String) throws -> Event? {
         let descriptor = FetchDescriptor<Event>(
             predicate: #Predicate { $0.id == id }
         )
         return try modelContext.fetch(descriptor).first
     }
 
-    /// Find an Event by server ID
-    func findEvent(byServerId serverId: String) throws -> Event? {
-        let descriptor = FetchDescriptor<Event>(
-            predicate: #Predicate { $0.serverId == serverId }
-        )
-        return try modelContext.fetch(descriptor).first
-    }
-
-    /// Find an EventType by server ID
-    func findEventType(byServerId serverId: String) throws -> EventType? {
+    /// Find an EventType by ID
+    func findEventType(id: String) throws -> EventType? {
         let descriptor = FetchDescriptor<EventType>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
         )
         return try modelContext.fetch(descriptor).first
     }
 
-    /// Find a Geofence by server ID
-    func findGeofence(byServerId serverId: String) throws -> Geofence? {
+    /// Find a Geofence by ID
+    func findGeofence(id: String) throws -> Geofence? {
         let descriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.serverId == serverId }
+            predicate: #Predicate { $0.id == id }
+        )
+        return try modelContext.fetch(descriptor).first
+    }
+
+    /// Find a PropertyDefinition by ID
+    func findPropertyDefinition(id: String) throws -> PropertyDefinition? {
+        let descriptor = FetchDescriptor<PropertyDefinition>(
+            predicate: #Predicate { $0.id == id }
         )
         return try modelContext.fetch(descriptor).first
     }
@@ -227,41 +247,68 @@ struct LocalStore {
         return try modelContext.fetch(descriptor)
     }
 
-    // MARK: - Reconciliation
+    // MARK: - Sync Status Updates
 
-    /// Reconcile a pending entity with the server response.
-    /// Updates the entity with the server ID and marks it as synced.
-    func reconcilePendingEvent(localId: UUID, serverId: String) throws {
+    /// Mark an entity as synced. With UUIDv7, no reconciliation is needed -
+    /// the ID is the same on client and server.
+    func markEventSynced(id: String) throws {
         let descriptor = FetchDescriptor<Event>(
-            predicate: #Predicate { $0.id == localId }
+            predicate: #Predicate { $0.id == id }
         )
 
-        if let event = try modelContext.fetch(descriptor).first {
-            event.serverId = serverId
-            event.syncStatus = .synced
+        guard let event = try modelContext.fetch(descriptor).first else {
+            Log.sync.error("markEventSynced: Event not found!", context: .with { ctx in
+                ctx.add("id", id)
+            })
+            throw LocalStoreError.eventNotFound(id: id)
         }
+
+        event.syncStatus = .synced
     }
 
-    func reconcilePendingEventType(localId: UUID, serverId: String) throws {
+    func markEventTypeSynced(id: String) throws {
         let descriptor = FetchDescriptor<EventType>(
-            predicate: #Predicate { $0.id == localId }
+            predicate: #Predicate { $0.id == id }
         )
 
-        if let eventType = try modelContext.fetch(descriptor).first {
-            eventType.serverId = serverId
-            eventType.syncStatus = .synced
+        guard let eventType = try modelContext.fetch(descriptor).first else {
+            Log.sync.error("markEventTypeSynced: EventType not found!", context: .with { ctx in
+                ctx.add("id", id)
+            })
+            throw LocalStoreError.eventTypeNotFound(id: id)
         }
+
+        eventType.syncStatus = .synced
     }
 
-    func reconcilePendingGeofence(localId: UUID, serverId: String) throws {
+    func markGeofenceSynced(id: String) throws {
         let descriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.id == localId }
+            predicate: #Predicate { $0.id == id }
         )
 
-        if let geofence = try modelContext.fetch(descriptor).first {
-            geofence.serverId = serverId
-            geofence.syncStatus = .synced
+        guard let geofence = try modelContext.fetch(descriptor).first else {
+            Log.sync.error("markGeofenceSynced: Geofence not found!", context: .with { ctx in
+                ctx.add("id", id)
+            })
+            throw LocalStoreError.geofenceNotFound(id: id)
         }
+
+        geofence.syncStatus = .synced
+    }
+
+    func markPropertyDefinitionSynced(id: String) throws {
+        let descriptor = FetchDescriptor<PropertyDefinition>(
+            predicate: #Predicate { $0.id == id }
+        )
+
+        guard let propDef = try modelContext.fetch(descriptor).first else {
+            Log.sync.error("markPropertyDefinitionSynced: PropertyDefinition not found!", context: .with { ctx in
+                ctx.add("id", id)
+            })
+            throw LocalStoreError.propertyDefinitionNotFound(id: id)
+        }
+
+        propDef.syncStatus = .synced
     }
 
     // MARK: - Save

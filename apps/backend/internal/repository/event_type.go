@@ -26,6 +26,11 @@ func (r *eventTypeRepository) Create(ctx context.Context, eventType *models.Even
 		"icon":    eventType.Icon,
 	}
 
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if eventType.ID != "" {
+		data["id"] = eventType.ID
+	}
+
 	// Extract user token from context for RLS
 	userToken := ""
 	if token := ctx.Value("user_token"); token != nil {

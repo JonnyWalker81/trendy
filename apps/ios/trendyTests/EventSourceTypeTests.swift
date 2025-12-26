@@ -260,6 +260,7 @@ struct EventSourceTypeAPICompatibilityTests {
     @Test("CreateEventRequest with manual sourceType encodes correctly")
     func test_createEventRequest_manualSourceType_encodesCorrectly() throws {
         let request = CreateEventRequest(
+            id: UUIDv7.generate(),
             eventTypeId: "type-1",
             timestamp: Date(),
             notes: "Test",
@@ -272,6 +273,8 @@ struct EventSourceTypeAPICompatibilityTests {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: [:]
         )
 
@@ -284,6 +287,7 @@ struct EventSourceTypeAPICompatibilityTests {
     @Test("CreateEventRequest with imported sourceType encodes correctly")
     func test_createEventRequest_importedSourceType_encodesCorrectly() throws {
         let request = CreateEventRequest(
+            id: UUIDv7.generate(),
             eventTypeId: "type-1",
             timestamp: Date(),
             notes: "Test",
@@ -296,6 +300,8 @@ struct EventSourceTypeAPICompatibilityTests {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: [:]
         )
 

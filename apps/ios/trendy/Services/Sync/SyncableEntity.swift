@@ -3,19 +3,17 @@
 //  trendy
 //
 //  Protocol for entities that can be synced with the backend server.
+//  With UUIDv7, the same ID is used locally and on the server.
 //
 
 import Foundation
 import SwiftData
 
 /// Protocol for entities that support synchronization with the backend.
-/// Entities conforming to this protocol have a local UUID and an optional server-generated ID.
+/// With UUIDv7, entities have a single ID that is the same locally and on the server.
 protocol SyncableEntity: PersistentModel {
-    /// Local SwiftData identifier
-    var id: UUID { get }
-
-    /// Server-generated ID - nil until synced with backend
-    var serverId: String? { get set }
+    /// UUIDv7 identifier - same on client and server
+    var id: String { get }
 
     /// Current sync status
     var syncStatus: SyncStatus { get set }
@@ -28,7 +26,7 @@ protocol SyncableEntity: PersistentModel {
 extension SyncableEntity {
     /// Whether this entity has been synced with the server
     var isSynced: Bool {
-        serverId != nil && syncStatus == .synced
+        syncStatus == .synced
     }
 
     /// Whether this entity is pending sync
@@ -41,9 +39,8 @@ extension SyncableEntity {
         syncStatus == .failed
     }
 
-    /// Mark this entity as synced with the given server ID
-    func markSynced(withServerId id: String) {
-        self.serverId = id
+    /// Mark this entity as synced
+    func markSynced() {
         self.syncStatus = .synced
     }
 

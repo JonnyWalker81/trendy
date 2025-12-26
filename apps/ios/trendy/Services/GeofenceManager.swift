@@ -35,7 +35,7 @@ class GeofenceManager: NSObject {
     }
 
     /// Active geofence events (entry recorded, waiting for exit)
-    private var activeGeofenceEvents: [UUID: UUID] = [:] // geofenceId -> eventId
+    private var activeGeofenceEvents: [String: String] = [:] // geofenceId -> eventId
 
     /// Timestamp of last geofence event (for debugging)
     var lastEventTimestamp: Date?
@@ -232,14 +232,14 @@ class GeofenceManager: NSObject {
     #if DEBUG
     /// Simulate a geofence entry for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate entry for
-    func simulateEntry(geofenceId: UUID) {
+    func simulateEntry(geofenceId: String) {
         print("🧪 DEBUG: Simulating geofence entry for ID: \(geofenceId)")
         handleGeofenceEntry(geofenceId: geofenceId)
     }
-    
+
     /// Simulate a geofence exit for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate exit for
-    func simulateExit(geofenceId: UUID) {
+    func simulateExit(geofenceId: String) {
         print("🧪 DEBUG: Simulating geofence exit for ID: \(geofenceId)")
         handleGeofenceExit(geofenceId: geofenceId)
     }
@@ -250,7 +250,7 @@ class GeofenceManager: NSObject {
     /// Load active geofence events from UserDefaults
     private func loadActiveGeofenceEvents() {
         if let data = UserDefaults.standard.data(forKey: "activeGeofenceEvents"),
-           let decoded = try? JSONDecoder().decode([UUID: UUID].self, from: data) {
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             activeGeofenceEvents = decoded
         }
     }
@@ -265,7 +265,7 @@ class GeofenceManager: NSObject {
     /// Check if a geofence has an active event (user is currently inside)
     /// - Parameter geofenceId: The geofence ID
     /// - Returns: The active event ID if exists
-    func activeEvent(for geofenceId: UUID) -> UUID? {
+    func activeEvent(for geofenceId: String) -> String? {
         return activeGeofenceEvents[geofenceId]
     }
 
@@ -282,14 +282,14 @@ class GeofenceManager: NSObject {
     }
 
     /// For debugging: list of active geofence IDs
-    var activeGeofenceIds: [UUID] {
+    var activeGeofenceIds: [String] {
         Array(activeGeofenceEvents.keys)
     }
 
     // MARK: - Event Creation/Update
 
     /// Handle geofence entry - create a new event
-    private func handleGeofenceEntry(geofenceId: UUID) {
+    private func handleGeofenceEntry(geofenceId: String) {
         print("🔍 handleGeofenceEntry called for geofenceId: \(geofenceId)")
         
         // Fetch the geofence
@@ -339,13 +339,13 @@ class GeofenceManager: NSObject {
             "Entered At": PropertyValue(type: .date, value: entryTime)
         ]
 
-        // Use backend ID for geofenceId (String) - this is the canonical ID for sync
+        // Use geofence ID for linking (now single canonical ID)
         let event = Event(
             timestamp: entryTime,
             eventType: eventType,
             notes: "Auto-logged by geofence: \(geofence.name)",
             sourceType: .geofence,
-            geofenceId: geofence.backendId,  // Uses backend ID (String) for consistency
+            geofenceId: geofence.id,  // Uses canonical UUIDv7 string ID
             locationLatitude: geofence.latitude,
             locationLongitude: geofence.longitude,
             locationName: geofence.name,
@@ -391,7 +391,7 @@ class GeofenceManager: NSObject {
     }
 
     /// Handle geofence exit - update the existing event with end date
-    private func handleGeofenceExit(geofenceId: UUID) {
+    private func handleGeofenceExit(geofenceId: String) {
         // Fetch the geofence
         let geofenceDescriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }

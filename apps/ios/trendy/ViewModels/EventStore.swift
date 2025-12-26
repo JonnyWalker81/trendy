@@ -209,10 +209,6 @@ class EventStore {
             // Always load from local cache after sync
             try await fetchFromLocal()
 
-            // Migrate HealthKit settings from local UUIDs to serverIds
-            // This ensures HealthKit links survive across syncs
-            HealthKitSettings.shared.migrateToServerIds(eventTypes: eventTypes)
-
         } catch {
             Log.data.error("Fetch error", error: error)
             errorMessage = "Failed to sync. Showing cached data."
@@ -241,12 +237,16 @@ class EventStore {
         events = try freshContext.fetch(eventDescriptor)
         eventTypes = try freshContext.fetch(typeDescriptor)
 
-        Log.sync.info("fetchFromLocal: loaded data", context: .with { ctx in
+        Log.sync.info("🔧 fetchFromLocal: loaded data", context: .with { ctx in
             ctx.add("events_count", events.count)
             ctx.add("event_types_count", eventTypes.count)
             // Log first few items
             for (index, et) in eventTypes.prefix(3).enumerated() {
-                ctx.add("type_\(index)", "\(et.name) (serverId: \(et.serverId ?? "nil"))")
+                ctx.add("type_\(index)", "\(et.name) (id: \(et.id))")
+            }
+            // Log first few events
+            for (index, ev) in events.prefix(5).enumerated() {
+                ctx.add("event_\(index)", "\(ev.eventType?.name ?? "nil") @ \(ev.timestamp)")
             }
         })
 
@@ -274,7 +274,7 @@ class EventStore {
             }
         }
 
-        // Create event locally with pending status
+        // Create event locally with UUIDv7 - the ID is immediately known
         let newEvent = Event(
             timestamp: timestamp,
             eventType: type,
@@ -286,7 +286,6 @@ class EventStore {
             syncStatus: .pending
         )
         newEvent.calendarEventId = calendarEventId
-        newEvent.eventTypeServerId = type.serverId
         modelContext.insert(newEvent)
 
         do {
@@ -294,9 +293,11 @@ class EventStore {
             reloadWidgets()
 
             // Queue mutation for sync if we have a sync engine
-            if let syncEngine = syncEngine, let eventTypeServerId = type.serverId {
+            // With UUIDv7, we can sync immediately - the ID is already known
+            if let syncEngine = syncEngine {
                 let request = CreateEventRequest(
-                    eventTypeId: eventTypeServerId,
+                    id: newEvent.id,  // Send client-generated UUIDv7
+                    eventTypeId: type.id,
                     timestamp: timestamp,
                     notes: notes,
                     isAllDay: isAllDay,
@@ -308,13 +309,15 @@ class EventStore {
                     locationLatitude: nil,
                     locationLongitude: nil,
                     locationName: nil,
+                    healthKitSampleId: nil,
+                    healthKitCategory: nil,
                     properties: convertLocalPropertiesToAPI(properties)
                 )
                 let payload = try JSONEncoder().encode(request)
                 try await syncEngine.queueMutation(
                     entityType: .event,
                     operation: .create,
-                    localEntityId: newEvent.id,
+                    entityId: newEvent.id,
                     payload: payload
                 )
 
@@ -356,10 +359,10 @@ class EventStore {
             try modelContext.save()
             reloadWidgets()
 
-            // Queue mutation for sync if we have a sync engine and server ID
-            if let syncEngine = syncEngine, let serverId = event.serverId {
+            // Queue mutation for sync - with UUIDv7, the ID is always the server ID
+            if let syncEngine = syncEngine {
                 let request = UpdateEventRequest(
-                    eventTypeId: event.eventType?.serverId,
+                    eventTypeId: event.eventType?.id,
                     timestamp: event.timestamp,
                     notes: event.notes,
                     isAllDay: event.isAllDay,
@@ -371,14 +374,15 @@ class EventStore {
                     locationLatitude: event.locationLatitude,
                     locationLongitude: event.locationLongitude,
                     locationName: event.locationName,
+                    healthKitSampleId: event.healthKitSampleId,
+                    healthKitCategory: event.healthKitCategory,
                     properties: convertLocalPropertiesToAPI(event.properties)
                 )
                 let payload = try JSONEncoder().encode(request)
                 try await syncEngine.queueMutation(
                     entityType: .event,
                     operation: .update,
-                    localEntityId: event.id,
-                    serverEntityId: serverId,
+                    entityId: event.id,
                     payload: payload
                 )
 
@@ -410,14 +414,14 @@ class EventStore {
         }
 
         // Queue deletion mutation before deleting locally
-        if let syncEngine = syncEngine, let serverId = event.serverId {
+        // With UUIDv7, we always have the ID we need
+        if let syncEngine = syncEngine {
             do {
                 let payload = Data() // No payload needed for delete
                 try await syncEngine.queueMutation(
                     entityType: .event,
                     operation: .delete,
-                    localEntityId: event.id,
-                    serverEntityId: serverId,
+                    entityId: event.id,
                     payload: payload
                 )
             } catch {
@@ -448,6 +452,7 @@ class EventStore {
     func createEventType(name: String, colorHex: String, iconName: String) async {
         guard let modelContext else { return }
 
+        // Create with UUIDv7 - ID is immediately known
         let newType = EventType(name: name, colorHex: colorHex, iconName: iconName)
         newType.syncStatus = .pending
         modelContext.insert(newType)
@@ -458,12 +463,17 @@ class EventStore {
 
             // Queue mutation for sync
             if let syncEngine = syncEngine {
-                let request = CreateEventTypeRequest(name: name, color: colorHex, icon: iconName)
+                let request = CreateEventTypeRequest(
+                    id: newType.id,  // Send client-generated UUIDv7
+                    name: name,
+                    color: colorHex,
+                    icon: iconName
+                )
                 let payload = try JSONEncoder().encode(request)
                 try await syncEngine.queueMutation(
                     entityType: .eventType,
                     operation: .create,
-                    localEntityId: newType.id,
+                    entityId: newType.id,
                     payload: payload
                 )
 
@@ -490,15 +500,14 @@ class EventStore {
             try modelContext.save()
             reloadWidgets()
 
-            // Queue mutation for sync if we have server ID
-            if let syncEngine = syncEngine, let serverId = eventType.serverId {
+            // Queue mutation for sync - ID is always the canonical ID
+            if let syncEngine = syncEngine {
                 let request = UpdateEventTypeRequest(name: name, color: colorHex, icon: iconName)
                 let payload = try JSONEncoder().encode(request)
                 try await syncEngine.queueMutation(
                     entityType: .eventType,
                     operation: .update,
-                    localEntityId: eventType.id,
-                    serverEntityId: serverId,
+                    entityId: eventType.id,
                     payload: payload
                 )
 
@@ -518,14 +527,13 @@ class EventStore {
         guard let modelContext else { return }
 
         // Queue deletion mutation before deleting locally
-        if let syncEngine = syncEngine, let serverId = eventType.serverId {
+        if let syncEngine = syncEngine {
             do {
                 let payload = Data()
                 try await syncEngine.queueMutation(
                     entityType: .eventType,
                     operation: .delete,
-                    localEntityId: eventType.id,
-                    serverEntityId: serverId,
+                    entityId: eventType.id,
                     payload: payload
                 )
             } catch {
@@ -595,12 +603,13 @@ class EventStore {
             // Queue mutation for sync
             if let syncEngine = syncEngine {
                 let request = CreateGeofenceRequest(
+                    id: geofence.id,  // Send client-generated UUIDv7
                     name: geofence.name,
                     latitude: geofence.latitude,
                     longitude: geofence.longitude,
                     radius: geofence.radius,
-                    eventTypeEntryId: nil, // TODO: lookup server IDs
-                    eventTypeExitId: nil,
+                    eventTypeEntryId: geofence.eventTypeEntryID,
+                    eventTypeExitId: geofence.eventTypeExitID,
                     isActive: geofence.isActive,
                     notifyOnEntry: geofence.notifyOnEntry,
                     notifyOnExit: geofence.notifyOnExit
@@ -609,7 +618,7 @@ class EventStore {
                 try await syncEngine.queueMutation(
                     entityType: .geofence,
                     operation: .create,
-                    localEntityId: geofence.id,
+                    entityId: geofence.id,
                     payload: payload
                 )
 
@@ -632,15 +641,15 @@ class EventStore {
         do {
             try modelContext.save()
 
-            // Queue mutation for sync if we have server ID
-            if let syncEngine = syncEngine, let serverId = geofence.serverId {
+            // Queue mutation for sync
+            if let syncEngine = syncEngine {
                 let request = UpdateGeofenceRequest(
                     name: geofence.name,
                     latitude: geofence.latitude,
                     longitude: geofence.longitude,
                     radius: geofence.radius,
-                    eventTypeEntryId: nil, // TODO: lookup server IDs
-                    eventTypeExitId: nil,
+                    eventTypeEntryId: geofence.eventTypeEntryID,
+                    eventTypeExitId: geofence.eventTypeExitID,
                     isActive: geofence.isActive,
                     notifyOnEntry: geofence.notifyOnEntry,
                     notifyOnExit: geofence.notifyOnExit,
@@ -650,8 +659,7 @@ class EventStore {
                 try await syncEngine.queueMutation(
                     entityType: .geofence,
                     operation: .update,
-                    localEntityId: geofence.id,
-                    serverEntityId: serverId,
+                    entityId: geofence.id,
                     payload: payload
                 )
 
@@ -669,14 +677,13 @@ class EventStore {
         guard let modelContext else { return }
 
         // Queue deletion mutation before deleting locally
-        if let syncEngine = syncEngine, let serverId = geofence.serverId {
+        if let syncEngine = syncEngine {
             do {
                 let payload = Data()
                 try await syncEngine.queueMutation(
                     entityType: .geofence,
                     operation: .delete,
-                    localEntityId: geofence.id,
-                    serverEntityId: serverId,
+                    entityId: geofence.id,
                     payload: payload
                 )
             } catch {
@@ -700,29 +707,19 @@ class EventStore {
 
     // MARK: - Geofence Reconciliation
 
-    /// Look up local Geofence UUID from a region identifier (which is the serverId or local UUID)
-    func lookupLocalGeofenceId(from identifier: String) -> UUID? {
+    /// Look up local Geofence ID from a region identifier (which is the UUIDv7 id)
+    func lookupLocalGeofenceId(from identifier: String) -> String? {
         guard let modelContext else {
-            return UUID(uuidString: identifier)
+            return identifier
         }
 
-        // First, try to find a geofence with matching serverId
-        let targetServerId = identifier
-        let serverIdDescriptor = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.serverId == targetServerId }
+        // With UUIDv7, the region identifier IS the canonical ID
+        let targetId = identifier
+        let descriptor = FetchDescriptor<Geofence>(
+            predicate: #Predicate { $0.id == targetId }
         )
-        if let geofence = try? modelContext.fetch(serverIdDescriptor).first {
+        if let geofence = try? modelContext.fetch(descriptor).first {
             return geofence.id
-        }
-
-        // Fallback: try to parse as UUID (for offline-created geofences)
-        if let uuid = UUID(uuidString: identifier) {
-            let uuidDescriptor = FetchDescriptor<Geofence>(
-                predicate: #Predicate { $0.id == uuid }
-            )
-            if let geofence = try? modelContext.fetch(uuidDescriptor).first {
-                return geofence.id
-            }
         }
 
         return nil
@@ -746,6 +743,30 @@ class EventStore {
         return getLocalGeofenceDefinitions()
     }
 
+    /// Sync geofences from the server without doing a full resync.
+    /// This is useful when geofences exist on the server but weren't pulled during incremental sync.
+    /// Returns the number of geofences synced.
+    func syncGeofencesFromServer() async throws -> Int {
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("syncGeofencesFromServer: no syncEngine available")
+            return 0
+        }
+
+        guard isOnline else {
+            Log.sync.warning("syncGeofencesFromServer: offline, cannot sync")
+            return 0
+        }
+
+        let count = try await syncEngine.syncGeofences()
+
+        // Note: We don't call fetchFromLocal() here because:
+        // 1. Geofence sync doesn't change events or eventTypes
+        // 2. Calling it can cause UICollectionView inconsistency crashes
+        //    if another UI update is in progress
+
+        return count
+    }
+
     /// Get current geofence definitions from local cache
     func getLocalGeofenceDefinitions() -> [GeofenceDefinition] {
         guard let modelContext else { return [] }
@@ -761,13 +782,9 @@ class EventStore {
 
         let limited = Array(geofences.prefix(20))
 
-        // Use serverId field directly - no mapping needed
-        return limited.map { geofence -> GeofenceDefinition in
-            if let serverId = geofence.serverId {
-                return GeofenceDefinition(from: geofence, backendId: serverId)
-            } else {
-                return GeofenceDefinition(fromLocal: geofence)
-            }
+        // With UUIDv7, the id IS the canonical identifier - no mapping needed
+        return limited.map { geofence in
+            GeofenceDefinition(from: geofence)
         }
     }
 
@@ -780,8 +797,12 @@ class EventStore {
             Log.sync.warning("syncEventToBackend: no syncEngine available")
             return
         }
-        guard let eventTypeServerId = event.eventTypeServerId ?? event.eventType?.serverId else {
-            Log.sync.warning("syncEventToBackend: event has no eventTypeServerId")
+
+        // With UUIDv7, we always have the ID we need
+        guard let eventType = event.eventType else {
+            Log.sync.warning("syncEventToBackend: event has no eventType", context: .with { ctx in
+                ctx.add("event_id", event.id)
+            })
             return
         }
 
@@ -789,7 +810,8 @@ class EventStore {
             try modelContext.save()
 
             let request = CreateEventRequest(
-                eventTypeId: eventTypeServerId,
+                id: event.id,  // Client-generated UUIDv7
+                eventTypeId: eventType.id,
                 timestamp: event.timestamp,
                 notes: event.notes,
                 isAllDay: event.isAllDay,
@@ -797,22 +819,24 @@ class EventStore {
                 sourceType: event.sourceType.rawValue,
                 externalId: event.externalId,
                 originalTitle: event.originalTitle,
-                geofenceId: event.geofenceServerId,
+                geofenceId: event.geofenceId,
                 locationLatitude: event.locationLatitude,
                 locationLongitude: event.locationLongitude,
                 locationName: event.locationName,
+                healthKitSampleId: event.healthKitSampleId,
+                healthKitCategory: event.healthKitCategory,
                 properties: convertLocalPropertiesToAPI(event.properties)
             )
             let payload = try JSONEncoder().encode(request)
             try await syncEngine.queueMutation(
                 entityType: .event,
                 operation: .create,
-                localEntityId: event.id,
+                entityId: event.id,
                 payload: payload
             )
 
             Log.sync.info("Queued event for sync", context: .with { ctx in
-                ctx.add("event_id", event.id.uuidString)
+                ctx.add("event_id", event.id)
                 ctx.add("source_type", event.sourceType.rawValue)
             })
 
@@ -837,6 +861,7 @@ class EventStore {
             try modelContext.save()
 
             let request = CreateEventTypeRequest(
+                id: eventType.id,  // Client-generated UUIDv7
                 name: eventType.name,
                 color: eventType.colorHex,
                 icon: eventType.iconName
@@ -845,12 +870,12 @@ class EventStore {
             try await syncEngine.queueMutation(
                 entityType: .eventType,
                 operation: .create,
-                localEntityId: eventType.id,
+                entityId: eventType.id,
                 payload: payload
             )
 
             Log.sync.info("Queued event type for sync", context: .with { ctx in
-                ctx.add("event_type_id", eventType.id.uuidString)
+                ctx.add("event_type_id", eventType.id)
                 ctx.add("name", eventType.name)
             })
 
@@ -874,26 +899,14 @@ class EventStore {
         do {
             try modelContext.save()
 
-            // Look up serverId for entry/exit event types
-            var entryServerId: String?
-            var exitServerId: String?
-            if let entryId = geofence.eventTypeEntryID {
-                let descriptor = FetchDescriptor<EventType>(predicate: #Predicate { $0.id == entryId })
-                entryServerId = try? modelContext.fetch(descriptor).first?.serverId
-            }
-            if let exitId = geofence.eventTypeExitID {
-                let descriptor = FetchDescriptor<EventType>(predicate: #Predicate { $0.id == exitId })
-                exitServerId = try? modelContext.fetch(descriptor).first?.serverId
-            }
-
             let request = CreateGeofenceRequest(
-                id: nil,
+                id: geofence.id,  // Client-generated UUIDv7
                 name: geofence.name,
                 latitude: geofence.latitude,
                 longitude: geofence.longitude,
                 radius: geofence.radius,
-                eventTypeEntryId: entryServerId,
-                eventTypeExitId: exitServerId,
+                eventTypeEntryId: geofence.eventTypeEntryID,
+                eventTypeExitId: geofence.eventTypeExitID,
                 isActive: geofence.isActive,
                 notifyOnEntry: geofence.notifyOnEntry,
                 notifyOnExit: geofence.notifyOnExit
@@ -902,12 +915,12 @@ class EventStore {
             try await syncEngine.queueMutation(
                 entityType: .geofence,
                 operation: .create,
-                localEntityId: geofence.id,
+                entityId: geofence.id,
                 payload: payload
             )
 
             Log.sync.info("Queued geofence for sync", context: .with { ctx in
-                ctx.add("geofence_id", geofence.id.uuidString)
+                ctx.add("geofence_id", geofence.id)
                 ctx.add("name", geofence.name)
             })
 

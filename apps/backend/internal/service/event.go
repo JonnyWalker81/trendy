@@ -43,16 +43,23 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 	}
 
 	event := &models.Event{
-		UserID:        userID,
-		EventTypeID:   req.EventTypeID,
-		Timestamp:     req.Timestamp,
-		Notes:         req.Notes,
-		IsAllDay:      req.IsAllDay,
-		EndDate:       req.EndDate,
-		SourceType:    sourceType,
-		ExternalID:    req.ExternalID,
-		OriginalTitle: req.OriginalTitle,
-		Properties:    req.Properties,
+		UserID:            userID,
+		EventTypeID:       req.EventTypeID,
+		Timestamp:         req.Timestamp,
+		Notes:             req.Notes,
+		IsAllDay:          req.IsAllDay,
+		EndDate:           req.EndDate,
+		SourceType:        sourceType,
+		ExternalID:        req.ExternalID,
+		OriginalTitle:     req.OriginalTitle,
+		HealthKitSampleID: req.HealthKitSampleID,
+		HealthKitCategory: req.HealthKitCategory,
+		Properties:        req.Properties,
+	}
+
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if req.ID != nil && *req.ID != "" {
+		event.ID = *req.ID
 	}
 
 	created, err := s.eventRepo.Create(ctx, event)
@@ -127,8 +134,16 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 			LocationLatitude:  eventReq.LocationLatitude,
 			LocationLongitude: eventReq.LocationLongitude,
 			LocationName:      eventReq.LocationName,
+			HealthKitSampleID: eventReq.HealthKitSampleID,
+			HealthKitCategory: eventReq.HealthKitCategory,
 			Properties:        eventReq.Properties,
 		}
+
+		// Use client-provided ID if present (for offline-first/UUIDv7 support)
+		if eventReq.ID != nil && *eventReq.ID != "" {
+			event.ID = *eventReq.ID
+		}
+
 		validEvents = append(validEvents, event)
 	}
 
@@ -240,6 +255,12 @@ func (s *eventService) UpdateEvent(ctx context.Context, userID, eventID string, 
 	}
 	if req.OriginalTitle != nil {
 		update.OriginalTitle = req.OriginalTitle
+	}
+	if req.HealthKitSampleID != nil {
+		update.HealthKitSampleID = req.HealthKitSampleID
+	}
+	if req.HealthKitCategory != nil {
+		update.HealthKitCategory = req.HealthKitCategory
 	}
 	if req.Properties != nil {
 		update.Properties = *req.Properties

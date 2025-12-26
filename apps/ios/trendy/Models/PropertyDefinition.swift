@@ -27,12 +27,13 @@ enum PropertyType: String, Codable, CaseIterable {
 
 @Model
 final class PropertyDefinition {
-    var id: UUID
-    /// Server-generated ID - unique constraint ensures no duplicates
-    @Attribute(.unique) var serverId: String?
+    /// UUIDv7 identifier - client-generated, globally unique, time-ordered
+    /// This is THE canonical ID used both locally and on the server
+    @Attribute(.unique) var id: String
     /// Sync status with the backend
     var syncStatusRaw: String = SyncStatus.pending.rawValue
-    var eventTypeId: UUID
+    /// EventType ID (UUIDv7 string)
+    var eventTypeId: String
     var key: String
     var label: String
     var propertyType: PropertyType
@@ -73,8 +74,8 @@ final class PropertyDefinition {
     }
 
     init(
-        id: UUID = UUID(),
-        eventTypeId: UUID,
+        id: String = UUIDv7.generate(),
+        eventTypeId: String,
         key: String,
         label: String,
         propertyType: PropertyType,
@@ -83,11 +84,9 @@ final class PropertyDefinition {
         displayOrder: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        serverId: String? = nil,
         syncStatus: SyncStatus = .pending
     ) {
         self.id = id
-        self.serverId = serverId
         self.syncStatusRaw = syncStatus.rawValue
         self.eventTypeId = eventTypeId
         self.key = key

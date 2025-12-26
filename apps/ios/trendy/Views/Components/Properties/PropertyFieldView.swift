@@ -213,7 +213,7 @@ struct PropertyFieldView: View {
     VStack(spacing: 20) {
         PropertyFieldView(
             definition: PropertyDefinition(
-                eventTypeId: UUID(),
+                eventTypeId: UUIDv7.generate(),
                 key: "test_text",
                 label: "Text Field",
                 propertyType: .text
@@ -223,7 +223,7 @@ struct PropertyFieldView: View {
 
         PropertyFieldView(
             definition: PropertyDefinition(
-                eventTypeId: UUID(),
+                eventTypeId: UUIDv7.generate(),
                 key: "test_number",
                 label: "Number Field",
                 propertyType: .number
@@ -233,7 +233,7 @@ struct PropertyFieldView: View {
 
         PropertyFieldView(
             definition: PropertyDefinition(
-                eventTypeId: UUID(),
+                eventTypeId: UUIDv7.generate(),
                 key: "test_bool",
                 label: "Boolean Field",
                 propertyType: .boolean
@@ -243,7 +243,7 @@ struct PropertyFieldView: View {
 
         PropertyFieldView(
             definition: PropertyDefinition(
-                eventTypeId: UUID(),
+                eventTypeId: UUIDv7.generate(),
                 key: "test_select",
                 label: "Select Field",
                 propertyType: .select,

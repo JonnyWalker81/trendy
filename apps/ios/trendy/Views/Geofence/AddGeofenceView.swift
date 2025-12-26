@@ -22,11 +22,11 @@ struct AddGeofenceView: View {
     // Form fields
     @State private var name: String = ""
     @State private var radius: Double = 100
-    @State private var selectedEventTypeEntryID: UUID?
+    @State private var selectedEventTypeEntryID: String?
     @State private var notifyOnEntry: Bool = false
     @State private var notifyOnExit: Bool = false
     @State private var showingNotificationPermissionAlert = false
-    
+
     private var selectedEventTypeEntry: EventType? {
         guard let id = selectedEventTypeEntryID else { return nil }
         return eventTypes.first { $0.id == id }
@@ -110,7 +110,7 @@ struct AddGeofenceView: View {
                 // Event Type Section
                 Section {
                     Picker("Event Type (Entry)", selection: $selectedEventTypeEntryID) {
-                        Text("None").tag(nil as UUID?)
+                        Text("None").tag(nil as String?)
                         ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
@@ -118,7 +118,7 @@ struct AddGeofenceView: View {
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType.id as UUID?)
+                            .tag(eventType.id as String?)
                         }
                     }
                 } header: {
@@ -422,11 +422,11 @@ struct AddGeofenceViewWithMapReader: View {
     // Form fields
     @State private var name: String = ""
     @State private var radius: Double = 100
-    @State private var selectedEventTypeEntryID: UUID?
+    @State private var selectedEventTypeEntryID: String?
     @State private var notifyOnEntry: Bool = false
     @State private var notifyOnExit: Bool = false
     @State private var showingNotificationPermissionAlert = false
-    
+
     private var selectedEventTypeEntry: EventType? {
         guard let id = selectedEventTypeEntryID else { return nil }
         return eventTypes.first { $0.id == id }
@@ -508,7 +508,7 @@ struct AddGeofenceViewWithMapReader: View {
                 // Event Type Section
                 Section {
                     Picker("Event Type (Entry)", selection: $selectedEventTypeEntryID) {
-                        Text("None").tag(nil as UUID?)
+                        Text("None").tag(nil as String?)
                         ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
@@ -516,7 +516,7 @@ struct AddGeofenceViewWithMapReader: View {
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType.id as UUID?)
+                            .tag(eventType.id as String?)
                         }
                     }
                 } header: {

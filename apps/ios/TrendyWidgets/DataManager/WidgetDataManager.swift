@@ -50,8 +50,8 @@ final class WidgetDataManager {
         return try context.fetch(descriptor)
     }
 
-    /// Fetches a specific EventType by its UUID
-    func getEventType(id: UUID) async throws -> EventType? {
+    /// Fetches a specific EventType by its ID (UUIDv7 string)
+    func getEventType(id: String) async throws -> EventType? {
         guard let container = modelContainer else { return nil }
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<EventType>(
@@ -61,7 +61,7 @@ final class WidgetDataManager {
     }
 
     /// Fetches today's events for a specific EventType
-    func getTodayEvents(for eventTypeId: UUID) async throws -> [Event] {
+    func getTodayEvents(for eventTypeId: String) async throws -> [Event] {
         guard let container = modelContainer else { return [] }
         let context = ModelContext(container)
 
@@ -81,7 +81,7 @@ final class WidgetDataManager {
     }
 
     /// Fetches today's total event count for a specific EventType
-    func getTodayCount(for eventTypeId: UUID) async throws -> Int {
+    func getTodayCount(for eventTypeId: String) async throws -> Int {
         let events = try await getTodayEvents(for: eventTypeId)
         return events.count
     }
@@ -118,7 +118,7 @@ final class WidgetDataManager {
     }
 
     /// Calculates the current streak for an EventType
-    func getStreak(for eventTypeId: UUID) async throws -> Int {
+    func getStreak(for eventTypeId: String) async throws -> Int {
         guard let container = modelContainer else { return 0 }
         let context = ModelContext(container)
 
@@ -132,7 +132,7 @@ final class WidgetDataManager {
     }
 
     /// Gets the last event timestamp for an EventType
-    func getLastEventTime(for eventTypeId: UUID) async throws -> Date? {
+    func getLastEventTime(for eventTypeId: String) async throws -> Date? {
         guard let container = modelContainer else { return nil }
         let context = ModelContext(container)
 
@@ -178,7 +178,7 @@ final class WidgetDataManager {
     // MARK: - Write Operations
 
     /// Creates a new event for quick logging from widgets
-    func createEvent(eventTypeId: UUID, timestamp: Date = Date()) async throws {
+    func createEvent(eventTypeId: String, timestamp: Date = Date()) async throws {
         guard let container = modelContainer else {
             throw WidgetDataError.containerNotAvailable
         }
@@ -193,7 +193,7 @@ final class WidgetDataManager {
             throw WidgetDataError.eventTypeNotFound
         }
 
-        // Create the new event
+        // Create the new event with UUIDv7
         let newEvent = Event(
             timestamp: timestamp,
             eventType: eventType,

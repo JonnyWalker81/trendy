@@ -17,7 +17,7 @@ protocol PropertyStorage: AnyObject {
 /// NOTE: We use a plain class reference, NOT @ObservedObject, because @ObservedObject
 /// was causing issues where the same object would return different values
 struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
-    let eventTypeId: UUID?
+    let eventTypeId: String?
     let storage: Storage  // Plain reference - parent handles observation
     let propertyDefinitions: [PropertyDefinition]
 
@@ -243,7 +243,7 @@ struct CustomPropertyValueEditor: View {
 
 /// Separate sheet view to avoid SwiftUI's stale binding capture issue
 struct AddCustomPropertySheet: View {
-    let eventTypeId: UUID?
+    let eventTypeId: String?
     let onAdd: (String, PropertyValue) -> Void
     let onCancel: () -> Void
 
@@ -273,7 +273,7 @@ struct AddCustomPropertySheet: View {
                 Section(header: Text("Initial Value")) {
                     PropertyFieldView(
                         definition: PropertyDefinition(
-                            eventTypeId: eventTypeId ?? UUID(),
+                            eventTypeId: eventTypeId ?? UUIDv7.generate(),
                             key: propertyKey,
                             label: propertyLabel.isEmpty ? "Value" : propertyLabel,
                             propertyType: propertyType
@@ -341,43 +341,49 @@ class PreviewPropertyStorage: PropertyStorage {
 
 // MARK: - Preview
 
+private struct DynamicPropertyFieldsPreview: View {
+    var body: some View {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try! ModelContainer(for: EventType.self, PropertyDefinition.self, configurations: config)
+
+        // Create sample event type
+        let eventType = EventType(name: "Test Event", colorHex: "#007AFF", iconName: "star.fill")
+        let _ = container.mainContext.insert(eventType)
+
+        // Create sample property definitions
+        let textProp = PropertyDefinition(
+            eventTypeId: eventType.id,
+            key: "notes",
+            label: "Notes",
+            propertyType: .text,
+            displayOrder: 0
+        )
+        let numberProp = PropertyDefinition(
+            eventTypeId: eventType.id,
+            key: "amount",
+            label: "Amount",
+            propertyType: .number,
+            displayOrder: 1
+        )
+
+        let _ = container.mainContext.insert(textProp)
+        let _ = container.mainContext.insert(numberProp)
+
+        let storage = PreviewPropertyStorage(properties: [
+            "notes": PropertyValue(type: .text, value: "Test note"),
+            "custom_field": PropertyValue(type: .number, value: 42)
+        ])
+
+        DynamicPropertyFieldsView(
+            eventTypeId: eventType.id,
+            storage: storage,
+            propertyDefinitions: [textProp, numberProp]
+        )
+        .modelContainer(container)
+        .padding()
+    }
+}
+
 #Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: EventType.self, PropertyDefinition.self, configurations: config)
-
-    // Create sample event type
-    let eventType = EventType(name: "Test Event", colorHex: "#007AFF", iconName: "star.fill")
-    container.mainContext.insert(eventType)
-
-    // Create sample property definitions
-    let textProp = PropertyDefinition(
-        eventTypeId: eventType.id,
-        key: "notes",
-        label: "Notes",
-        propertyType: .text,
-        displayOrder: 0
-    )
-    let numberProp = PropertyDefinition(
-        eventTypeId: eventType.id,
-        key: "amount",
-        label: "Amount",
-        propertyType: .number,
-        displayOrder: 1
-    )
-
-    container.mainContext.insert(textProp)
-    container.mainContext.insert(numberProp)
-
-    let storage = PreviewPropertyStorage(properties: [
-        "notes": PropertyValue(type: .text, value: "Test note"),
-        "custom_field": PropertyValue(type: .number, value: 42)
-    ])
-
-    return DynamicPropertyFieldsView(
-        eventTypeId: eventType.id,
-        storage: storage,
-        propertyDefinitions: [textProp, numberProp]
-    )
-    .modelContainer(container)
-    .padding()
+    DynamicPropertyFieldsPreview()
 }

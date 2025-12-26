@@ -17,9 +17,9 @@ enum EventSourceType: String, Codable, CaseIterable {
 
 @Model
 final class Event {
-    var id: UUID
-    /// Server-generated ID - unique constraint ensures no duplicates
-    @Attribute(.unique) var serverId: String?
+    /// UUIDv7 identifier - client-generated, globally unique, time-ordered
+    /// This is THE canonical ID used both locally and on the server
+    @Attribute(.unique) var id: String
     /// Sync status with the backend
     var syncStatusRaw: String = SyncStatus.pending.rawValue
     var timestamp: Date
@@ -32,12 +32,8 @@ final class Event {
     var isAllDay: Bool = false
     var endDate: Date?
     var calendarEventId: String?
-    /// Backend geofence ID (String) - references Geofence.serverId
+    /// Geofence ID (UUIDv7 string) - references Geofence.id
     var geofenceId: String?
-    /// Server ID of the event type - used for sync to resolve relationships
-    var eventTypeServerId: String?
-    /// Server ID of the geofence - used for sync (alias for geofenceId)
-    var geofenceServerId: String?
     var locationLatitude: Double?
     var locationLongitude: Double?
     var locationName: String?
@@ -109,6 +105,7 @@ final class Event {
     }
 
     init(
+        id: String = UUIDv7.generate(),
         timestamp: Date = Date(),
         eventType: EventType? = nil,
         notes: String? = nil,
@@ -125,11 +122,9 @@ final class Event {
         healthKitSampleId: String? = nil,
         healthKitCategory: String? = nil,
         properties: [String: PropertyValue] = [:],
-        serverId: String? = nil,
         syncStatus: SyncStatus = .pending
     ) {
-        self.id = UUID()
-        self.serverId = serverId
+        self.id = id
         self.syncStatusRaw = syncStatus.rawValue
         self.timestamp = timestamp
         self.eventType = eventType

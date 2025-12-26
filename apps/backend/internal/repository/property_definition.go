@@ -28,6 +28,11 @@ func (r *propertyDefinitionRepository) Create(ctx context.Context, def *models.P
 		"display_order": def.DisplayOrder,
 	}
 
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if def.ID != "" {
+		data["id"] = def.ID
+	}
+
 	// Add optional fields
 	if len(def.Options) > 0 {
 		data["options"] = def.Options

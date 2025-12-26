@@ -92,8 +92,8 @@ struct DashboardProvider: AppIntentTimelineProvider {
         // Fetch quick log types with counts
         var quickLogTypes: [EventTypeWithCount] = []
         for configType in (configuration.quickLogTypes ?? []).prefix(4) {
-            guard let uuid = UUID(uuidString: configType.id) else { continue }
-            let count = (try? await dataManager.getTodayCount(for: uuid)) ?? 0
+            let eventTypeId = configType.id
+            let count = (try? await dataManager.getTodayCount(for: eventTypeId)) ?? 0
             quickLogTypes.append(EventTypeWithCount(
                 id: configType.id,
                 name: configType.name,
@@ -110,7 +110,7 @@ struct DashboardProvider: AppIntentTimelineProvider {
             recentEvents = events.compactMap { event in
                 guard let eventType = event.eventType else { return nil }
                 return RecentEventData(
-                    id: event.id.uuidString,
+                    id: event.id,
                     eventTypeName: eventType.name,
                     eventTypeColorHex: eventType.colorHex,
                     eventTypeIconName: eventType.iconName,

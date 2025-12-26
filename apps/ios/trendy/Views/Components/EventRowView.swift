@@ -10,10 +10,10 @@ import SwiftUI
 struct EventRowView: View {
     let event: Event
     @State private var showingEditView = false
-    @State private var eventTypeIDForEdit: UUID?
+    @State private var eventTypeIDForEdit: String?
     @Environment(EventStore.self) private var eventStore
     @EnvironmentObject private var calendarManager: CalendarManager
-    
+
     private var eventTypeForEdit: EventType? {
         guard let id = eventTypeIDForEdit else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
@@ -70,8 +70,12 @@ struct EventRowView: View {
         .onTapGesture {
             eventTypeIDForEdit = event.eventType?.id
         }
-        .sheet(item: $eventTypeIDForEdit) { eventTypeID in
-            if let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
+        .sheet(isPresented: Binding(
+            get: { eventTypeIDForEdit != nil },
+            set: { if !$0 { eventTypeIDForEdit = nil } }
+        )) {
+            if let eventTypeID = eventTypeIDForEdit,
+               let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
                 EventEditView(eventType: eventType, existingEvent: event)
                     .environment(eventStore)
                     .environmentObject(calendarManager)

@@ -28,6 +28,11 @@ func (r *eventRepository) Create(ctx context.Context, event *models.Event) (*mod
 		"source_type":   event.SourceType,
 	}
 
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if event.ID != "" {
+		data["id"] = event.ID
+	}
+
 	if event.Notes != nil {
 		data["notes"] = *event.Notes
 	}
@@ -39,6 +44,12 @@ func (r *eventRepository) Create(ctx context.Context, event *models.Event) (*mod
 	}
 	if event.OriginalTitle != nil {
 		data["original_title"] = *event.OriginalTitle
+	}
+	if event.HealthKitSampleID != nil {
+		data["healthkit_sample_id"] = *event.HealthKitSampleID
+	}
+	if event.HealthKitCategory != nil {
+		data["healthkit_category"] = *event.HealthKitCategory
 	}
 	if event.Properties != nil && len(event.Properties) > 0 {
 		data["properties"] = event.Properties
@@ -72,19 +83,26 @@ func (r *eventRepository) CreateBatch(ctx context.Context, events []models.Event
 	insertData := make([]map[string]interface{}, 0, len(events))
 	for _, event := range events {
 		data := map[string]interface{}{
-			"user_id":            event.UserID,
-			"event_type_id":      event.EventTypeID,
-			"timestamp":          event.Timestamp,
-			"is_all_day":         event.IsAllDay,
-			"source_type":        event.SourceType,
-			"notes":              event.Notes,
-			"end_date":           event.EndDate,
-			"external_id":        event.ExternalID,
-			"original_title":     event.OriginalTitle,
-			"geofence_id":        event.GeofenceID,
-			"location_latitude":  event.LocationLatitude,
-			"location_longitude": event.LocationLongitude,
-			"location_name":      event.LocationName,
+			"user_id":             event.UserID,
+			"event_type_id":       event.EventTypeID,
+			"timestamp":           event.Timestamp,
+			"is_all_day":          event.IsAllDay,
+			"source_type":         event.SourceType,
+			"notes":               event.Notes,
+			"end_date":            event.EndDate,
+			"external_id":         event.ExternalID,
+			"original_title":      event.OriginalTitle,
+			"geofence_id":         event.GeofenceID,
+			"location_latitude":   event.LocationLatitude,
+			"location_longitude":  event.LocationLongitude,
+			"location_name":       event.LocationName,
+			"healthkit_sample_id": event.HealthKitSampleID,
+			"healthkit_category":  event.HealthKitCategory,
+		}
+
+		// Use client-provided ID if present (for offline-first/UUIDv7 support)
+		if event.ID != "" {
+			data["id"] = event.ID
 		}
 
 		// Properties column has NOT NULL constraint - use empty object {} if no properties
@@ -202,6 +220,12 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 	}
 	if event.OriginalTitle != nil {
 		data["original_title"] = *event.OriginalTitle
+	}
+	if event.HealthKitSampleID != nil {
+		data["healthkit_sample_id"] = *event.HealthKitSampleID
+	}
+	if event.HealthKitCategory != nil {
+		data["healthkit_category"] = *event.HealthKitCategory
 	}
 
 	// Debug logging for properties

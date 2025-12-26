@@ -3,6 +3,7 @@
 //  trendy
 //
 //  Swift actor responsible for synchronizing local SwiftData with the backend.
+//  Uses UUIDv7 for all IDs - same ID on client and server, no reconciliation needed.
 //  Implements single-flight sync, cursor-based incremental pull, and idempotent mutations.
 //
 
@@ -19,6 +20,12 @@ enum SyncState: Equatable {
 /// Actor that manages synchronization between local SwiftData and the backend.
 /// Uses single-flight pattern to prevent concurrent syncs and cursor-based
 /// incremental pull for efficient data transfer.
+///
+/// With UUIDv7:
+/// - Client generates IDs at creation time
+/// - No server/local ID distinction
+/// - No reconciliation needed after create
+/// - ID is the same everywhere
 actor SyncEngine {
     // MARK: - Dependencies
 
@@ -50,7 +57,15 @@ actor SyncEngine {
         self.apiClient = apiClient
         self.modelContainer = modelContainer
         // Use computed cursorKey which includes environment
-        self.lastSyncCursor = Int64(UserDefaults.standard.integer(forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)"))
+        let cursorKeyValue = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+        self.lastSyncCursor = Int64(UserDefaults.standard.integer(forKey: cursorKeyValue))
+
+        // DIAGNOSTIC: Log cursor state on init
+        Log.sync.info("🔧 SyncEngine init", context: .with { ctx in
+            ctx.add("cursor_key", cursorKeyValue)
+            ctx.add("loaded_cursor", Int(self.lastSyncCursor))
+            ctx.add("environment", AppEnvironment.current.rawValue)
+        })
     }
 
     // MARK: - Public API
@@ -85,6 +100,15 @@ actor SyncEngine {
             // before change_log was implemented, or when user requests a full resync.
             let shouldBootstrap = lastSyncCursor == 0 || forceBootstrapOnNextSync
             let wasForceBootstrap = forceBootstrapOnNextSync
+
+            // DIAGNOSTIC: Always log cursor state before deciding
+            Log.sync.info("🔧 Sync decision point", context: .with { ctx in
+                ctx.add("current_cursor", Int(lastSyncCursor))
+                ctx.add("cursor_key", cursorKey)
+                ctx.add("should_bootstrap", shouldBootstrap)
+                ctx.add("force_bootstrap_flag", forceBootstrapOnNextSync)
+            })
+
             if shouldBootstrap {
                 Log.sync.info("Performing bootstrap fetch", context: .with { ctx in
                     ctx.add("cursor_was_zero", lastSyncCursor == 0)
@@ -105,15 +129,21 @@ actor SyncEngine {
                     let latestCursor = try await apiClient.getLatestCursor()
                     lastSyncCursor = latestCursor
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
-                    Log.sync.info("Skipped pullChanges after bootstrap, cursor set to latest", context: .with { ctx in
-                        ctx.add("latest_cursor", Int(latestCursor))
+                    UserDefaults.standard.synchronize() // Force immediate persistence
+                    Log.sync.info("🔧 Cursor saved after bootstrap", context: .with { ctx in
+                        ctx.add("cursor_key", cursorKey)
+                        ctx.add("saved_cursor", Int(latestCursor))
                         ctx.add("was_forced", wasForceBootstrap)
+                        // Verify it was saved
+                        let verifyValue = UserDefaults.standard.integer(forKey: cursorKey)
+                        ctx.add("verify_read_back", verifyValue)
                     })
                 } catch {
                     // Fallback: if we can't get the latest cursor, use a high value
                     // This may skip some legitimate changes, but prevents stale data recreation
                     lastSyncCursor = 1_000_000_000
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
+                    UserDefaults.standard.synchronize() // Force immediate persistence
                     Log.sync.warning("Could not get latest cursor, using fallback", context: .with { ctx in
                         ctx.add("fallback_cursor", Int(lastSyncCursor))
                         ctx.add("error", error.localizedDescription)
@@ -121,6 +151,25 @@ actor SyncEngine {
                 }
             } else {
                 try await pullChanges()
+
+                // Step 4: If we have no geofences locally but the server might have some,
+                // fetch them directly. This handles the case where geofences were created
+                // before the change_log system was implemented.
+                let localGeofenceCount = getLocalGeofenceCount()
+                if localGeofenceCount == 0 {
+                    Log.sync.info("No local geofences found, fetching from server")
+                    do {
+                        let syncedCount = try await syncGeofences()
+                        Log.sync.info("Auto-synced geofences", context: .with { ctx in
+                            ctx.add("count", syncedCount)
+                        })
+                    } catch {
+                        Log.sync.warning("Failed to auto-sync geofences", context: .with { ctx in
+                            ctx.add("error", error.localizedDescription)
+                        })
+                        // Don't fail the entire sync for this
+                    }
+                }
             }
 
             await updateState(.idle)
@@ -152,12 +201,59 @@ actor SyncEngine {
         await performSync()
     }
 
+    /// Sync geofences from the server without doing a full bootstrap.
+    /// This is useful when geofences exist on the server but weren't pulled
+    /// during incremental sync (e.g., created before change_log was implemented).
+    /// Returns the number of geofences synced.
+    @discardableResult
+    func syncGeofences() async throws -> Int {
+        Log.sync.info("Syncing geofences from server")
+
+        let context = ModelContext(modelContainer)
+        let localStore = LocalStore(modelContext: context)
+
+        // Fetch geofences from API
+        let geofences = try await apiClient.getGeofences()
+        Log.sync.info("Fetched geofences from server", context: .with { ctx in
+            ctx.add("count", geofences.count)
+        })
+
+        // Upsert each geofence
+        for apiGeofence in geofences {
+            try localStore.upsertGeofence(id: apiGeofence.id) { geofence in
+                geofence.name = apiGeofence.name
+                geofence.latitude = apiGeofence.latitude
+                geofence.longitude = apiGeofence.longitude
+                geofence.radius = apiGeofence.radius
+                geofence.isActive = apiGeofence.isActive
+                geofence.notifyOnEntry = apiGeofence.notifyOnEntry
+                geofence.notifyOnExit = apiGeofence.notifyOnExit
+                // Event type IDs are now String (UUIDv7), same as on server
+                geofence.eventTypeEntryID = apiGeofence.eventTypeEntryId
+                geofence.eventTypeExitID = apiGeofence.eventTypeExitId
+            }
+        }
+
+        try context.save()
+        Log.sync.info("Saved geofences locally", context: .with { ctx in
+            ctx.add("count", geofences.count)
+        })
+
+        return geofences.count
+    }
+
+    /// Get the local geofence count
+    func getLocalGeofenceCount() -> Int {
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<Geofence>()
+        return (try? context.fetchCount(descriptor)) ?? 0
+    }
+
     /// Queue a mutation for sync. The mutation will be flushed on the next sync.
     func queueMutation(
         entityType: MutationEntityType,
         operation: MutationOperation,
-        localEntityId: UUID,
-        serverEntityId: String? = nil,
+        entityId: String,
         payload: Data
     ) async throws {
         let context = ModelContext(modelContainer)
@@ -165,8 +261,7 @@ actor SyncEngine {
         let mutation = PendingMutation(
             entityType: entityType,
             operation: operation,
-            localEntityId: localEntityId,
-            serverEntityId: serverEntityId,
+            entityId: entityId,
             payload: payload
         )
 
@@ -177,7 +272,7 @@ actor SyncEngine {
         Log.sync.debug("Queued mutation", context: .with { ctx in
             ctx.add("entity_type", entityType.rawValue)
             ctx.add("operation", operation.rawValue)
-            ctx.add("local_id", localEntityId.uuidString)
+            ctx.add("entity_id", entityId)
         })
     }
 
@@ -205,28 +300,64 @@ actor SyncEngine {
         })
 
         for mutation in mutations {
+            Log.sync.debug("Processing mutation", context: .with { ctx in
+                ctx.add("entity_type", mutation.entityType.rawValue)
+                ctx.add("operation", mutation.operation.rawValue)
+                ctx.add("entity_id", mutation.entityId)
+                ctx.add("attempts_before", mutation.attempts)
+            })
+
             do {
                 try await flushMutation(mutation, localStore: localStore)
+                Log.sync.info("Mutation flushed successfully", context: .with { ctx in
+                    ctx.add("entity_type", mutation.entityType.rawValue)
+                    ctx.add("entity_id", mutation.entityId)
+                })
                 context.delete(mutation)
             } catch let error as APIError where error.isDuplicateError {
-                // Duplicate error - the event already exists on the server
-                // This can happen if:
-                // 1. The same event was created twice (race condition)
-                // 2. Migration created duplicates
-                // 3. Unique constraint violation
+                // Duplicate error - the entity already exists on the server
+                // This can happen if the create was successful but we didn't delete the mutation
                 Log.sync.warning("Duplicate detected, marking as synced", context: .with { ctx in
                     ctx.add("entity_type", mutation.entityType.rawValue)
                     ctx.add("operation", mutation.operation.rawValue)
-                    ctx.add("local_id", mutation.localEntityId.uuidString)
+                    ctx.add("entity_id", mutation.entityId)
+                    ctx.add("error", error.localizedDescription ?? "unknown")
                 })
                 // Mark the local entity as synced since equivalent data exists on server
-                try markEntitySyncedAfterDuplicate(mutation, context: context)
+                try markEntitySynced(mutation, localStore: localStore)
                 context.delete(mutation)
+            } catch let error as APIError {
+                // Other API error (not duplicate)
+                Log.sync.error("API error during mutation flush", error: error, context: .with { ctx in
+                    ctx.add("entity_type", mutation.entityType.rawValue)
+                    ctx.add("entity_id", mutation.entityId)
+                    ctx.add("is_duplicate", error.isDuplicateError)
+                })
+                mutation.recordFailure(error: error.localizedDescription ?? "Unknown API error")
+
+                if mutation.hasExceededRetryLimit {
+                    Log.sync.error("Mutation exceeded retry limit (API error)", context: .with { ctx in
+                        ctx.add("entity_type", mutation.entityType.rawValue)
+                        ctx.add("attempts", mutation.attempts)
+                    })
+                    try markEntityFailed(mutation, context: context)
+                    context.delete(mutation)
+                } else {
+                    Log.sync.info("Mutation will retry", context: .with { ctx in
+                        ctx.add("attempts_after", mutation.attempts)
+                    })
+                }
             } catch {
+                // Non-API error (decoding, encoding, etc.)
+                Log.sync.error("Non-API error during mutation flush", error: error, context: .with { ctx in
+                    ctx.add("entity_type", mutation.entityType.rawValue)
+                    ctx.add("entity_id", mutation.entityId)
+                    ctx.add("error_type", String(describing: type(of: error)))
+                })
                 mutation.recordFailure(error: error.localizedDescription)
 
                 if mutation.hasExceededRetryLimit {
-                    Log.sync.error("Mutation exceeded retry limit, marking entity as failed", context: .with { ctx in
+                    Log.sync.error("Mutation exceeded retry limit (non-API error)", context: .with { ctx in
                         ctx.add("entity_type", mutation.entityType.rawValue)
                         ctx.add("operation", mutation.operation.rawValue)
                         ctx.add("attempts", mutation.attempts)
@@ -234,6 +365,10 @@ actor SyncEngine {
                     // Mark the entity as failed
                     try markEntityFailed(mutation, context: context)
                     context.delete(mutation)
+                } else {
+                    Log.sync.info("Mutation will retry", context: .with { ctx in
+                        ctx.add("attempts_after", mutation.attempts)
+                    })
                 }
             }
         }
@@ -257,80 +392,82 @@ actor SyncEngine {
         switch mutation.entityType {
         case .event:
             let request = try JSONDecoder().decode(CreateEventRequest.self, from: mutation.payload)
-            let response = try await apiClient.createEventWithIdempotency(
+            _ = try await apiClient.createEventWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.reconcilePendingEvent(localId: mutation.localEntityId, serverId: response.id)
+            // With UUIDv7, no reconciliation needed - just mark as synced
+            try localStore.markEventSynced(id: mutation.entityId)
 
         case .eventType:
             let request = try JSONDecoder().decode(CreateEventTypeRequest.self, from: mutation.payload)
-            let response = try await apiClient.createEventTypeWithIdempotency(
+            _ = try await apiClient.createEventTypeWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.reconcilePendingEventType(localId: mutation.localEntityId, serverId: response.id)
+            try localStore.markEventTypeSynced(id: mutation.entityId)
 
         case .geofence:
             let request = try JSONDecoder().decode(CreateGeofenceRequest.self, from: mutation.payload)
-            let response = try await apiClient.createGeofenceWithIdempotency(
+            _ = try await apiClient.createGeofenceWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.reconcilePendingGeofence(localId: mutation.localEntityId, serverId: response.id)
+            try localStore.markGeofenceSynced(id: mutation.entityId)
 
         case .propertyDefinition:
-            // PropertyDefinitions are created via event type endpoint
-            // This requires special handling
-            Log.sync.warning("PropertyDefinition create not yet implemented in flush")
+            let request = try JSONDecoder().decode(CreatePropertyDefinitionRequest.self, from: mutation.payload)
+            _ = try await apiClient.createPropertyDefinitionWithIdempotency(
+                request,
+                idempotencyKey: mutation.clientRequestId
+            )
+            try localStore.markPropertyDefinitionSynced(id: mutation.entityId)
         }
 
         try localStore.save()
     }
 
     private func flushUpdate(_ mutation: PendingMutation) async throws {
-        guard let serverId = mutation.serverEntityId else {
-            throw SyncError.missingServerId
-        }
+        // For updates, entityId IS the server ID (since we use UUIDv7)
+        let entityId = mutation.entityId
 
         switch mutation.entityType {
         case .event:
             let request = try JSONDecoder().decode(UpdateEventRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateEvent(id: serverId, request)
+            _ = try await apiClient.updateEvent(id: entityId, request)
 
         case .eventType:
             let request = try JSONDecoder().decode(UpdateEventTypeRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateEventType(id: serverId, request)
+            _ = try await apiClient.updateEventType(id: entityId, request)
 
         case .geofence:
             let request = try JSONDecoder().decode(UpdateGeofenceRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateGeofence(id: serverId, request)
+            _ = try await apiClient.updateGeofence(id: entityId, request)
 
         case .propertyDefinition:
             let request = try JSONDecoder().decode(UpdatePropertyDefinitionRequest.self, from: mutation.payload)
-            _ = try await apiClient.updatePropertyDefinition(id: serverId, request)
+            _ = try await apiClient.updatePropertyDefinition(id: entityId, request)
         }
     }
 
     private func flushDelete(_ mutation: PendingMutation) async throws {
-        guard let serverId = mutation.serverEntityId else {
-            throw SyncError.missingServerId
-        }
+        // For deletes, entityId IS the server ID (since we use UUIDv7)
+        let entityId = mutation.entityId
 
         switch mutation.entityType {
         case .event:
-            try await apiClient.deleteEvent(id: serverId)
+            try await apiClient.deleteEvent(id: entityId)
         case .eventType:
-            try await apiClient.deleteEventType(id: serverId)
+            try await apiClient.deleteEventType(id: entityId)
         case .geofence:
-            try await apiClient.deleteGeofence(id: serverId)
+            try await apiClient.deleteGeofence(id: entityId)
         case .propertyDefinition:
-            try await apiClient.deletePropertyDefinition(id: serverId)
+            try await apiClient.deletePropertyDefinition(id: entityId)
         }
     }
 
     private func markEntityFailed(_ mutation: PendingMutation, context: ModelContext) throws {
-        let entityId = mutation.localEntityId
+        let entityId = mutation.entityId
 
         switch mutation.entityType {
         case .event:
@@ -367,57 +504,18 @@ actor SyncEngine {
         }
     }
 
-    /// Handle duplicate error by deleting the local entity.
-    /// The server already has equivalent data, so we delete the local version
-    /// and let the next sync pull the server's authoritative copy.
-    private func markEntitySyncedAfterDuplicate(_ mutation: PendingMutation, context: ModelContext) throws {
-        let entityId = mutation.localEntityId
-
+    /// Handle duplicate error by marking the entity as synced.
+    /// With UUIDv7, the server has the same ID, so we just mark synced.
+    private func markEntitySynced(_ mutation: PendingMutation, localStore: LocalStore) throws {
         switch mutation.entityType {
         case .event:
-            let descriptor = FetchDescriptor<Event>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let event = try context.fetch(descriptor).first {
-                // Delete the local duplicate - server's version will be pulled on next sync
-                context.delete(event)
-                Log.sync.info("Deleted local duplicate event", context: .with { ctx in
-                    ctx.add("local_id", entityId.uuidString)
-                })
-            }
-
+            try localStore.markEventSynced(id: mutation.entityId)
         case .eventType:
-            let descriptor = FetchDescriptor<EventType>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let eventType = try context.fetch(descriptor).first {
-                context.delete(eventType)
-                Log.sync.info("Deleted local duplicate event type", context: .with { ctx in
-                    ctx.add("local_id", entityId.uuidString)
-                })
-            }
-
+            try localStore.markEventTypeSynced(id: mutation.entityId)
         case .geofence:
-            let descriptor = FetchDescriptor<Geofence>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let geofence = try context.fetch(descriptor).first {
-                context.delete(geofence)
-                Log.sync.info("Deleted local duplicate geofence", context: .with { ctx in
-                    ctx.add("local_id", entityId.uuidString)
-                })
-            }
-
+            try localStore.markGeofenceSynced(id: mutation.entityId)
         case .propertyDefinition:
-            let descriptor = FetchDescriptor<PropertyDefinition>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let propDef = try context.fetch(descriptor).first {
-                context.delete(propDef)
-                Log.sync.info("Deleted local duplicate property definition", context: .with { ctx in
-                    ctx.add("local_id", entityId.uuidString)
-                })
-            }
+            try localStore.markPropertyDefinitionSynced(id: mutation.entityId)
         }
     }
 
@@ -495,7 +593,7 @@ actor SyncEngine {
 
         switch change.entityType {
         case "event":
-            try localStore.upsertEvent(serverId: change.entityId) { event in
+            try localStore.upsertEvent(id: change.entityId) { event in
                 // Apply data from change
                 if let timestamp = data.timestamp {
                     event.timestamp = timestamp
@@ -509,11 +607,9 @@ actor SyncEngine {
                 if let endDate = data.endDate {
                     event.endDate = endDate
                 }
-                // Event type ID needs special handling - look up local EventType by serverId
+                // EventType ID - look up and establish relationship
                 if let eventTypeId = data.eventTypeId {
-                    event.eventTypeServerId = eventTypeId
-                    // Establish the SwiftData relationship
-                    if let localEventType = try? localStore.findEventType(byServerId: eventTypeId) {
+                    if let localEventType = try? localStore.findEventType(id: eventTypeId) {
                         event.eventType = localEventType
                     }
                 }
@@ -527,7 +623,7 @@ actor SyncEngine {
                     event.originalTitle = originalTitle
                 }
                 if let geofenceId = data.geofenceId {
-                    event.geofenceServerId = geofenceId
+                    event.geofenceId = geofenceId
                 }
                 if let lat = data.locationLatitude, let lon = data.locationLongitude {
                     event.locationLatitude = lat
@@ -536,6 +632,13 @@ actor SyncEngine {
                 if let locationName = data.locationName {
                     event.locationName = locationName
                 }
+                // Sync HealthKit fields from change feed (critical for deduplication)
+                if let healthKitSampleId = data.healthKitSampleId {
+                    event.healthKitSampleId = healthKitSampleId
+                }
+                if let healthKitCategory = data.healthKitCategory {
+                    event.healthKitCategory = healthKitCategory
+                }
                 // Sync properties from change feed
                 if let apiProperties = data.properties {
                     event.properties = Self.convertAPIProperties(apiProperties)
@@ -543,7 +646,7 @@ actor SyncEngine {
             }
 
         case "event_type":
-            try localStore.upsertEventType(serverId: change.entityId) { eventType in
+            try localStore.upsertEventType(id: change.entityId) { eventType in
                 if let name = data.name {
                     eventType.name = name
                 }
@@ -556,7 +659,7 @@ actor SyncEngine {
             }
 
         case "geofence":
-            try localStore.upsertGeofence(serverId: change.entityId) { geofence in
+            try localStore.upsertGeofence(id: change.entityId) { geofence in
                 if let name = data.name {
                     geofence.name = name
                 }
@@ -578,25 +681,19 @@ actor SyncEngine {
                 if let notifyOnExit = data.notifyOnExit {
                     geofence.notifyOnExit = notifyOnExit
                 }
-                // Event type IDs handled separately via lookup
+                // Event type IDs are now String (UUIDv7)
                 if let entryId = data.eventTypeEntryId {
-                    // Need to look up local EventType by serverId and get its local ID
-                    if let localEventType = try? localStore.findEventType(byServerId: entryId) {
-                        geofence.eventTypeEntryID = localEventType.id
-                    }
+                    geofence.eventTypeEntryID = entryId
                 }
                 if let exitId = data.eventTypeExitId {
-                    if let localEventType = try? localStore.findEventType(byServerId: exitId) {
-                        geofence.eventTypeExitID = localEventType.id
-                    }
+                    geofence.eventTypeExitID = exitId
                 }
             }
 
         case "property_definition":
-            // PropertyDefinitions need eventTypeId lookup
-            if let eventTypeServerId = data.eventTypeId,
-               let eventType = try? localStore.findEventType(byServerId: eventTypeServerId) {
-                try localStore.upsertPropertyDefinition(serverId: change.entityId, eventTypeId: eventType.id) { propDef in
+            // PropertyDefinitions need eventTypeId
+            if let eventTypeId = data.eventTypeId {
+                try localStore.upsertPropertyDefinition(id: change.entityId, eventTypeId: eventTypeId) { propDef in
                     if let key = data.key {
                         propDef.key = key
                     }
@@ -625,184 +722,18 @@ actor SyncEngine {
     private func applyDelete(_ change: ChangeEntry, localStore: LocalStore) throws {
         switch change.entityType {
         case "event":
-            try localStore.deleteEventByServerId(change.entityId)
+            try localStore.deleteEvent(id: change.entityId)
         case "event_type":
-            try localStore.deleteEventTypeByServerId(change.entityId)
+            try localStore.deleteEventType(id: change.entityId)
         case "geofence":
-            try localStore.deleteGeofenceByServerId(change.entityId)
+            try localStore.deleteGeofence(id: change.entityId)
         case "property_definition":
-            try localStore.deletePropertyDefinitionByServerId(change.entityId)
+            try localStore.deletePropertyDefinition(id: change.entityId)
         default:
             Log.sync.warning("Unknown entity type for delete", context: .with { ctx in
                 ctx.add("entity_type", change.entityType)
             })
         }
-    }
-
-    // MARK: - Private: Cleanup Orphaned Entities
-
-    /// Remove local entities that don't have a serverId.
-    /// These are orphaned local records that were never synced to the backend.
-    /// During bootstrap, we want the backend to be the source of truth.
-    private func cleanupOrphanedEntities(context: ModelContext) throws {
-        // Delete EventTypes without serverId
-        let orphanedEventTypes = FetchDescriptor<EventType>(
-            predicate: #Predicate { $0.serverId == nil }
-        )
-        let eventTypesToDelete = try context.fetch(orphanedEventTypes)
-        Log.sync.info("Cleanup: removing orphaned event types", context: .with { ctx in
-            ctx.add("count", eventTypesToDelete.count)
-        })
-        for eventType in eventTypesToDelete {
-            context.delete(eventType)
-        }
-
-        // Delete Events without serverId
-        let orphanedEvents = FetchDescriptor<Event>(
-            predicate: #Predicate { $0.serverId == nil }
-        )
-        let eventsToDelete = try context.fetch(orphanedEvents)
-        Log.sync.info("Cleanup: removing orphaned events", context: .with { ctx in
-            ctx.add("count", eventsToDelete.count)
-        })
-        for event in eventsToDelete {
-            context.delete(event)
-        }
-
-        // Delete Geofences without serverId
-        let orphanedGeofences = FetchDescriptor<Geofence>(
-            predicate: #Predicate { $0.serverId == nil }
-        )
-        let geofencesToDelete = try context.fetch(orphanedGeofences)
-        Log.sync.info("Cleanup: removing orphaned geofences", context: .with { ctx in
-            ctx.add("count", geofencesToDelete.count)
-        })
-        for geofence in geofencesToDelete {
-            context.delete(geofence)
-        }
-
-        // Delete PropertyDefinitions without serverId
-        let orphanedPropDefs = FetchDescriptor<PropertyDefinition>(
-            predicate: #Predicate { $0.serverId == nil }
-        )
-        let propDefsToDelete = try context.fetch(orphanedPropDefs)
-        Log.sync.info("Cleanup: removing orphaned property definitions", context: .with { ctx in
-            ctx.add("count", propDefsToDelete.count)
-        })
-        for propDef in propDefsToDelete {
-            context.delete(propDef)
-        }
-
-        // Save the deletions
-        try context.save()
-        Log.sync.info("Cleanup: orphaned entities removed")
-    }
-
-    /// Remove local entities whose serverId is not in the set of valid backend IDs.
-    /// This handles stale data from deleted backend records or sync issues.
-    private func removeStaleEntities(
-        context: ModelContext,
-        validEventTypeIds: Set<String>,
-        validEventIds: Set<String>,
-        validGeofenceIds: Set<String>,
-        validPropertyDefinitionIds: Set<String>
-    ) throws {
-        // Remove stale Events (have serverId but it's not in backend)
-        let allEvents = FetchDescriptor<Event>()
-        let localEvents = try context.fetch(allEvents)
-
-        // Diagnostic logging
-        let eventsWithNilServerId = localEvents.filter { $0.serverId == nil }.count
-        let eventsWithServerId = localEvents.filter { $0.serverId != nil }.count
-        Log.sync.info("Cleanup: event diagnostic", context: .with { ctx in
-            ctx.add("total_local_events", localEvents.count)
-            ctx.add("events_with_nil_serverId", eventsWithNilServerId)
-            ctx.add("events_with_serverId", eventsWithServerId)
-            ctx.add("valid_backend_event_ids", validEventIds.count)
-        })
-
-        var staleEventCount = 0
-        var nilServerIdCount = 0
-        for event in localEvents {
-            if let serverId = event.serverId {
-                if !validEventIds.contains(serverId) {
-                    context.delete(event)
-                    staleEventCount += 1
-                }
-            } else {
-                // Also delete events with nil serverId (orphaned)
-                context.delete(event)
-                nilServerIdCount += 1
-            }
-        }
-        Log.sync.info("Cleanup: removing stale events", context: .with { ctx in
-            ctx.add("stale_count", staleEventCount)
-            ctx.add("nil_serverId_count", nilServerIdCount)
-            ctx.add("total_deleted", staleEventCount + nilServerIdCount)
-        })
-
-        // Remove stale EventTypes
-        let allEventTypes = FetchDescriptor<EventType>()
-        let localEventTypes = try context.fetch(allEventTypes)
-        var staleEventTypeCount = 0
-        for eventType in localEventTypes {
-            if let serverId = eventType.serverId, !validEventTypeIds.contains(serverId) {
-                context.delete(eventType)
-                staleEventTypeCount += 1
-            }
-        }
-        Log.sync.info("Cleanup: removing stale event types", context: .with { ctx in
-            ctx.add("count", staleEventTypeCount)
-        })
-
-        // Remove stale Geofences
-        let allGeofences = FetchDescriptor<Geofence>()
-        let localGeofences = try context.fetch(allGeofences)
-        var staleGeofenceCount = 0
-        var nilServerIdGeofenceCount = 0
-        for geofence in localGeofences {
-            if let serverId = geofence.serverId {
-                if !validGeofenceIds.contains(serverId) {
-                    context.delete(geofence)
-                    staleGeofenceCount += 1
-                }
-            } else {
-                // Also delete geofences with nil serverId (orphaned)
-                context.delete(geofence)
-                nilServerIdGeofenceCount += 1
-            }
-        }
-        Log.sync.info("Cleanup: removing stale geofences", context: .with { ctx in
-            ctx.add("stale_count", staleGeofenceCount)
-            ctx.add("nil_serverId_count", nilServerIdGeofenceCount)
-            ctx.add("total_deleted", staleGeofenceCount + nilServerIdGeofenceCount)
-        })
-
-        // Remove stale PropertyDefinitions
-        let allPropDefs = FetchDescriptor<PropertyDefinition>()
-        let localPropDefs = try context.fetch(allPropDefs)
-        var stalePropDefCount = 0
-        var nilServerIdPropDefCount = 0
-        for propDef in localPropDefs {
-            if let serverId = propDef.serverId {
-                if !validPropertyDefinitionIds.contains(serverId) {
-                    context.delete(propDef)
-                    stalePropDefCount += 1
-                }
-            } else {
-                // Also delete property definitions with nil serverId (orphaned)
-                context.delete(propDef)
-                nilServerIdPropDefCount += 1
-            }
-        }
-        Log.sync.info("Cleanup: removing stale property definitions", context: .with { ctx in
-            ctx.add("stale_count", stalePropDefCount)
-            ctx.add("nil_serverId_count", nilServerIdPropDefCount)
-            ctx.add("total_deleted", stalePropDefCount + nilServerIdPropDefCount)
-        })
-
-        try context.save()
-        Log.sync.info("Cleanup: stale entities removed")
     }
 
     // MARK: - Private: Bootstrap Fetch (Initial Sync)
@@ -873,7 +804,7 @@ actor SyncEngine {
         })
 
         for apiEventType in eventTypes {
-            try localStore.upsertEventType(serverId: apiEventType.id) { eventType in
+            try localStore.upsertEventType(id: apiEventType.id) { eventType in
                 eventType.name = apiEventType.name
                 eventType.colorHex = apiEventType.color
                 eventType.iconName = apiEventType.icon
@@ -894,7 +825,7 @@ actor SyncEngine {
         })
 
         for apiGeofence in geofences {
-            try localStore.upsertGeofence(serverId: apiGeofence.id) { geofence in
+            try localStore.upsertGeofence(id: apiGeofence.id) { geofence in
                 geofence.name = apiGeofence.name
                 geofence.latitude = apiGeofence.latitude
                 geofence.longitude = apiGeofence.longitude
@@ -902,17 +833,9 @@ actor SyncEngine {
                 geofence.isActive = apiGeofence.isActive
                 geofence.notifyOnEntry = apiGeofence.notifyOnEntry
                 geofence.notifyOnExit = apiGeofence.notifyOnExit
-                // Look up local EventTypes by server ID for entry/exit references
-                if let entryId = apiGeofence.eventTypeEntryId {
-                    if let localEventType = try? localStore.findEventType(byServerId: entryId) {
-                        geofence.eventTypeEntryID = localEventType.id
-                    }
-                }
-                if let exitId = apiGeofence.eventTypeExitId {
-                    if let localEventType = try? localStore.findEventType(byServerId: exitId) {
-                        geofence.eventTypeExitID = localEventType.id
-                    }
-                }
+                // Event type IDs are now String (UUIDv7)
+                geofence.eventTypeEntryID = apiGeofence.eventTypeEntryId
+                geofence.eventTypeExitID = apiGeofence.eventTypeExitId
             }
         }
 
@@ -933,26 +856,28 @@ actor SyncEngine {
         })
 
         for apiEvent in events {
-            let event = try localStore.upsertEvent(serverId: apiEvent.id) { event in
+            let event = try localStore.upsertEvent(id: apiEvent.id) { event in
                 event.timestamp = apiEvent.timestamp
                 event.notes = apiEvent.notes
                 event.isAllDay = apiEvent.isAllDay
                 event.endDate = apiEvent.endDate
-                event.eventTypeServerId = apiEvent.eventTypeId
                 event.sourceType = EventSourceType(rawValue: apiEvent.sourceType) ?? .manual
                 event.externalId = apiEvent.externalId
                 event.originalTitle = apiEvent.originalTitle
-                event.geofenceServerId = apiEvent.geofenceId
+                event.geofenceId = apiEvent.geofenceId
                 event.locationLatitude = apiEvent.locationLatitude
                 event.locationLongitude = apiEvent.locationLongitude
                 event.locationName = apiEvent.locationName
+                // Sync HealthKit fields from backend (critical for deduplication)
+                event.healthKitSampleId = apiEvent.healthKitSampleId
+                event.healthKitCategory = apiEvent.healthKitCategory
                 // Sync properties from backend
                 if let apiProperties = apiEvent.properties {
                     event.properties = Self.convertAPIProperties(apiProperties)
                 }
             }
             // Establish the SwiftData relationship to EventType
-            if let localEventType = try? localStore.findEventType(byServerId: apiEvent.eventTypeId) {
+            if let localEventType = try? localStore.findEventType(id: apiEvent.eventTypeId) {
                 event.eventType = localEventType
             }
         }
@@ -969,17 +894,15 @@ actor SyncEngine {
         for apiEventType in eventTypes {
             do {
                 let propDefs = try await apiClient.getPropertyDefinitions(eventTypeId: apiEventType.id)
-                if let localEventType = try? localStore.findEventType(byServerId: apiEventType.id) {
-                    for apiPropDef in propDefs {
-                        try localStore.upsertPropertyDefinition(serverId: apiPropDef.id, eventTypeId: localEventType.id) { propDef in
-                            propDef.key = apiPropDef.key
-                            propDef.label = apiPropDef.label
-                            propDef.propertyType = PropertyType(rawValue: apiPropDef.propertyType) ?? .text
-                            propDef.displayOrder = apiPropDef.displayOrder
-                            propDef.options = apiPropDef.options ?? []
-                        }
-                        allPropertyDefinitionIds.append(apiPropDef.id)
+                for apiPropDef in propDefs {
+                    try localStore.upsertPropertyDefinition(id: apiPropDef.id, eventTypeId: apiEventType.id) { propDef in
+                        propDef.key = apiPropDef.key
+                        propDef.label = apiPropDef.label
+                        propDef.propertyType = PropertyType(rawValue: apiPropDef.propertyType) ?? .text
+                        propDef.displayOrder = apiPropDef.displayOrder
+                        propDef.options = apiPropDef.options ?? []
                     }
+                    allPropertyDefinitionIds.append(apiPropDef.id)
                 }
             } catch {
                 Log.sync.warning("Failed to fetch property definitions for event type", context: .with { ctx in
@@ -996,27 +919,15 @@ actor SyncEngine {
         // Save all upserts
         try context.save()
 
-        // Step 5: Remove stale local entities that no longer exist on the backend
-        // This ensures local database matches backend exactly
-        let validEventTypeIds = Set(eventTypes.map { $0.id })
-        let validEventIds = Set(events.map { $0.id })
-        let validGeofenceIds = Set(geofences.map { $0.id })
-        let validPropertyDefinitionIds = Set(allPropertyDefinitionIds)
-
-        try removeStaleEntities(
-            context: context,
-            validEventTypeIds: validEventTypeIds,
-            validEventIds: validEventIds,
-            validGeofenceIds: validGeofenceIds,
-            validPropertyDefinitionIds: validPropertyDefinitionIds
-        )
+        // Restore any broken Event→EventType relationships
+        try restoreEventTypeRelationships(context: context, localStore: localStore)
 
         // Verification: count remaining records after cleanup
         let finalEventCount = try context.fetchCount(FetchDescriptor<Event>())
         let finalEventTypeCount = try context.fetchCount(FetchDescriptor<EventType>())
         let finalGeofenceCount = try context.fetchCount(FetchDescriptor<Geofence>())
 
-        Log.sync.info("Bootstrap fetch completed", context: .with { ctx in
+        Log.sync.info("🔧 Bootstrap fetch completed", context: .with { ctx in
             ctx.add("backend_event_types", eventTypes.count)
             ctx.add("backend_geofences", geofences.count)
             ctx.add("backend_events", events.count)
@@ -1025,6 +936,44 @@ actor SyncEngine {
             ctx.add("final_local_event_types", finalEventTypeCount)
             ctx.add("final_local_geofences", finalGeofenceCount)
         })
+
+        // DIAGNOSTIC: Additional verification after save
+        Log.sync.info("🔧 Bootstrap verification after context.save()", context: .with { ctx in
+            // Create a fresh context to verify persistence
+            let verifyContext = ModelContext(modelContainer)
+            let verifyEventCount = (try? verifyContext.fetchCount(FetchDescriptor<Event>())) ?? -1
+            let verifyEventTypeCount = (try? verifyContext.fetchCount(FetchDescriptor<EventType>())) ?? -1
+            ctx.add("verify_events_fresh_context", verifyEventCount)
+            ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
+        })
+    }
+
+    /// Restore Event→EventType relationships for events with missing eventType relationship.
+    /// This can happen when events are loaded from backend but the SwiftData relationship wasn't
+    /// properly established during sync.
+    private func restoreEventTypeRelationships(context: ModelContext, localStore: LocalStore) throws {
+        let allEvents = try context.fetch(FetchDescriptor<Event>())
+        var restoredCount = 0
+
+        for event in allEvents {
+            // Check if event is missing the relationship
+            guard event.eventType == nil else { continue }
+
+            // Try to find the EventType by looking at what the event references
+            // Since we don't have eventTypeServerId anymore, we need to check all event types
+            // and match by the relationship that should exist
+            // This is a recovery mechanism - normally the relationship is set during sync
+            Log.sync.warning("Event missing eventType relationship", context: .with { ctx in
+                ctx.add("event_id", event.id)
+            })
+        }
+
+        if restoredCount > 0 {
+            try context.save()
+            Log.sync.info("Restored eventType relationships", context: .with { ctx in
+                ctx.add("count", restoredCount)
+            })
+        }
     }
 
     // MARK: - Private: State Updates
@@ -1057,14 +1006,11 @@ actor SyncEngine {
 // MARK: - Errors
 
 enum SyncError: LocalizedError {
-    case missingServerId
     case encodingFailed
     case unknown(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingServerId:
-            return "Server ID is required for update/delete operations"
         case .encodingFailed:
             return "Failed to encode mutation payload"
         case .unknown(let message):

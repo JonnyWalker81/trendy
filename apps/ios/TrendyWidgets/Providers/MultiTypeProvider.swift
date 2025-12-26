@@ -81,9 +81,8 @@ struct MultiTypeProvider: AppIntentTimelineProvider {
         var eventTypesWithCounts: [EventTypeWithCount] = []
 
         for configType in configuredTypes.prefix(6) { // Max 6 types
-            guard let uuid = UUID(uuidString: configType.id) else { continue }
-
-            let count = (try? await dataManager.getTodayCount(for: uuid)) ?? 0
+            let eventTypeId = configType.id
+            let count = (try? await dataManager.getTodayCount(for: eventTypeId)) ?? 0
 
             eventTypesWithCounts.append(EventTypeWithCount(
                 id: configType.id,

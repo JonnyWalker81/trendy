@@ -62,6 +62,6 @@ struct EventBubbleView: View {
             impactFeedback.impactOccurred()
             onLongPress()
         }
-        .accessibilityIdentifier("eventBubble_\(eventType.id.uuidString)")
+        .accessibilityIdentifier("eventBubble_\(eventType.id)")
     }
 }

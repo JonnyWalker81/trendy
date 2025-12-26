@@ -119,12 +119,14 @@ struct APIModelFixture {
 
     /// Create CreateEventRequest with defaults
     static func makeCreateEventRequest(
+        id: String = UUIDv7.generate(),
         eventTypeId: String = "type-1",
         timestamp: Date = Date(timeIntervalSince1970: 1704067200),
         notes: String? = "Test event",
         properties: [String: APIPropertyValue] = [:]
     ) -> CreateEventRequest {
         CreateEventRequest(
+            id: id,
             eventTypeId: eventTypeId,
             timestamp: timestamp,
             notes: notes,
@@ -137,6 +139,8 @@ struct APIModelFixture {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: properties
         )
     }

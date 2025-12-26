@@ -25,14 +25,10 @@ struct QuickLogIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        guard let uuid = UUID(uuidString: eventTypeId) else {
-            throw QuickLogError.invalidEventTypeId
-        }
-
         let dataManager = WidgetDataManager.shared
 
         do {
-            try await dataManager.createEvent(eventTypeId: uuid, timestamp: Date())
+            try await dataManager.createEvent(eventTypeId: eventTypeId, timestamp: Date())
 
             // Reload all widget timelines to reflect the new event
             WidgetCenter.shared.reloadAllTimelines()

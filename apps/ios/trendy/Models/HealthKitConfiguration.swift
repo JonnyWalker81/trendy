@@ -98,7 +98,7 @@ enum HealthDataCategory: String, Codable, CaseIterable {
 final class HealthKitConfiguration {
     var id: UUID
     var healthDataCategory: String      // Raw value storage for SwiftData compatibility
-    var eventTypeID: UUID?              // Links to EventType (UUID pattern from Geofence)
+    var eventTypeID: String?            // Links to EventType by UUIDv7 string
     var isEnabled: Bool
     var notifyOnDetection: Bool         // User-configurable notifications
     var createdAt: Date
@@ -112,7 +112,7 @@ final class HealthKitConfiguration {
 
     init(
         category: HealthDataCategory,
-        eventTypeID: UUID? = nil,
+        eventTypeID: String? = nil,
         isEnabled: Bool = true,
         notifyOnDetection: Bool = false
     ) {

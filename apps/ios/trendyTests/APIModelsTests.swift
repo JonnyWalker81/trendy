@@ -87,6 +87,7 @@ struct APIModelsTests {
     func test_createEventRequest_encodesWithSnakeCase() throws {
         let fixedDate = Date(timeIntervalSince1970: 1704067200) // 2024-01-01 00:00:00 UTC
         let request = CreateEventRequest(
+            id: UUIDv7.generate(),
             eventTypeId: "type-123",
             timestamp: fixedDate,
             notes: "Morning run",
@@ -99,6 +100,8 @@ struct APIModelsTests {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: [:]
         )
 
@@ -119,6 +122,7 @@ struct APIModelsTests {
         ]
 
         let request = CreateEventRequest(
+            id: UUIDv7.generate(),
             eventTypeId: "workout-type",
             timestamp: Date(),
             notes: nil,
@@ -131,6 +135,8 @@ struct APIModelsTests {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: properties
         )
 
@@ -374,6 +380,7 @@ struct APIModelsTests {
     @Test("CreateEventRequest with all nil optional fields encodes correctly")
     func test_createEventRequest_allNilOptionals_encodesCorrectly() throws {
         let request = CreateEventRequest(
+            id: UUIDv7.generate(),
             eventTypeId: "type-1",
             timestamp: Date(),
             notes: nil,
@@ -386,6 +393,8 @@ struct APIModelsTests {
             locationLatitude: nil,
             locationLongitude: nil,
             locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: [:]
         )
 
@@ -408,6 +417,12 @@ struct APIModelsTests {
             sourceType: nil,
             externalId: nil,
             originalTitle: nil,
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
             properties: nil
         )
 
@@ -431,6 +446,7 @@ struct APIModelsTests {
 
             for i in 0..<1000 {
                 let request = CreateEventRequest(
+                    id: UUIDv7.generate(),
                     eventTypeId: "type-\(i)",
                     timestamp: Date(),
                     notes: "Event \(i)",
@@ -443,6 +459,8 @@ struct APIModelsTests {
                     locationLatitude: nil,
                     locationLongitude: nil,
                     locationName: nil,
+                    healthKitSampleId: nil,
+                    healthKitCategory: nil,
                     properties: [:]
                 )
 

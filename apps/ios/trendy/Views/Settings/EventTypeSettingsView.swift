@@ -11,7 +11,7 @@ struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
     @Environment(ThemeManager.self) private var themeManager
     @State private var showingAddEventType = false
-    @State private var editingEventTypeID: UUID?
+    @State private var editingEventTypeID: String?
     @State private var showingCalendarImport = false
 
     var body: some View {
@@ -41,7 +41,7 @@ struct EventTypeSettingsView: View {
                         EventTypeRow(eventType: eventType) {
                             editingEventTypeID = eventType.id
                         }
-                        .accessibilityIdentifier("eventTypeRow_\(eventType.id.uuidString)")
+                        .accessibilityIdentifier("eventTypeRow_\(eventType.id)")
                     }
                     .onDelete(perform: deleteEventTypes)
                 } header: {
@@ -112,8 +112,12 @@ struct EventTypeSettingsView: View {
             .sheet(isPresented: $showingAddEventType) {
                 AddEventTypeView()
             }
-            .sheet(item: $editingEventTypeID) { eventTypeID in
-                if let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
+            .sheet(isPresented: Binding(
+                get: { editingEventTypeID != nil },
+                set: { if !$0 { editingEventTypeID = nil } }
+            )) {
+                if let eventTypeID = editingEventTypeID,
+                   let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
                     EditEventTypeView(eventType: eventType)
                 }
             }

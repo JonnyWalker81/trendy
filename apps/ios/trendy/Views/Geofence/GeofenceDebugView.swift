@@ -116,7 +116,7 @@ struct GeofenceDebugView: View {
             Section {
                 if let identifiers = geofenceManager?.monitoredRegionIdentifiers, !identifiers.isEmpty {
                     ForEach(identifiers, id: \.self) { identifier in
-                        let geofence = allGeofences.first { $0.id.uuidString == identifier }
+                        let geofence = allGeofences.first { $0.id == identifier }
                         HStack {
                             VStack(alignment: .leading) {
                                 if let geofence = geofence {

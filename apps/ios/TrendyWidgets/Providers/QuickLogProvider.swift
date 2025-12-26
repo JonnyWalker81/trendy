@@ -85,23 +85,13 @@ struct QuickLogProvider: AppIntentTimelineProvider {
             )
         }
 
-        guard let uuid = UUID(uuidString: configuredType.id) else {
-            return QuickLogEntry(
-                date: Date(),
-                eventType: nil,
-                todayCount: 0,
-                streak: 0,
-                lastEventTime: nil,
-                configuration: configuration
-            )
-        }
-
+        let eventTypeId = configuredType.id
         let dataManager = WidgetDataManager.shared
 
         do {
-            let todayCount = try await dataManager.getTodayCount(for: uuid)
-            let streak = (configuration.showStreak ?? true) ? try await dataManager.getStreak(for: uuid) : 0
-            let lastEventTime = try await dataManager.getLastEventTime(for: uuid)
+            let todayCount = try await dataManager.getTodayCount(for: eventTypeId)
+            let streak = (configuration.showStreak ?? true) ? try await dataManager.getStreak(for: eventTypeId) : 0
+            let lastEventTime = try await dataManager.getLastEventTime(for: eventTypeId)
 
             return QuickLogEntry(
                 date: Date(),

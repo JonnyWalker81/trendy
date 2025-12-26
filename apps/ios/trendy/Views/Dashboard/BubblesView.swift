@@ -14,9 +14,9 @@ struct BubblesView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var calendarManager: CalendarManager
     @State private var showingAddEventType = false
-    @State private var selectedEventTypeID: UUID?
+    @State private var selectedEventTypeID: String?
     @State private var showingInsightDetail: APIInsight?
-    
+
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
@@ -83,8 +83,12 @@ struct BubblesView: View {
                 AddEventTypeView()
                     .environment(eventStore)
             }
-            .sheet(item: $selectedEventTypeID) { eventTypeID in
-                if let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
+            .sheet(isPresented: Binding(
+                get: { selectedEventTypeID != nil },
+                set: { if !$0 { selectedEventTypeID = nil } }
+            )) {
+                if let eventTypeID = selectedEventTypeID,
+                   let eventType = eventStore.eventTypes.first(where: { $0.id == eventTypeID }) {
                     EventEditView(eventType: eventType)
                         .environment(eventStore)
                         .environmentObject(calendarManager)

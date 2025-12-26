@@ -16,7 +16,7 @@ struct PropertyDefinitionListView: View {
     @Query private var allPropertyDefinitions: [PropertyDefinition]
 
     @State private var showingAddProperty = false
-    @State private var editingPropertyID: UUID?
+    @State private var editingPropertyID: String?
 
     // Property definitions for this event type
     private var propertyDefinitions: [PropertyDefinition] {
@@ -24,7 +24,7 @@ struct PropertyDefinitionListView: View {
             .filter { $0.eventTypeId == eventType.id }
             .sorted { $0.displayOrder < $1.displayOrder }
     }
-    
+
     private var editingProperty: PropertyDefinition? {
         guard let id = editingPropertyID else { return nil }
         return propertyDefinitions.first { $0.id == id }
@@ -66,8 +66,12 @@ struct PropertyDefinitionListView: View {
         .sheet(isPresented: $showingAddProperty) {
             PropertyDefinitionFormView(eventType: eventType, propertyDefinition: nil)
         }
-        .sheet(item: $editingPropertyID) { propertyID in
-            if let definition = propertyDefinitions.first(where: { $0.id == propertyID }) {
+        .sheet(isPresented: Binding(
+            get: { editingPropertyID != nil },
+            set: { if !$0 { editingPropertyID = nil } }
+        )) {
+            if let propertyID = editingPropertyID,
+               let definition = propertyDefinitions.first(where: { $0.id == propertyID }) {
                 PropertyDefinitionFormView(eventType: eventType, propertyDefinition: definition)
             }
         }

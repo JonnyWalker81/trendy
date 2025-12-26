@@ -32,6 +32,7 @@ struct APIEventType: Codable, Identifiable {
 
 /// Request model for creating event types
 struct CreateEventTypeRequest: Codable {
+    let id: String  // Client-generated UUIDv7
     let name: String
     let color: String
     let icon: String
@@ -68,6 +69,8 @@ struct APIEvent: Codable, Identifiable {
     let locationLatitude: Double?
     let locationLongitude: Double?
     let locationName: String?
+    let healthKitSampleId: String?
+    let healthKitCategory: String?
     let properties: [String: APIPropertyValue]?
     let createdAt: Date
     let updatedAt: Date
@@ -88,6 +91,8 @@ struct APIEvent: Codable, Identifiable {
         case locationLatitude = "location_latitude"
         case locationLongitude = "location_longitude"
         case locationName = "location_name"
+        case healthKitSampleId = "healthkit_sample_id"
+        case healthKitCategory = "healthkit_category"
         case properties
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -97,6 +102,7 @@ struct APIEvent: Codable, Identifiable {
 
 /// Request model for creating events
 struct CreateEventRequest: Codable {
+    let id: String  // Client-generated UUIDv7
     let eventTypeId: String
     let timestamp: Date
     let notes: String?
@@ -109,9 +115,12 @@ struct CreateEventRequest: Codable {
     let locationLatitude: Double?
     let locationLongitude: Double?
     let locationName: String?
+    let healthKitSampleId: String?
+    let healthKitCategory: String?
     let properties: [String: APIPropertyValue]  // Required - backend rejects null
 
     enum CodingKeys: String, CodingKey {
+        case id
         case eventTypeId = "event_type_id"
         case timestamp
         case notes
@@ -124,6 +133,8 @@ struct CreateEventRequest: Codable {
         case locationLatitude = "location_latitude"
         case locationLongitude = "location_longitude"
         case locationName = "location_name"
+        case healthKitSampleId = "healthkit_sample_id"
+        case healthKitCategory = "healthkit_category"
         case properties
     }
 }
@@ -162,6 +173,8 @@ struct UpdateEventRequest: Codable {
     let locationLatitude: Double?
     let locationLongitude: Double?
     let locationName: String?
+    let healthKitSampleId: String?
+    let healthKitCategory: String?
     let properties: [String: APIPropertyValue]?
 
     enum CodingKeys: String, CodingKey {
@@ -177,6 +190,8 @@ struct UpdateEventRequest: Codable {
         case locationLatitude = "location_latitude"
         case locationLongitude = "location_longitude"
         case locationName = "location_name"
+        case healthKitSampleId = "healthkit_sample_id"
+        case healthKitCategory = "healthkit_category"
         case properties
     }
 }
@@ -272,6 +287,7 @@ struct APIPropertyDefinition: Codable, Identifiable {
 
 /// Request model for creating property definitions
 struct CreatePropertyDefinitionRequest: Codable {
+    let id: String  // Client-generated UUIDv7
     let eventTypeId: String
     let key: String
     let label: String
@@ -281,6 +297,7 @@ struct CreatePropertyDefinitionRequest: Codable {
     let displayOrder: Int
 
     enum CodingKeys: String, CodingKey {
+        case id
         case eventTypeId = "event_type_id"
         case key
         case label
@@ -570,12 +587,10 @@ struct QueuedGeofenceUpdate: Codable {
 /// Represents a geofence definition for reconciliation with CLLocationManager.
 /// Used to bridge between backend APIGeofence and iOS CLCircularRegion.
 struct GeofenceDefinition: Hashable, Sendable {
-    /// Region identifier for CLLocationManager - uses backend ID when synced
+    /// Region identifier for CLLocationManager - uses the UUIDv7 ID
     let identifier: String
-    /// Backend geofence ID
-    let backendId: String
-    /// Local SwiftData UUID (for event creation lookup)
-    let localId: UUID?
+    /// The canonical geofence ID (UUIDv7)
+    let id: String
     let name: String
     let latitude: Double
     let longitude: Double
@@ -585,11 +600,10 @@ struct GeofenceDefinition: Hashable, Sendable {
     let notifyOnExit: Bool
 
     /// Creates from APIGeofence (backend data)
-    init(from apiGeofence: APIGeofence, localId: UUID? = nil) {
-        // Use ios_region_identifier if set, otherwise fall back to backend ID
+    init(from apiGeofence: APIGeofence) {
+        // Use ios_region_identifier if set, otherwise fall back to ID
         self.identifier = apiGeofence.iosRegionIdentifier ?? apiGeofence.id
-        self.backendId = apiGeofence.id
-        self.localId = localId
+        self.id = apiGeofence.id
         self.name = apiGeofence.name
         self.latitude = apiGeofence.latitude
         self.longitude = apiGeofence.longitude
@@ -599,25 +613,10 @@ struct GeofenceDefinition: Hashable, Sendable {
         self.notifyOnExit = apiGeofence.notifyOnExit
     }
 
-    /// Creates from local Geofence with backend ID
-    init(from geofence: Geofence, backendId: String) {
-        self.identifier = backendId
-        self.backendId = backendId
-        self.localId = geofence.id
-        self.name = geofence.name
-        self.latitude = geofence.latitude
-        self.longitude = geofence.longitude
-        self.radius = geofence.radius
-        self.isActive = geofence.isActive
-        self.notifyOnEntry = geofence.notifyOnEntry
-        self.notifyOnExit = geofence.notifyOnExit
-    }
-
-    /// Creates from local Geofence using local ID as identifier (offline mode)
-    init(fromLocal geofence: Geofence) {
-        self.identifier = geofence.id.uuidString
-        self.backendId = geofence.id.uuidString // No backend ID yet
-        self.localId = geofence.id
+    /// Creates from local Geofence
+    init(from geofence: Geofence) {
+        self.identifier = geofence.id
+        self.id = geofence.id
         self.name = geofence.name
         self.latitude = geofence.latitude
         self.longitude = geofence.longitude
@@ -945,6 +944,16 @@ struct ChangeEntryData: Codable {
 
     var locationName: String? {
         guard case .string(let str) = rawData["location_name"] else { return nil }
+        return str
+    }
+
+    var healthKitSampleId: String? {
+        guard case .string(let str) = rawData["healthkit_sample_id"] else { return nil }
+        return str
+    }
+
+    var healthKitCategory: String? {
+        guard case .string(let str) = rawData["healthkit_category"] else { return nil }
         return str
     }
 

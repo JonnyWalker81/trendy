@@ -443,6 +443,11 @@ class APIClient {
         return try await requestWithIdempotency("POST", endpoint: "/geofences", body: request, idempotencyKey: idempotencyKey)
     }
 
+    /// Create property definition with idempotency key for exactly-once semantics
+    func createPropertyDefinitionWithIdempotency(_ request: CreatePropertyDefinitionRequest, idempotencyKey: String) async throws -> APIPropertyDefinition {
+        return try await requestWithIdempotency("POST", endpoint: "/event-types/\(request.eventTypeId)/properties", body: request, idempotencyKey: idempotencyKey)
+    }
+
     /// Generic request with idempotency key header
     private func requestWithIdempotency<T: Decodable>(
         _ method: String,

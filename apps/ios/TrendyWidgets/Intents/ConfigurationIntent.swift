@@ -38,10 +38,10 @@ struct EventTypeQuery: EntityQuery {
         let allTypes = try await dataManager.getAllEventTypes()
 
         return allTypes
-            .filter { identifiers.contains($0.id.uuidString) }
+            .filter { identifiers.contains($0.id) }
             .map { eventType in
                 EventTypeEntity(
-                    id: eventType.id.uuidString,
+                    id: eventType.id,
                     name: eventType.name,
                     colorHex: eventType.colorHex,
                     iconName: eventType.iconName
@@ -56,7 +56,7 @@ struct EventTypeQuery: EntityQuery {
 
         return allTypes.map { eventType in
             EventTypeEntity(
-                id: eventType.id.uuidString,
+                id: eventType.id,
                 name: eventType.name,
                 colorHex: eventType.colorHex,
                 iconName: eventType.iconName

@@ -38,35 +38,27 @@ struct trendyApp: App {
     // MARK: - SwiftData
 
     var sharedModelContainer: ModelContainer = {
+        // Ensure App Group container directories exist before SwiftData tries to use them
+        ensureAppGroupDirectoriesExist()
+
         // Check if we need to clear container data (set by DebugStorageView)
         if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
             print("🗑️ Debug: Clearing App Group container on launch...")
             UserDefaults.standard.removeObject(forKey: "debug_clear_container_on_launch")
             UserDefaults.standard.synchronize()
-
-            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
-                let fileManager = FileManager.default
-                if let contents = try? fileManager.contentsOfDirectory(at: appGroupURL, includingPropertiesForKeys: nil) {
-                    for item in contents {
-                        do {
-                            try fileManager.removeItem(at: item)
-                            print("   Deleted: \(item.lastPathComponent)")
-                        } catch {
-                            print("   Failed to delete \(item.lastPathComponent): \(error)")
-                        }
-                    }
-                }
-                print("🗑️ Debug: Container cleared")
-            }
+            clearDatabaseFiles()
+            print("🗑️ Debug: Container cleared")
         }
 
+        // Schema V2: Uses UUIDv7 String IDs (single canonical ID)
+        // Note: Migration from V1 requires database reset (UUID→String type change)
         let schema = Schema([
             Event.self,
             EventType.self,
-            QueuedOperation.self,
-            PendingMutation.self,
             Geofence.self,
             PropertyDefinition.self,
+            QueuedOperation.self,
+            PendingMutation.self,
             HealthKitConfiguration.self
         ])
 
@@ -80,69 +72,86 @@ struct trendyApp: App {
             cloudKitDatabase: .none  // Disable iCloud/CloudKit sync
         )
 
-        // Try to create the container, with fallback to reset if schema is corrupted
+        // Try to create the container
+        // Note: We don't use a migration plan because SwiftData cannot auto-migrate
+        // UUID→String type changes. Old V1 users will get a schema error and reset.
         var container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            print("📦 ModelContainer created successfully")
         } catch {
             print("⚠️ Failed to create ModelContainer: \(error)")
-            print("⚠️ Attempting to reset database due to schema incompatibility...")
+            print("⚠️ This likely means schema changed (V1→V2 migration)")
+            print("⚠️ Clearing database and will resync from backend...")
 
-            // Delete the corrupted database files
-            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
-                let storeURL = appGroupURL.appendingPathComponent("Library/Application Support")
-                let filesToDelete = ["default.store", "default.store-wal", "default.store-shm"]
-                for file in filesToDelete {
-                    let fileURL = storeURL.appendingPathComponent(file)
-                    try? FileManager.default.removeItem(at: fileURL)
-                }
-                print("   Deleted old database files")
-            }
+            // Clear database and resync from backend
+            clearDatabaseFiles()
+            markForPostMigrationResync()
 
             // Try again with a fresh database
             do {
                 container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                print("   ✅ Created fresh database successfully")
+                print("   ✅ Created fresh V2 database successfully")
+                print("   ⚠️ User will need to resync from backend")
             } catch {
                 fatalError("Could not create ModelContainer even after reset: \(error)")
             }
         }
 
-        // Verify schema by testing access to all tables
+        // Verify schema by testing access to all tables individually
+        // If ANY table fails, we need to reset the database
         let context = container.mainContext
-        var schemaValid = true
+        var failedModels: [String] = []
+        var modelCounts: [String: Int] = [:]
 
-        // Test each table - if any fails, we need to reset
-        do {
-            _ = try context.fetchCount(FetchDescriptor<EventType>())
-            _ = try context.fetchCount(FetchDescriptor<Event>())
-            _ = try context.fetchCount(FetchDescriptor<QueuedOperation>())
-            _ = try context.fetchCount(FetchDescriptor<PendingMutation>())
-            _ = try context.fetchCount(FetchDescriptor<Geofence>())
-            _ = try context.fetchCount(FetchDescriptor<PropertyDefinition>())
-            _ = try context.fetchCount(FetchDescriptor<HealthKitConfiguration>())
-        } catch {
-            print("⚠️ Schema validation failed: \(error)")
-            schemaValid = false
+        // Helper to check each model independently
+        func checkModel<T: PersistentModel>(_ type: T.Type, name: String) {
+            do {
+                let count = try context.fetchCount(FetchDescriptor<T>())
+                modelCounts[name] = count
+            } catch {
+                print("⚠️ Schema check failed for \(name): \(error)")
+                failedModels.append(name)
+            }
+        }
+
+        // Check each model - continue even if some fail
+        checkModel(Event.self, name: "Event")
+        checkModel(EventType.self, name: "EventType")
+        checkModel(Geofence.self, name: "Geofence")
+        checkModel(PropertyDefinition.self, name: "PropertyDefinition")
+        checkModel(HealthKitConfiguration.self, name: "HealthKitConfiguration")
+        checkModel(QueuedOperation.self, name: "QueuedOperation")
+        checkModel(PendingMutation.self, name: "PendingMutation")
+
+        let schemaValid = failedModels.isEmpty
+
+        if schemaValid {
+            // DIAGNOSTIC: Log counts on app launch
+            print("🔧 Schema validation passed - existing data:")
+            print("   EventTypes: \(modelCounts["EventType"] ?? 0)")
+            print("   Events: \(modelCounts["Event"] ?? 0)")
+            print("   Geofences: \(modelCounts["Geofence"] ?? 0)")
+            print("   PropertyDefinitions: \(modelCounts["PropertyDefinition"] ?? 0)")
+            print("   HealthKitConfigs: \(modelCounts["HealthKitConfiguration"] ?? 0)")
+            print("   QueuedOperations: \(modelCounts["QueuedOperation"] ?? 0)")
+            print("   PendingMutations: \(modelCounts["PendingMutation"] ?? 0)")
+        } else {
+            print("⚠️ Schema validation failed for: \(failedModels.joined(separator: ", "))")
         }
 
         if !schemaValid {
             print("⚠️ Database schema is incomplete. Resetting database...")
-
-            // Delete the corrupted database files
-            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
-                let storeURL = appGroupURL.appendingPathComponent("Library/Application Support")
-                let filesToDelete = ["default.store", "default.store-wal", "default.store-shm"]
-                for file in filesToDelete {
-                    let fileURL = storeURL.appendingPathComponent(file)
-                    try? FileManager.default.removeItem(at: fileURL)
-                }
-                print("   Deleted old database files")
-            }
+            clearDatabaseFiles()
+            markForPostMigrationResync()
 
             // Create a new container with fresh database
             do {
-                container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                container = try ModelContainer(
+                    for: schema,
+                    migrationPlan: TrendySchemaMigrationPlan.self,
+                    configurations: [modelConfiguration]
+                )
                 print("   ✅ Created fresh database with complete schema")
             } catch {
                 fatalError("Could not create ModelContainer after schema reset: \(error)")
@@ -152,10 +161,78 @@ struct trendyApp: App {
         // Log SwiftData container location
         #if DEBUG
         print("📦 SwiftData using App Group: \(appGroupIdentifier)")
+        print("📦 Schema version: V2 (UUIDv7 String IDs)")
         #endif
 
         return container
     }()
+
+    /// Ensure the App Group container directories exist before SwiftData tries to use them
+    private static func ensureAppGroupDirectoriesExist() {
+        guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            print("⚠️ Could not get App Group container URL")
+            return
+        }
+
+        let applicationSupportURL = appGroupURL
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: applicationSupportURL.path) {
+            do {
+                try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
+                print("📁 Created App Group directory: Library/Application Support")
+            } catch {
+                print("⚠️ Failed to create App Group directories: \(error)")
+            }
+        }
+    }
+
+    /// Clear the SwiftData database files from the App Group container
+    private static func clearDatabaseFiles() {
+        guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            print("⚠️ Could not get App Group container URL")
+            return
+        }
+
+        let fileManager = FileManager.default
+
+        // Delete all contents of the App Group container
+        if let contents = try? fileManager.contentsOfDirectory(at: appGroupURL, includingPropertiesForKeys: nil) {
+            for item in contents {
+                do {
+                    try fileManager.removeItem(at: item)
+                    print("   Deleted: \(item.lastPathComponent)")
+                } catch {
+                    print("   Failed to delete \(item.lastPathComponent): \(error)")
+                }
+            }
+        }
+
+        // Recreate the Library/Application Support directory that SwiftData expects
+        let applicationSupportURL = appGroupURL
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+
+        do {
+            try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
+            print("   ✅ Recreated: Library/Application Support")
+        } catch {
+            print("   ⚠️ Failed to recreate Application Support directory: \(error)")
+        }
+    }
+
+    /// Mark that a post-migration resync is needed
+    private static func markForPostMigrationResync() {
+        // Clear sync cursors to force full resync
+        UserDefaults.standard.removeObject(forKey: "sync_cursor")
+        UserDefaults.standard.removeObject(forKey: "lastSyncCursor")
+
+        // Set flag for UI to show resync prompt if needed
+        UserDefaults.standard.set(true, forKey: "schema_migration_v1_to_v2_completed")
+        UserDefaults.standard.synchronize()
+    }
 
     // MARK: - Initialization
 

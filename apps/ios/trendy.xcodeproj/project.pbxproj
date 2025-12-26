@@ -91,6 +91,7 @@
 				Models/PropertyDefinition.swift,
 				Models/PropertyValue.swift,
 				Models/SyncStatus.swift,
+				Utilities/UUIDv7.swift,
 			);
 			target = DE6E7D112ED7CEA8006CA4DD /* TrendyWidgetsExtension */;
 		};
@@ -970,7 +971,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1002,7 +1003,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1034,7 +1035,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1066,7 +1067,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1079,7 +1080,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.TrendyWidgetsExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.beta.TrendyWidgetsExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1239,7 +1240,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;

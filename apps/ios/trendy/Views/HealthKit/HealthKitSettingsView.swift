@@ -287,8 +287,8 @@ struct HealthKitCategoryRow: View {
     @Query private var eventTypes: [EventType]
 
     private var linkedEventType: EventType? {
-        guard let serverId = settings.eventTypeServerId(for: category) else { return nil }
-        return eventTypes.first { $0.serverId == serverId }
+        guard let eventTypeId = settings.eventTypeId(for: category) else { return nil }
+        return eventTypes.first { $0.id == eventTypeId }
     }
 
     var body: some View {
@@ -480,7 +480,7 @@ struct EditHealthKitCategoryView: View {
 
     private let settings = HealthKitSettings.shared
 
-    @State private var selectedEventTypeServerId: String?
+    @State private var selectedEventTypeId: String?
     @State private var notifyOnDetection = false
 
     var body: some View {
@@ -500,20 +500,20 @@ struct EditHealthKitCategoryView: View {
                 }
 
                 Section {
-                    Picker("Event Type", selection: $selectedEventTypeServerId) {
+                    Picker("Event Type", selection: $selectedEventTypeId) {
                         Text("Auto-create").tag(nil as String?)
-                        ForEach(eventTypes.filter { $0.serverId != nil }) { eventType in
+                        ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
                                     .fill(Color(hex: eventType.colorHex) ?? .blue)
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType.serverId as String?)
+                            .tag(eventType.id as String?)
                         }
                     }
                 } footer: {
-                    Text("Choose which event type to use when logging this health data. Only synced event types are shown.")
+                    Text("Choose which event type to use when logging this health data.")
                 }
 
                 Section {
@@ -545,16 +545,16 @@ struct EditHealthKitCategoryView: View {
                 }
             }
             .onAppear {
-                selectedEventTypeServerId = settings.eventTypeServerId(for: category)
+                selectedEventTypeId = settings.eventTypeId(for: category)
                 notifyOnDetection = settings.notifyOnDetection(for: category)
             }
         }
     }
 
     private func saveChanges() {
-        settings.setEventTypeServerId(selectedEventTypeServerId, for: category)
+        settings.setEventTypeId(selectedEventTypeId, for: category)
         settings.setNotifyOnDetection(notifyOnDetection, for: category)
-        print("✅ HealthKit: Updated \(category.displayName) settings (serverId: \(selectedEventTypeServerId ?? "auto"))")
+        print("✅ HealthKit: Updated \(category.displayName) settings (eventTypeId: \(selectedEventTypeId ?? "auto"))")
         dismiss()
     }
 }

@@ -23,28 +23,31 @@ type EventType struct {
 
 // Event represents a tracked event
 type Event struct {
-	ID                string                   `json:"id"`
-	UserID            string                   `json:"user_id"`
-	EventTypeID       string                   `json:"event_type_id"`
-	Timestamp         time.Time                `json:"timestamp"`
-	Notes             *string                  `json:"notes,omitempty"`
-	IsAllDay          bool                     `json:"is_all_day"`
-	EndDate           *time.Time               `json:"end_date,omitempty"`
-	SourceType        string                   `json:"source_type"`
-	ExternalID        *string                  `json:"external_id,omitempty"`
-	OriginalTitle     *string                  `json:"original_title,omitempty"`
-	GeofenceID        *string                  `json:"geofence_id,omitempty"`
-	LocationLatitude  *float64                 `json:"location_latitude,omitempty"`
-	LocationLongitude *float64                 `json:"location_longitude,omitempty"`
-	LocationName      *string                  `json:"location_name,omitempty"`
-	Properties        map[string]PropertyValue `json:"properties,omitempty"`
-	CreatedAt         time.Time                `json:"created_at"`
-	UpdatedAt         time.Time                `json:"updated_at"`
-	EventType         *EventType               `json:"event_type,omitempty"`
+	ID                 string                   `json:"id"`
+	UserID             string                   `json:"user_id"`
+	EventTypeID        string                   `json:"event_type_id"`
+	Timestamp          time.Time                `json:"timestamp"`
+	Notes              *string                  `json:"notes,omitempty"`
+	IsAllDay           bool                     `json:"is_all_day"`
+	EndDate            *time.Time               `json:"end_date,omitempty"`
+	SourceType         string                   `json:"source_type"`
+	ExternalID         *string                  `json:"external_id,omitempty"`
+	OriginalTitle      *string                  `json:"original_title,omitempty"`
+	GeofenceID         *string                  `json:"geofence_id,omitempty"`
+	LocationLatitude   *float64                 `json:"location_latitude,omitempty"`
+	LocationLongitude  *float64                 `json:"location_longitude,omitempty"`
+	LocationName       *string                  `json:"location_name,omitempty"`
+	HealthKitSampleID  *string                  `json:"healthkit_sample_id,omitempty"`
+	HealthKitCategory  *string                  `json:"healthkit_category,omitempty"`
+	Properties         map[string]PropertyValue `json:"properties,omitempty"`
+	CreatedAt          time.Time                `json:"created_at"`
+	UpdatedAt          time.Time                `json:"updated_at"`
+	EventType          *EventType               `json:"event_type,omitempty"`
 }
 
 // CreateEventRequest represents the request to create an event
 type CreateEventRequest struct {
+	ID                *string                  `json:"id,omitempty"` // Optional client-generated UUIDv7
 	EventTypeID       string                   `json:"event_type_id" binding:"required"`
 	Timestamp         time.Time                `json:"timestamp" binding:"required"`
 	Notes             *string                  `json:"notes"`
@@ -57,6 +60,8 @@ type CreateEventRequest struct {
 	LocationLatitude  *float64                 `json:"location_latitude"`
 	LocationLongitude *float64                 `json:"location_longitude"`
 	LocationName      *string                  `json:"location_name"`
+	HealthKitSampleID *string                  `json:"healthkit_sample_id,omitempty"`
+	HealthKitCategory *string                  `json:"healthkit_category,omitempty"`
 	Properties        map[string]PropertyValue `json:"properties,omitempty"`
 }
 
@@ -74,6 +79,8 @@ type UpdateEventRequest struct {
 	LocationLatitude  *float64                  `json:"location_latitude"`
 	LocationLongitude *float64                  `json:"location_longitude"`
 	LocationName      *string                   `json:"location_name"`
+	HealthKitSampleID *string                   `json:"healthkit_sample_id,omitempty"`
+	HealthKitCategory *string                   `json:"healthkit_category,omitempty"`
 	Properties        *map[string]PropertyValue `json:"properties,omitempty"`
 }
 
@@ -99,9 +106,10 @@ type BatchError struct {
 
 // CreateEventTypeRequest represents the request to create an event type
 type CreateEventTypeRequest struct {
-	Name  string `json:"name" binding:"required"`
-	Color string `json:"color" binding:"required"`
-	Icon  string `json:"icon" binding:"required"`
+	ID    *string `json:"id,omitempty"` // Optional client-generated UUIDv7
+	Name  string  `json:"name" binding:"required"`
+	Color string  `json:"color" binding:"required"`
+	Icon  string  `json:"icon" binding:"required"`
 }
 
 // UpdateEventTypeRequest represents the request to update an event type
@@ -189,6 +197,7 @@ type PropertyValue struct {
 
 // CreatePropertyDefinitionRequest represents the request to create a property definition
 type CreatePropertyDefinitionRequest struct {
+	ID           *string      `json:"id,omitempty"` // Optional client-generated UUIDv7
 	EventTypeID  string       `json:"event_type_id" binding:"required"`
 	Key          string       `json:"key" binding:"required"`
 	Label        string       `json:"label" binding:"required"`

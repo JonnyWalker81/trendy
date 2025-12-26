@@ -31,6 +31,11 @@ func (s *eventTypeService) CreateEventType(ctx context.Context, userID string, r
 		Icon:   req.Icon,
 	}
 
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if req.ID != nil && *req.ID != "" {
+		eventType.ID = *req.ID
+	}
+
 	created, err := s.eventTypeRepo.Create(ctx, eventType)
 	if err != nil {
 		return nil, err

@@ -10,8 +10,8 @@ import SwiftUI
 struct EventListView: View {
     @Environment(EventStore.self) private var eventStore
     @State private var searchText = ""
-    @State private var selectedEventTypeID: UUID?
-    
+    @State private var selectedEventTypeID: String?
+
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
@@ -126,7 +126,7 @@ struct EventListView: View {
                                 selectedEventTypeID = eventType.id
                             }
                         }
-                        .accessibilityIdentifier("filterChip_\(eventType.id.uuidString)")
+                        .accessibilityIdentifier("filterChip_\(eventType.id)")
                     }
                 }
                 .padding(.horizontal)

@@ -12,13 +12,13 @@ struct AnalyticsView: View {
     @Environment(EventStore.self) private var eventStore
     @Environment(InsightsViewModel.self) private var insightsViewModel
     @State private var analyticsViewModel = AnalyticsViewModel()
-    @State private var selectedEventTypeID: UUID?
+    @State private var selectedEventTypeID: String?
     @State private var timeRange: TimeRange = .month
     @State private var statistics: Statistics?
-    
+
     @AppStorage("analyticsSelectedEventTypeId") private var savedEventTypeId: String = ""
     @AppStorage("analyticsTimeRange") private var savedTimeRangeRaw: String = TimeRange.month.rawValue
-    
+
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
@@ -73,7 +73,7 @@ struct AnalyticsView: View {
 
                 // Restore saved state
                 if !savedEventTypeId.isEmpty,
-                   let savedType = eventStore.eventTypes.first(where: { $0.id.uuidString == savedEventTypeId }) {
+                   let savedType = eventStore.eventTypes.first(where: { $0.id == savedEventTypeId }) {
                     selectedEventTypeID = savedType.id
                 } else if let firstType = eventStore.eventTypes.first {
                     selectedEventTypeID = firstType.id
@@ -124,7 +124,7 @@ struct AnalyticsView: View {
                 ForEach(eventStore.eventTypes) { eventType in
                     Button {
                         selectedEventTypeID = eventType.id
-                        savedEventTypeId = eventType.id.uuidString
+                        savedEventTypeId = eventType.id
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: eventType.iconName)
@@ -138,7 +138,7 @@ struct AnalyticsView: View {
                         .foregroundColor(selectedEventTypeID == eventType.id ? .white : .primary)
                         .clipShape(Capsule())
                     }
-                    .accessibilityIdentifier("analyticsEventType_\(eventType.id.uuidString)")
+                    .accessibilityIdentifier("analyticsEventType_\(eventType.id)")
                 }
             }
         }

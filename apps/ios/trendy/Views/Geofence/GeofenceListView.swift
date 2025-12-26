@@ -15,9 +15,9 @@ struct GeofenceListView: View {
     @Query(sort: \Geofence.name) private var geofences: [Geofence]
     @Query(sort: \EventType.name) private var eventTypes: [EventType]
     @State private var showingAddGeofence = false
-    @State private var selectedGeofenceID: UUID?
+    @State private var selectedGeofenceID: String?
     @State private var showingDeleteConfirmation = false
-    @State private var geofenceToDeleteID: UUID?
+    @State private var geofenceToDeleteID: String?
 
     // GeofenceManager should be passed in as environment
     @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
@@ -74,8 +74,12 @@ struct GeofenceListView: View {
             .sheet(isPresented: $showingAddGeofence) {
                 AddGeofenceView()
             }
-            .sheet(item: $selectedGeofenceID) { geofenceID in
-                if let geofence = geofences.first(where: { $0.id == geofenceID }) {
+            .sheet(isPresented: Binding(
+                get: { selectedGeofenceID != nil },
+                set: { if !$0 { selectedGeofenceID = nil } }
+            )) {
+                if let geofenceID = selectedGeofenceID,
+                   let geofence = geofences.first(where: { $0.id == geofenceID }) {
                     EditGeofenceView(geofence: geofence)
                 }
             }
@@ -624,7 +628,7 @@ struct EditGeofenceView: View {
     @State private var name: String = ""
     @State private var radius: Double = 100
     @State private var isActive: Bool = true
-    @State private var selectedEventTypeID: UUID?
+    @State private var selectedEventTypeID: String?
     @State private var notifyOnEntry: Bool = false
     @State private var notifyOnExit: Bool = false
     @State private var hasUnsavedChanges = false
@@ -715,7 +719,7 @@ struct EditGeofenceView: View {
 
                 Section {
                     Picker("Event Type", selection: $selectedEventTypeID) {
-                        Text("None").tag(nil as UUID?)
+                        Text("None").tag(nil as String?)
                         ForEach(eventTypes) { eventType in
                             HStack {
                                 Circle()
@@ -723,7 +727,7 @@ struct EditGeofenceView: View {
                                     .frame(width: 12, height: 12)
                                 Text(eventType.name)
                             }
-                            .tag(eventType.id as UUID?)
+                            .tag(eventType.id as String?)
                         }
                     }
                     .onChange(of: selectedEventTypeID) { _, _ in

@@ -44,12 +44,9 @@ final class PendingMutation {
     /// Type of operation (create, update, delete)
     var operationRaw: String
 
-    /// Local UUID of the entity being mutated
-    var localEntityId: UUID
-
-    /// Server ID of the entity (for update/delete operations)
-    /// For create operations, this is nil until the server responds
-    var serverEntityId: String?
+    /// UUIDv7 ID of the entity being mutated.
+    /// This is the canonical ID used both locally and on the server.
+    var entityId: String
 
     /// JSON-encoded request payload
     var payload: Data
@@ -83,16 +80,14 @@ final class PendingMutation {
     init(
         entityType: MutationEntityType,
         operation: MutationOperation,
-        localEntityId: UUID,
-        serverEntityId: String? = nil,
+        entityId: String,
         payload: Data
     ) {
         self.id = UUID()
         self.clientRequestId = UUID().uuidString
         self.entityTypeRaw = entityType.rawValue
         self.operationRaw = operation.rawValue
-        self.localEntityId = localEntityId
-        self.serverEntityId = serverEntityId
+        self.entityId = entityId
         self.payload = payload
         self.createdAt = Date()
         self.attempts = 0
