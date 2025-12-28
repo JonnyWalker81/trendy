@@ -331,6 +331,44 @@ class HealthKitService: NSObject {
             return
         }
 
+        // Request authorization for this specific category first, then start observer
+        Task {
+            await requestAuthorizationForCategory(category)
+            await startObserverQuery(for: category, sampleType: sampleType)
+        }
+    }
+
+    /// Request authorization for a specific HealthKit category
+    @MainActor
+    private func requestAuthorizationForCategory(_ category: HealthDataCategory) async {
+        guard isHealthKitAvailable else { return }
+
+        var typesToRead: Set<HKSampleType> = []
+
+        if let sampleType = category.hkSampleType {
+            typesToRead.insert(sampleType)
+        }
+
+        // Add heart rate for workout enrichment
+        if category == .workout, let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            typesToRead.insert(heartRateType)
+        }
+
+        do {
+            try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+            authorizationRequested = true
+            print("✅ HealthKit: Authorization requested for \(category.displayName)")
+        } catch {
+            print("⚠️ HealthKit: Failed to request authorization for \(category.displayName): \(error.localizedDescription)")
+        }
+    }
+
+    /// Start the observer query for a category (called after authorization)
+    @MainActor
+    private func startObserverQuery(for category: HealthDataCategory, sampleType: HKSampleType) async {
+        // Double-check we're not already monitoring
+        guard observerQueries[category] == nil else { return }
+
         // Create observer query
         let query = HKObserverQuery(sampleType: sampleType, predicate: nil) { [weak self] _, completionHandler, error in
             guard let self = self else {
@@ -358,9 +396,7 @@ class HealthKitService: NSObject {
         observerQueries[category] = query
 
         // Enable background delivery
-        Task {
-            await enableBackgroundDelivery(for: category)
-        }
+        await enableBackgroundDelivery(for: category)
 
         print("Started monitoring: \(category.displayName)")
     }

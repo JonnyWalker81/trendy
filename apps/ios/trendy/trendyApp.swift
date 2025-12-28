@@ -136,6 +136,15 @@ struct trendyApp: App {
             print("   HealthKitConfigs: \(modelCounts["HealthKitConfiguration"] ?? 0)")
             print("   QueuedOperations: \(modelCounts["QueuedOperation"] ?? 0)")
             print("   PendingMutations: \(modelCounts["PendingMutation"] ?? 0)")
+
+            // Force a save to ensure the database file is created on disk
+            // This prevents "No such file or directory" errors during later saves
+            do {
+                try context.save()
+                print("📦 Database file initialized on disk")
+            } catch {
+                print("⚠️ Failed to initialize database file: \(error)")
+            }
         } else {
             print("⚠️ Schema validation failed for: \(failedModels.joined(separator: ", "))")
         }
@@ -153,6 +162,11 @@ struct trendyApp: App {
                     configurations: [modelConfiguration]
                 )
                 print("   ✅ Created fresh database with complete schema")
+
+                // Force a save to ensure the database file is created on disk
+                let freshContext = container.mainContext
+                try freshContext.save()
+                print("   📦 Database file initialized on disk")
             } catch {
                 fatalError("Could not create ModelContainer after schema reset: \(error)")
             }

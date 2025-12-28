@@ -18,6 +18,14 @@ type EventRepository interface {
 	Update(ctx context.Context, id string, event *models.Event) (*models.Event, error)
 	Delete(ctx context.Context, id string) error
 	CountByEventType(ctx context.Context, userID string) (map[string]int64, error)
+	// UpsertHealthKitEvent inserts or updates a HealthKit event by sample ID.
+	// Returns (event, wasCreated, error) where wasCreated indicates if this was a new insert.
+	UpsertHealthKitEvent(ctx context.Context, event *models.Event) (*models.Event, bool, error)
+	// UpsertHealthKitEventsBatch inserts or updates multiple HealthKit events.
+	// Returns (events, createdIDs, error) where createdIDs contains IDs of newly created events.
+	UpsertHealthKitEventsBatch(ctx context.Context, events []models.Event) ([]models.Event, []string, error)
+	// GetByHealthKitSampleIDs retrieves events by their HealthKit sample IDs for a user.
+	GetByHealthKitSampleIDs(ctx context.Context, userID string, sampleIDs []string) ([]models.Event, error)
 }
 
 // EventTypeRepository defines the interface for event type data access

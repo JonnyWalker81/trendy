@@ -9,20 +9,22 @@ import Foundation
 import SwiftData
 
 /// Represents an operation that was performed offline and needs to be synced
+/// Note: This model is deprecated - use PendingMutation instead
 @Model
 final class QueuedOperation {
-    var id: UUID
+    /// UUIDv7 identifier - consistent with V2 schema pattern
+    @Attribute(.unique) var id: String
     var operationType: String // "create_event", "update_event", "delete_event", "create_event_type", etc.
-    var entityId: UUID // ID of the local entity
+    var entityId: String // ID of the local entity (UUIDv7 string)
     var payload: Data // JSON-encoded operation data
     var createdAt: Date
     var attempts: Int // Number of sync attempts
     var lastError: String?
 
     init(
-        id: UUID = UUID(),
+        id: String = UUIDv7.generate(),
         operationType: String,
-        entityId: UUID,
+        entityId: String,
         payload: Data,
         createdAt: Date = Date(),
         attempts: Int = 0,

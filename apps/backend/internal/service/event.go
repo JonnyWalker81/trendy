@@ -62,15 +62,39 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 		event.ID = *req.ID
 	}
 
-	created, err := s.eventRepo.Create(ctx, event)
-	if err != nil {
-		return nil, err
+	// Check if this is a HealthKit event that should use upsert
+	isHealthKit := sourceType == "healthkit" &&
+		req.HealthKitSampleID != nil &&
+		*req.HealthKitSampleID != ""
+
+	var created *models.Event
+	var operation models.Operation
+
+	if isHealthKit {
+		// Use upsert for HealthKit events - idempotent by sample ID
+		var wasCreated bool
+		created, wasCreated, err = s.eventRepo.UpsertHealthKitEvent(ctx, event)
+		if err != nil {
+			return nil, err
+		}
+		if wasCreated {
+			operation = models.OperationCreate
+		} else {
+			operation = models.OperationUpdate
+		}
+	} else {
+		// Standard insert for non-HealthKit events
+		created, err = s.eventRepo.Create(ctx, event)
+		if err != nil {
+			return nil, err
+		}
+		operation = models.OperationCreate
 	}
 
-	// Append to change log
+	// Append to change log with correct operation
 	if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
 		EntityType: models.EntityTypeEvent,
-		Operation:  models.OperationCreate,
+		Operation:  operation,
 		EntityID:   created.ID,
 		UserID:     userID,
 		Data:       created,
@@ -102,8 +126,10 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 		eventTypeMap[et.ID] = true
 	}
 
-	// Validate and prepare events
-	validEvents := make([]models.Event, 0, len(req.Events))
+	// Validate and prepare events, separating HealthKit from regular events
+	regularEvents := make([]models.Event, 0, len(req.Events))
+	healthKitEvents := make([]models.Event, 0)
+
 	for i, eventReq := range req.Events {
 		// Validate event type
 		if !eventTypeMap[eventReq.EventTypeID] {
@@ -144,19 +170,29 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 			event.ID = *eventReq.ID
 		}
 
-		validEvents = append(validEvents, event)
+		// Separate HealthKit events for upsert handling
+		isHealthKit := sourceType == "healthkit" &&
+			eventReq.HealthKitSampleID != nil &&
+			*eventReq.HealthKitSampleID != ""
+
+		if isHealthKit {
+			healthKitEvents = append(healthKitEvents, event)
+		} else {
+			regularEvents = append(regularEvents, event)
+		}
 	}
 
-	// Batch insert valid events
-	if len(validEvents) > 0 {
-		created, err := s.eventRepo.CreateBatch(ctx, validEvents)
+	log := logger.FromContext(ctx)
+
+	// Batch insert regular events (non-HealthKit)
+	if len(regularEvents) > 0 {
+		created, err := s.eventRepo.CreateBatch(ctx, regularEvents)
 		if err != nil {
 			return nil, fmt.Errorf("failed to batch create events: %w", err)
 		}
-		response.Created = created
+		response.Created = append(response.Created, created...)
 
 		// Append to change log for each created event
-		log := logger.FromContext(ctx)
 		for _, event := range created {
 			if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
 				EntityType: models.EntityTypeEvent,
@@ -166,6 +202,39 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 				Data:       event,
 			}); err != nil {
 				log.Warn("failed to append batch event to change log", logger.Err(err), logger.String("event_id", event.ID))
+			}
+		}
+	}
+
+	// Batch upsert HealthKit events (idempotent)
+	if len(healthKitEvents) > 0 {
+		upserted, createdIDs, err := s.eventRepo.UpsertHealthKitEventsBatch(ctx, healthKitEvents)
+		if err != nil {
+			return nil, fmt.Errorf("failed to batch upsert HealthKit events: %w", err)
+		}
+		response.Created = append(response.Created, upserted...)
+
+		// Build set of created IDs for quick lookup
+		createdIDSet := make(map[string]bool)
+		for _, id := range createdIDs {
+			createdIDSet[id] = true
+		}
+
+		// Append to change log with correct operation (create vs update)
+		for _, event := range upserted {
+			operation := models.OperationUpdate
+			if createdIDSet[event.ID] {
+				operation = models.OperationCreate
+			}
+
+			if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+				EntityType: models.EntityTypeEvent,
+				Operation:  operation,
+				EntityID:   event.ID,
+				UserID:     userID,
+				Data:       event,
+			}); err != nil {
+				log.Warn("failed to append HealthKit event to change log", logger.Err(err), logger.String("event_id", event.ID))
 			}
 		}
 	}

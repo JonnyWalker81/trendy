@@ -31,8 +31,8 @@ enum MutationOperation: String, Codable {
 /// will return the cached response.
 @Model
 final class PendingMutation {
-    /// Unique identifier for this mutation record
-    var id: UUID
+    /// UUIDv7 identifier - consistent with V2 schema pattern
+    @Attribute(.unique) var id: String
 
     /// UUID used as the Idempotency-Key header for exactly-once semantics.
     /// This is generated once when the mutation is created and never changes.
@@ -83,8 +83,8 @@ final class PendingMutation {
         entityId: String,
         payload: Data
     ) {
-        self.id = UUID()
-        self.clientRequestId = UUID().uuidString
+        self.id = UUIDv7.generate()
+        self.clientRequestId = UUID().uuidString  // Keep as UUID string for idempotency key
         self.entityTypeRaw = entityType.rawValue
         self.operationRaw = operation.rawValue
         self.entityId = entityId

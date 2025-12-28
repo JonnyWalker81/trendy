@@ -15,6 +15,7 @@ struct HealthKitSettingsView: View {
     @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
 
     @State private var showingAddConfiguration = false
+    @State private var showingManageCategories = false
     @State private var selectedCategory: HealthDataCategory?
     @State private var showingDeleteConfirmation = false
     @State private var categoryToDelete: HealthDataCategory?
@@ -62,6 +63,9 @@ struct HealthKitSettingsView: View {
             }
             .sheet(isPresented: $showingAddConfiguration) {
                 AddHealthKitCategoriesView(availableCategories: availableCategories)
+            }
+            .sheet(isPresented: $showingManageCategories) {
+                ManageHealthKitCategoriesView()
             }
             .sheet(item: $selectedCategory) { category in
                 EditHealthKitCategoryView(category: category, eventTypes: eventTypes)
@@ -203,8 +207,12 @@ struct HealthKitSettingsView: View {
                 }
             }
 
-            if !availableCategories.isEmpty {
-                Section {
+            Section {
+                Button(action: { showingManageCategories = true }) {
+                    Label("Manage Categories", systemImage: "slider.horizontal.3")
+                }
+
+                if !availableCategories.isEmpty {
                     Button(action: { showingAddConfiguration = true }) {
                         Label("Add More Health Data", systemImage: "plus.circle")
                     }

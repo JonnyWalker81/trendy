@@ -94,9 +94,11 @@ enum HealthDataCategory: String, Codable, CaseIterable {
 }
 
 /// SwiftData model linking HealthKit data types to EventTypes
+/// Note: This model is deprecated - use HealthKitSettings (UserDefaults-based) instead
 @Model
 final class HealthKitConfiguration {
-    var id: UUID
+    /// UUIDv7 identifier - consistent with V2 schema pattern
+    @Attribute(.unique) var id: String
     var healthDataCategory: String      // Raw value storage for SwiftData compatibility
     var eventTypeID: String?            // Links to EventType by UUIDv7 string
     var isEnabled: Bool
@@ -116,7 +118,7 @@ final class HealthKitConfiguration {
         isEnabled: Bool = true,
         notifyOnDetection: Bool = false
     ) {
-        self.id = UUID()
+        self.id = UUIDv7.generate()
         self.healthDataCategory = category.rawValue
         self.eventTypeID = eventTypeID
         self.isEnabled = isEnabled

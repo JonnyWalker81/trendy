@@ -349,3 +349,198 @@ func (r *eventRepository) GetForExport(ctx context.Context, userID string, start
 
 	return events, nil
 }
+
+// GetByHealthKitSampleIDs retrieves events by their HealthKit sample IDs for a user.
+// Used to determine which events already exist before upserting.
+func (r *eventRepository) GetByHealthKitSampleIDs(ctx context.Context, userID string, sampleIDs []string) ([]models.Event, error) {
+	if len(sampleIDs) == 0 {
+		return []models.Event{}, nil
+	}
+
+	// Build "in" filter for sample IDs
+	sampleIDFilter := "in.("
+	for i, id := range sampleIDs {
+		if i > 0 {
+			sampleIDFilter += ","
+		}
+		sampleIDFilter += id
+	}
+	sampleIDFilter += ")"
+
+	query := map[string]interface{}{
+		"user_id":             fmt.Sprintf("eq.%s", userID),
+		"healthkit_sample_id": sampleIDFilter,
+		"select":              "id,healthkit_sample_id",
+	}
+
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events by sample IDs: %w", err)
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return events, nil
+}
+
+// UpsertHealthKitEvent inserts or updates a HealthKit event by sample ID.
+// Returns (event, wasCreated, error) where wasCreated indicates if this was a new insert.
+func (r *eventRepository) UpsertHealthKitEvent(ctx context.Context, event *models.Event) (*models.Event, bool, error) {
+	if event.HealthKitSampleID == nil || *event.HealthKitSampleID == "" {
+		return nil, false, fmt.Errorf("healthkit_sample_id is required for upsert")
+	}
+
+	// Check if event already exists to determine wasCreated
+	existingEvents, err := r.GetByHealthKitSampleIDs(ctx, event.UserID, []string{*event.HealthKitSampleID})
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to check existing event: %w", err)
+	}
+	wasCreated := len(existingEvents) == 0
+
+	// Build data map with all fields
+	// PostgREST upsert requires all fields to be present
+	data := map[string]interface{}{
+		"user_id":             event.UserID,
+		"event_type_id":       event.EventTypeID,
+		"timestamp":           event.Timestamp,
+		"is_all_day":          event.IsAllDay,
+		"source_type":         event.SourceType,
+		"healthkit_sample_id": *event.HealthKitSampleID,
+		"notes":               event.Notes,
+		"end_date":            event.EndDate,
+		"external_id":         event.ExternalID,
+		"original_title":      event.OriginalTitle,
+		"geofence_id":         event.GeofenceID,
+		"location_latitude":   event.LocationLatitude,
+		"location_longitude":  event.LocationLongitude,
+		"location_name":       event.LocationName,
+		"healthkit_category":  event.HealthKitCategory,
+	}
+
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if event.ID != "" {
+		data["id"] = event.ID
+	}
+
+	// Properties - use empty object if nil (NOT NULL constraint)
+	if event.Properties != nil && len(event.Properties) > 0 {
+		data["properties"] = event.Properties
+	} else {
+		data["properties"] = map[string]interface{}{}
+	}
+
+	// Upsert using the healthkit sample ID as conflict key
+	body, err := r.client.Upsert("events", data, "user_id,healthkit_sample_id")
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to upsert HealthKit event: %w", err)
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, false, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(events) == 0 {
+		return nil, false, fmt.Errorf("no event returned from upsert")
+	}
+
+	return &events[0], wasCreated, nil
+}
+
+// UpsertHealthKitEventsBatch inserts or updates multiple HealthKit events.
+// Returns (events, createdIDs, error) where createdIDs contains IDs of newly created events.
+func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events []models.Event) ([]models.Event, []string, error) {
+	if len(events) == 0 {
+		return []models.Event{}, []string{}, nil
+	}
+
+	// Collect sample IDs to check which already exist
+	sampleIDs := make([]string, 0, len(events))
+	for _, event := range events {
+		if event.HealthKitSampleID != nil && *event.HealthKitSampleID != "" {
+			sampleIDs = append(sampleIDs, *event.HealthKitSampleID)
+		}
+	}
+
+	// Get existing events to determine which are creates vs updates
+	existingEvents, err := r.GetByHealthKitSampleIDs(ctx, events[0].UserID, sampleIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to check existing events: %w", err)
+	}
+
+	// Build set of existing sample IDs
+	existingSampleIDs := make(map[string]bool)
+	for _, e := range existingEvents {
+		if e.HealthKitSampleID != nil {
+			existingSampleIDs[*e.HealthKitSampleID] = true
+		}
+	}
+
+	// Build insert data with uniform keys (required by PostgREST batch)
+	insertData := make([]map[string]interface{}, 0, len(events))
+	for _, event := range events {
+		if event.HealthKitSampleID == nil || *event.HealthKitSampleID == "" {
+			continue // Skip events without sample ID
+		}
+
+		data := map[string]interface{}{
+			"user_id":             event.UserID,
+			"event_type_id":       event.EventTypeID,
+			"timestamp":           event.Timestamp,
+			"is_all_day":          event.IsAllDay,
+			"source_type":         event.SourceType,
+			"healthkit_sample_id": *event.HealthKitSampleID,
+			"notes":               event.Notes,
+			"end_date":            event.EndDate,
+			"external_id":         event.ExternalID,
+			"original_title":      event.OriginalTitle,
+			"geofence_id":         event.GeofenceID,
+			"location_latitude":   event.LocationLatitude,
+			"location_longitude":  event.LocationLongitude,
+			"location_name":       event.LocationName,
+			"healthkit_category":  event.HealthKitCategory,
+		}
+
+		// Use client-provided ID if present
+		if event.ID != "" {
+			data["id"] = event.ID
+		}
+
+		// Properties - use empty object if nil
+		if event.Properties != nil && len(event.Properties) > 0 {
+			data["properties"] = event.Properties
+		} else {
+			data["properties"] = map[string]interface{}{}
+		}
+
+		insertData = append(insertData, data)
+	}
+
+	if len(insertData) == 0 {
+		return []models.Event{}, []string{}, nil
+	}
+
+	// Batch upsert
+	body, err := r.client.Upsert("events", insertData, "user_id,healthkit_sample_id")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to batch upsert HealthKit events: %w", err)
+	}
+
+	var upsertedEvents []models.Event
+	if err := json.Unmarshal(body, &upsertedEvents); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	// Determine which events were newly created (not in existingSampleIDs)
+	createdIDs := make([]string, 0)
+	for _, e := range upsertedEvents {
+		if e.HealthKitSampleID != nil && !existingSampleIDs[*e.HealthKitSampleID] {
+			createdIDs = append(createdIDs, e.ID)
+		}
+	}
+
+	return upsertedEvents, createdIDs, nil
+}
