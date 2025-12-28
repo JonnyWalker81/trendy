@@ -14,8 +14,8 @@ CURRENT_PROJECT_VERSION = 1
 INFOPLIST_FILE = trendy/trendy-Info.plist
 
 // MARK: - Bundle Identifier
-// Different bundle ID allows side-by-side installation with Production
-PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.beta
+// Uses production bundle ID as required by App Store Connect
+PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight
 
 // MARK: - Display Name
 // Shows "Trendy Beta" in app name to distinguish from production
