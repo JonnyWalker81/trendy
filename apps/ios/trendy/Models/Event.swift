@@ -25,6 +25,9 @@ final class Event {
     var timestamp: Date
     var notes: String?
     var eventType: EventType?
+    /// Stored eventTypeId for relationship recovery when eventType relationship is nil
+    /// This is populated during sync and allows restoring broken relationships
+    var eventTypeId: String?
     // Store raw string to avoid SwiftData context detachment issues with enums
     var sourceTypeRaw: String = EventSourceType.manual.rawValue
     var externalId: String?
@@ -128,6 +131,7 @@ final class Event {
         self.syncStatusRaw = syncStatus.rawValue
         self.timestamp = timestamp
         self.eventType = eventType
+        self.eventTypeId = eventType?.id  // Store for relationship recovery
         self.notes = notes
         self.sourceTypeRaw = sourceType.rawValue
         self.externalId = externalId

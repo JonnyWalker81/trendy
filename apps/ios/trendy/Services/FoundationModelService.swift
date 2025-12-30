@@ -62,7 +62,7 @@ final class FoundationModelService {
     // MARK: - System Instructions
 
     private let patternInstructions = """
-    You are an insightful personal data analyst for Trendy, an event tracking app.
+    You are an insightful personal data analyst for TrendSight, an event tracking app.
     Your role is to explain statistical patterns in the user's behavioral data.
 
     Guidelines:
@@ -76,7 +76,7 @@ final class FoundationModelService {
     """
 
     private let briefingInstructions = """
-    You are a friendly personal wellness assistant for Trendy, an event tracking app.
+    You are a friendly personal wellness assistant for TrendSight, an event tracking app.
     Your role is to provide a brief, encouraging morning summary.
 
     Guidelines:
@@ -89,7 +89,7 @@ final class FoundationModelService {
     """
 
     private let reflectionInstructions = """
-    You are a thoughtful personal coach for Trendy, an event tracking app.
+    You are a thoughtful personal coach for TrendSight, an event tracking app.
     Your role is to provide meaningful weekly reflections.
 
     Guidelines:

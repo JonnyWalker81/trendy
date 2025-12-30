@@ -50,7 +50,7 @@ struct CalendarSyncSettingsView: View {
             } header: {
                 Text("Calendar Integration")
             } footer: {
-                Text("When enabled, events created in Trendy will automatically be added to your system calendar.")
+                Text("When enabled, events created in TrendSight will automatically be added to your system calendar.")
             }
             
             if calendarManager.isAuthorized {

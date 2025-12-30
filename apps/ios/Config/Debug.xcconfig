@@ -8,7 +8,7 @@ TARGETED_DEVICE_FAMILY = 1,2
 ENABLE_BITCODE = NO
 DEVELOPMENT_TEAM = 6H6N882H4S
 CODE_SIGN_STYLE = Automatic
-PRODUCT_NAME = Trendy
+PRODUCT_NAME = TrendSight
 MARKETING_VERSION = 1.0
 CURRENT_PROJECT_VERSION = 1
 INFOPLIST_FILE = trendy/trendy-Info.plist
@@ -18,8 +18,8 @@ INFOPLIST_FILE = trendy/trendy-Info.plist
 PRODUCT_BUNDLE_IDENTIFIER = com.shadowlabs.trendsight.dev
 
 // MARK: - Display Name
-// Shows "Trendy Dev" in app name to distinguish from other builds
-PRODUCT_DISPLAY_NAME = Trendy Dev
+// Shows "TrendSight Dev" in app name to distinguish from other builds
+PRODUCT_DISPLAY_NAME = TrendSight Dev
 
 // MARK: - Environment Settings
 // Secrets loaded from Secrets-Debug.xcconfig (gitignored)

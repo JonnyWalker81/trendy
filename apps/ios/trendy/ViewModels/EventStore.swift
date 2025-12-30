@@ -116,6 +116,8 @@ class EventStore {
                 guard let observer = observer else { return }
                 let eventStore = Unmanaged<EventStore>.fromOpaque(observer).takeUnretainedValue()
                 Task { @MainActor in
+                    // Queue mutations for any widget-created events before fetching
+                    await eventStore.queueMutationsForUnsyncedEvents()
                     await eventStore.fetchData()
                 }
             },
@@ -134,6 +136,108 @@ class EventStore {
             CFNotificationName(notificationName),
             nil
         )
+    }
+
+    /// Finds events created by widgets (pending sync but no mutation queued) and queues mutations for them.
+    /// This is called when the main app receives a Darwin notification from the widget extension.
+    func queueMutationsForUnsyncedEvents() async {
+        guard let modelContext = modelContext,
+              let syncEngine = syncEngine else {
+            Log.sync.debug("queueMutationsForUnsyncedEvents: skipping - no context or syncEngine")
+            return
+        }
+
+        do {
+            // Fetch all events with syncStatus = pending
+            let pendingStatus = SyncStatus.pending.rawValue
+            let pendingEventsDescriptor = FetchDescriptor<Event>(
+                predicate: #Predicate { $0.syncStatusRaw == pendingStatus }
+            )
+            let pendingEvents = try modelContext.fetch(pendingEventsDescriptor)
+
+            guard !pendingEvents.isEmpty else {
+                Log.sync.debug("queueMutationsForUnsyncedEvents: no pending events found")
+                return
+            }
+
+            // Fetch all existing PendingMutation entries for events (create operations)
+            let eventEntityType = MutationEntityType.event.rawValue
+            let createOperation = MutationOperation.create.rawValue
+            let mutationDescriptor = FetchDescriptor<PendingMutation>(
+                predicate: #Predicate {
+                    $0.entityTypeRaw == eventEntityType && $0.operationRaw == createOperation
+                }
+            )
+            let existingMutations = try modelContext.fetch(mutationDescriptor)
+            let mutatedEventIds = Set(existingMutations.map { $0.entityId })
+
+            // Find pending events that don't have a mutation queued
+            let eventsNeedingMutation = pendingEvents.filter { !mutatedEventIds.contains($0.id) }
+
+            if eventsNeedingMutation.isEmpty {
+                Log.sync.debug("queueMutationsForUnsyncedEvents: all pending events have mutations")
+                return
+            }
+
+            Log.sync.info("Found widget-created events needing mutation queue", context: .with { ctx in
+                ctx.add("count", eventsNeedingMutation.count)
+            })
+
+            // Queue mutations for each unsynced event
+            for event in eventsNeedingMutation {
+                guard let eventType = event.eventType else {
+                    Log.sync.warning("queueMutationsForUnsyncedEvents: event has no eventType", context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                    })
+                    continue
+                }
+
+                let request = CreateEventRequest(
+                    id: event.id,
+                    eventTypeId: eventType.id,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    healthKitSampleId: event.healthKitSampleId,
+                    healthKitCategory: event.healthKitCategory,
+                    properties: convertLocalPropertiesToAPI(event.properties)
+                )
+
+                do {
+                    let payload = try JSONEncoder().encode(request)
+                    try await syncEngine.queueMutation(
+                        entityType: .event,
+                        operation: .create,
+                        entityId: event.id,
+                        payload: payload
+                    )
+                    Log.sync.info("Queued mutation for widget-created event", context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                        ctx.add("event_type", eventType.name)
+                    })
+                } catch {
+                    Log.sync.error("Failed to queue mutation for widget event", error: error, context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                    })
+                }
+            }
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+
+        } catch {
+            Log.sync.error("queueMutationsForUnsyncedEvents failed", error: error)
+        }
     }
 
     // MARK: - Setup
@@ -157,6 +261,8 @@ class EventStore {
     /// Trigger a sync with the backend
     func performSync() async {
         guard let syncEngine = syncEngine else { return }
+        // Queue mutations for any widget-created events that may have been missed
+        await queueMutationsForUnsyncedEvents()
         await syncEngine.performSync()
         // Refresh local data after sync
         try? await fetchFromLocal()
@@ -175,6 +281,19 @@ class EventStore {
         try? await fetchFromLocal()
         isLoading = false
         Log.sync.info("Force full resync completed")
+    }
+
+    /// Restore broken Event→EventType relationships.
+    /// Use this when events show "Unknown" instead of their proper event type name.
+    func restoreEventRelationships() async {
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("restoreEventRelationships: no syncEngine available")
+            return
+        }
+        Log.sync.info("Starting event relationship restoration")
+        await syncEngine.restoreEventRelationships()
+        try? await fetchFromLocal()
+        Log.sync.info("Event relationship restoration completed")
     }
 
     // MARK: - Data Fetching
@@ -792,40 +911,67 @@ class EventStore {
 
     /// Sync an existing event to the backend (used by GeofenceManager, HealthKitService)
     func syncEventToBackend(_ event: Event) async {
-        guard let modelContext else { return }
+        guard let modelContext else {
+            Log.sync.error("syncEventToBackend: modelContext is nil - event will NOT sync!", context: .with { ctx in
+                ctx.add("event_id", event.id)
+                ctx.add("source_type", event.sourceType.rawValue)
+            })
+            return
+        }
         guard let syncEngine = syncEngine else {
             Log.sync.warning("syncEventToBackend: no syncEngine available")
             return
         }
 
-        // With UUIDv7, we always have the ID we need
-        guard let eventType = event.eventType else {
-            Log.sync.warning("syncEventToBackend: event has no eventType", context: .with { ctx in
-                ctx.add("event_id", event.id)
-            })
-            return
-        }
+        // Capture the event ID immediately - event object may have stale properties across Task boundaries
+        let eventId = event.id
 
         do {
             try modelContext.save()
 
+            // Fetch the event fresh from the context to ensure we have persisted values
+            // This fixes issues where SwiftData model properties may be stale when accessed across async boundaries
+            let descriptor = FetchDescriptor<Event>(predicate: #Predicate { $0.id == eventId })
+            guard let freshEvent = try modelContext.fetch(descriptor).first else {
+                Log.sync.error("syncEventToBackend: could not fetch event after save", context: .with { ctx in
+                    ctx.add("event_id", eventId)
+                })
+                return
+            }
+
+            // With UUIDv7, we always have the ID we need
+            guard let eventType = freshEvent.eventType else {
+                Log.sync.warning("syncEventToBackend: event has no eventType", context: .with { ctx in
+                    ctx.add("event_id", eventId)
+                })
+                return
+            }
+
+            // Log the values being synced for debugging
+            Log.sync.debug("syncEventToBackend: building request", context: .with { ctx in
+                ctx.add("event_id", eventId)
+                ctx.add("geofence_id", freshEvent.geofenceId ?? "nil")
+                ctx.add("location_name", freshEvent.locationName ?? "nil")
+                ctx.add("source_type", freshEvent.sourceType.rawValue)
+            })
+
             let request = CreateEventRequest(
-                id: event.id,  // Client-generated UUIDv7
+                id: freshEvent.id,  // Client-generated UUIDv7
                 eventTypeId: eventType.id,
-                timestamp: event.timestamp,
-                notes: event.notes,
-                isAllDay: event.isAllDay,
-                endDate: event.endDate,
-                sourceType: event.sourceType.rawValue,
-                externalId: event.externalId,
-                originalTitle: event.originalTitle,
-                geofenceId: event.geofenceId,
-                locationLatitude: event.locationLatitude,
-                locationLongitude: event.locationLongitude,
-                locationName: event.locationName,
-                healthKitSampleId: event.healthKitSampleId,
-                healthKitCategory: event.healthKitCategory,
-                properties: convertLocalPropertiesToAPI(event.properties)
+                timestamp: freshEvent.timestamp,
+                notes: freshEvent.notes,
+                isAllDay: freshEvent.isAllDay,
+                endDate: freshEvent.endDate,
+                sourceType: freshEvent.sourceType.rawValue,
+                externalId: freshEvent.externalId,
+                originalTitle: freshEvent.originalTitle,
+                geofenceId: freshEvent.geofenceId,
+                locationLatitude: freshEvent.locationLatitude,
+                locationLongitude: freshEvent.locationLongitude,
+                locationName: freshEvent.locationName,
+                healthKitSampleId: freshEvent.healthKitSampleId,
+                healthKitCategory: freshEvent.healthKitCategory,
+                properties: convertLocalPropertiesToAPI(freshEvent.properties)
             )
             let payload = try JSONEncoder().encode(request)
             try await syncEngine.queueMutation(
@@ -849,9 +995,85 @@ class EventStore {
         }
     }
 
+    /// Sync an existing HealthKit event update to the backend
+    /// This sends an UPDATE mutation instead of CREATE, ensuring the backend receives the new values
+    func syncHealthKitEventUpdate(_ event: Event) async {
+        guard let modelContext else {
+            Log.sync.error("syncHealthKitEventUpdate: modelContext is nil", context: .with { ctx in
+                ctx.add("event_id", event.id)
+            })
+            return
+        }
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("syncHealthKitEventUpdate: no syncEngine available")
+            return
+        }
+
+        // Capture the event ID immediately
+        let eventId = event.id
+
+        do {
+            try modelContext.save()
+
+            // Fetch the event fresh from the context to ensure we have persisted values
+            let descriptor = FetchDescriptor<Event>(predicate: #Predicate { $0.id == eventId })
+            guard let freshEvent = try modelContext.fetch(descriptor).first else {
+                Log.sync.error("syncHealthKitEventUpdate: could not fetch event after save", context: .with { ctx in
+                    ctx.add("event_id", eventId)
+                })
+                return
+            }
+
+            // Build UpdateEventRequest with only the fields we want to update
+            let request = UpdateEventRequest(
+                eventTypeId: freshEvent.eventType?.id,
+                timestamp: freshEvent.timestamp,
+                notes: freshEvent.notes,
+                isAllDay: freshEvent.isAllDay,
+                endDate: freshEvent.endDate,
+                sourceType: freshEvent.sourceType.rawValue,
+                externalId: freshEvent.externalId,
+                originalTitle: freshEvent.originalTitle,
+                geofenceId: freshEvent.geofenceId,
+                locationLatitude: freshEvent.locationLatitude,
+                locationLongitude: freshEvent.locationLongitude,
+                locationName: freshEvent.locationName,
+                healthKitSampleId: freshEvent.healthKitSampleId,
+                healthKitCategory: freshEvent.healthKitCategory,
+                properties: convertLocalPropertiesToAPI(freshEvent.properties)
+            )
+            let payload = try JSONEncoder().encode(request)
+            try await syncEngine.queueMutation(
+                entityType: .event,
+                operation: .update,  // UPDATE, not CREATE
+                entityId: eventId,
+                payload: payload
+            )
+
+            Log.sync.info("Queued HealthKit event UPDATE for sync", context: .with { ctx in
+                ctx.add("event_id", eventId)
+                ctx.add("healthkit_sample_id", freshEvent.healthKitSampleId ?? "none")
+                ctx.add("healthkit_category", freshEvent.healthKitCategory ?? "none")
+            })
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+        } catch {
+            Log.sync.error("Failed to queue HealthKit event update for sync", error: error)
+        }
+    }
+
     /// Sync an auto-created EventType to the backend (used by HealthKitService)
     func syncEventTypeToBackend(_ eventType: EventType) async {
-        guard let modelContext else { return }
+        guard let modelContext else {
+            Log.sync.error("syncEventTypeToBackend: modelContext is nil - eventType will NOT sync!", context: .with { ctx in
+                ctx.add("event_type_id", eventType.id)
+                ctx.add("name", eventType.name)
+            })
+            return
+        }
         guard let syncEngine = syncEngine else {
             Log.sync.warning("syncEventTypeToBackend: no syncEngine available")
             return
@@ -930,6 +1152,115 @@ class EventStore {
             }
         } catch {
             Log.sync.error("Failed to queue geofence for sync", error: error)
+        }
+    }
+
+    /// Re-sync all local HealthKit events to the backend
+    /// Use this to recover orphaned events that were created locally but never synced
+    func resyncHealthKitEvents() async {
+        guard let modelContext else {
+            Log.sync.error("resyncHealthKitEvents: modelContext is nil")
+            return
+        }
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("resyncHealthKitEvents: no syncEngine available")
+            return
+        }
+
+        Log.sync.info("Starting resync of HealthKit events")
+
+        // Find all HealthKit events (use sourceTypeRaw for SwiftData predicate)
+        let healthKitRawValue = EventSourceType.healthKit.rawValue
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.sourceTypeRaw == healthKitRawValue
+            }
+        )
+
+        do {
+            let healthKitEvents = try modelContext.fetch(descriptor)
+            Log.sync.info("Found \(healthKitEvents.count) HealthKit events to resync")
+
+            var syncedCount = 0
+            var skippedCount = 0
+            for event in healthKitEvents {
+                // Try to get eventTypeId from multiple sources:
+                // 1. The relationship (if it exists)
+                // 2. The stored eventTypeId backup field
+                // 3. Look up by HealthKit category name (for events created before eventTypeId was added)
+                var eventTypeId: String?
+
+                if let existingEventType = event.eventType {
+                    eventTypeId = existingEventType.id
+                } else if let storedEventTypeId = event.eventTypeId {
+                    eventTypeId = storedEventTypeId
+                } else if let categoryRaw = event.healthKitCategory,
+                          let category = HealthDataCategory(rawValue: categoryRaw) {
+                    // Look up EventType by the default name for this category
+                    let defaultName = category.defaultEventTypeName
+                    let eventTypeDescriptor = FetchDescriptor<EventType>(
+                        predicate: #Predicate { et in et.name == defaultName }
+                    )
+                    if let foundEventType = try? modelContext.fetch(eventTypeDescriptor).first {
+                        eventTypeId = foundEventType.id
+                        // Also restore the relationship and backup field for future use
+                        event.eventType = foundEventType
+                        event.eventTypeId = foundEventType.id
+                    }
+                }
+
+                guard let finalEventTypeId = eventTypeId else {
+                    Log.sync.warning("resyncHealthKitEvents: skipping event - no eventTypeId", context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                        ctx.add("category", event.healthKitCategory ?? "nil")
+                    })
+                    skippedCount += 1
+                    continue
+                }
+
+                // Queue the event for sync (idempotent - backend handles duplicates)
+                let request = CreateEventRequest(
+                    id: event.id,
+                    eventTypeId: finalEventTypeId,
+                    timestamp: event.timestamp,
+                    notes: event.notes,
+                    isAllDay: event.isAllDay,
+                    endDate: event.endDate,
+                    sourceType: event.sourceType.rawValue,
+                    externalId: event.externalId,
+                    originalTitle: event.originalTitle,
+                    geofenceId: event.geofenceId,
+                    locationLatitude: event.locationLatitude,
+                    locationLongitude: event.locationLongitude,
+                    locationName: event.locationName,
+                    healthKitSampleId: event.healthKitSampleId,
+                    healthKitCategory: event.healthKitCategory,
+                    properties: convertLocalPropertiesToAPI(event.properties)
+                )
+                let payload = try JSONEncoder().encode(request)
+                try await syncEngine.queueMutation(
+                    entityType: .event,
+                    operation: .create,
+                    entityId: event.id,
+                    payload: payload
+                )
+                syncedCount += 1
+            }
+
+            // Save any relationship restorations
+            try modelContext.save()
+
+            Log.sync.info("Queued HealthKit events for sync", context: .with { ctx in
+                ctx.add("synced_count", syncedCount)
+                ctx.add("skipped_count", skippedCount)
+            })
+
+            // Trigger sync if online
+            if isOnline {
+                await syncEngine.performSync()
+            }
+        } catch {
+            Log.sync.error("Failed to resync HealthKit events", error: error)
         }
     }
 

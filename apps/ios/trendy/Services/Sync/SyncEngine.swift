@@ -43,6 +43,9 @@ actor SyncEngine {
     @MainActor public private(set) var state: SyncState = .idle
     @MainActor public private(set) var pendingCount: Int = 0
 
+    /// Track entity IDs with pending DELETE mutations to prevent resurrection by pullChanges
+    private var pendingDeleteIds: Set<String> = []
+
     // MARK: - Constants
 
     /// Cursor key is environment-specific to prevent sync issues when switching between dev/prod
@@ -91,6 +94,20 @@ actor SyncEngine {
                 ctx.add("cursor", Int(lastSyncCursor))
                 ctx.add("is_first_sync", lastSyncCursor == 0)
             })
+
+            // Capture IDs with pending DELETE mutations BEFORE flush
+            // These should not be resurrected by pullChanges even if change_log has CREATE entries
+            let deleteContext = ModelContext(modelContainer)
+            let deleteStore = LocalStore(modelContext: deleteContext)
+            let pendingDeletes = try deleteStore.fetchPendingMutations()
+                .filter { $0.operation == .delete }
+                .map { $0.entityId }
+            pendingDeleteIds = Set(pendingDeletes)
+            if !pendingDeleteIds.isEmpty {
+                Log.sync.debug("Captured pending delete IDs to prevent resurrection", context: .with { ctx in
+                    ctx.add("count", pendingDeletes.count)
+                })
+            }
 
             // Step 1: Flush any pending mutations to the server
             try await flushPendingMutations()
@@ -176,9 +193,11 @@ actor SyncEngine {
             Log.sync.info("Sync completed successfully", context: .with { ctx in
                 ctx.add("new_cursor", Int(lastSyncCursor))
             })
+            pendingDeleteIds.removeAll()  // Clear tracking after successful sync
         } catch {
             Log.sync.error("Sync failed", error: error)
             await updateState(.error(error.localizedDescription))
+            pendingDeleteIds.removeAll()  // Clear tracking even on failure
         }
     }
 
@@ -199,6 +218,20 @@ actor SyncEngine {
 
         Log.sync.info("Cursor reset to 0, starting forced bootstrap sync")
         await performSync()
+    }
+
+    /// Manually restore broken Event→EventType relationships.
+    /// Call this if events show "Unknown" instead of their proper event type name.
+    func restoreEventRelationships() async {
+        Log.sync.info("Manual event relationship restoration requested")
+        let context = ModelContext(modelContainer)
+        let localStore = LocalStore(modelContext: context)
+
+        do {
+            try restoreEventTypeRelationships(context: context, localStore: localStore)
+        } catch {
+            Log.sync.error("Failed to restore event relationships", error: error)
+        }
     }
 
     /// Sync geofences from the server without doing a full bootstrap.
@@ -584,6 +617,16 @@ actor SyncEngine {
     }
 
     private func applyUpsert(_ change: ChangeEntry, localStore: LocalStore) throws {
+        // Skip resurrection if this entity has a pending DELETE mutation
+        // This prevents the race condition where pullChanges recreates a deleted entity
+        if pendingDeleteIds.contains(change.entityId) {
+            Log.sync.debug("Skipping resurrection of pending-delete entity", context: .with { ctx in
+                ctx.add("entity_id", change.entityId)
+                ctx.add("entity_type", change.entityType)
+            })
+            return
+        }
+
         guard let data = change.data else {
             Log.sync.warning("Missing data for upsert", context: .with { ctx in
                 ctx.add("change_id", Int(change.id))
@@ -607,10 +650,16 @@ actor SyncEngine {
                 if let endDate = data.endDate {
                     event.endDate = endDate
                 }
-                // EventType ID - look up and establish relationship
+                // EventType ID - store for relationship recovery and establish relationship
                 if let eventTypeId = data.eventTypeId {
+                    event.eventTypeId = eventTypeId  // Always store for recovery
                     if let localEventType = try? localStore.findEventType(id: eventTypeId) {
                         event.eventType = localEventType
+                    } else {
+                        Log.sync.warning("Could not find EventType during changefeed processing", context: .with { ctx in
+                            ctx.add("event_id", change.entityId)
+                            ctx.add("event_type_id", eventTypeId)
+                        })
                     }
                 }
                 if let sourceType = data.sourceType {
@@ -875,10 +924,17 @@ actor SyncEngine {
                 if let apiProperties = apiEvent.properties {
                     event.properties = Self.convertAPIProperties(apiProperties)
                 }
+                // Store eventTypeId for relationship recovery
+                event.eventTypeId = apiEvent.eventTypeId
             }
             // Establish the SwiftData relationship to EventType
             if let localEventType = try? localStore.findEventType(id: apiEvent.eventTypeId) {
                 event.eventType = localEventType
+            } else {
+                Log.sync.warning("Bootstrap: Could not find EventType for event", context: .with { ctx in
+                    ctx.add("event_id", apiEvent.id)
+                    ctx.add("event_type_id", apiEvent.eventTypeId)
+                })
             }
         }
 
@@ -950,28 +1006,46 @@ actor SyncEngine {
 
     /// Restore Event→EventType relationships for events with missing eventType relationship.
     /// This can happen when events are loaded from backend but the SwiftData relationship wasn't
-    /// properly established during sync.
+    /// properly established during sync. Uses the stored eventTypeId field for recovery.
     private func restoreEventTypeRelationships(context: ModelContext, localStore: LocalStore) throws {
         let allEvents = try context.fetch(FetchDescriptor<Event>())
         var restoredCount = 0
+        var orphanedCount = 0
 
         for event in allEvents {
             // Check if event is missing the relationship
             guard event.eventType == nil else { continue }
 
-            // Try to find the EventType by looking at what the event references
-            // Since we don't have eventTypeServerId anymore, we need to check all event types
-            // and match by the relationship that should exist
-            // This is a recovery mechanism - normally the relationship is set during sync
-            Log.sync.warning("Event missing eventType relationship", context: .with { ctx in
-                ctx.add("event_id", event.id)
-            })
+            // Try to restore using the stored eventTypeId
+            if let eventTypeId = event.eventTypeId {
+                if let localEventType = try? localStore.findEventType(id: eventTypeId) {
+                    event.eventType = localEventType
+                    restoredCount += 1
+                    Log.sync.info("Restored eventType relationship", context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                        ctx.add("event_type_id", eventTypeId)
+                        ctx.add("event_type_name", localEventType.name)
+                    })
+                } else {
+                    orphanedCount += 1
+                    Log.sync.warning("Event has eventTypeId but EventType not found locally", context: .with { ctx in
+                        ctx.add("event_id", event.id)
+                        ctx.add("event_type_id", eventTypeId)
+                    })
+                }
+            } else {
+                orphanedCount += 1
+                Log.sync.warning("Event missing eventType relationship and has no eventTypeId for recovery", context: .with { ctx in
+                    ctx.add("event_id", event.id)
+                })
+            }
         }
 
-        if restoredCount > 0 {
+        if restoredCount > 0 || orphanedCount > 0 {
             try context.save()
-            Log.sync.info("Restored eventType relationships", context: .with { ctx in
-                ctx.add("count", restoredCount)
+            Log.sync.info("Event relationship restoration complete", context: .with { ctx in
+                ctx.add("restored", restoredCount)
+                ctx.add("orphaned", orphanedCount)
             })
         }
     }

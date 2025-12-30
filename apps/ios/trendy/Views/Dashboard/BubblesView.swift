@@ -68,7 +68,7 @@ struct BubblesView: View {
                     }
                 }
             }
-            .navigationTitle("Trendy")
+            .navigationTitle("TrendSight")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {

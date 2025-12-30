@@ -115,7 +115,7 @@ struct HealthKitSettingsView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Trendy needs access to your health data to automatically log workouts, sleep, steps, and other activities.")
+            Text("TrendSight needs access to your health data to automatically log workouts, sleep, steps, and other activities.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -142,7 +142,7 @@ struct HealthKitSettingsView: View {
                 }
                 .font(.subheadline)
 
-                Text("If you previously denied access, enable it in Health app under Sources > Trendy")
+                Text("If you previously denied access, enable it in Health app under Sources > TrendSight")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

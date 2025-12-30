@@ -114,6 +114,9 @@ class HealthKitService: NSObject {
     /// Last processed date for daily sleep aggregation
     private var lastSleepDate: Date?
 
+    /// Last processed date for daily active energy aggregation
+    private var lastActiveEnergyDate: Date?
+
     /// Anchors for incremental fetching
     private var queryAnchors: [HealthDataCategory: HKQueryAnchor] = [:]
 
@@ -122,6 +125,7 @@ class HealthKitService: NSObject {
     private let processedSampleIdsKey = "healthKitProcessedSampleIds"
     private let lastStepDateKey = "healthKitLastStepDate"
     private let lastSleepDateKey = "healthKitLastSleepDate"
+    private let lastActiveEnergyDateKey = "healthKitLastActiveEnergyDate"
     private let maxProcessedSampleIds = 1000
     private static let migrationCompletedKey = "healthKitMigrationToAppGroupCompleted"
 
@@ -157,6 +161,7 @@ class HealthKitService: NSObject {
         loadProcessedSampleIds()
         loadLastStepDate()
         loadLastSleepDate()
+        loadLastActiveEnergyDate()
 
         // Debug: Log current state
         #if DEBUG
@@ -331,9 +336,12 @@ class HealthKitService: NSObject {
             return
         }
 
-        // Request authorization for this specific category first, then start observer
         Task {
-            await requestAuthorizationForCategory(category)
+            // Only request authorization if HealthKit says we need to
+            // This prevents showing prompts for already-authorized categories
+            if await shouldRequestAuthorization(for: sampleType) {
+                await requestAuthorizationForCategory(category)
+            }
             await startObserverQuery(for: category, sampleType: sampleType)
         }
     }
@@ -360,6 +368,16 @@ class HealthKitService: NSObject {
             print("✅ HealthKit: Authorization requested for \(category.displayName)")
         } catch {
             print("⚠️ HealthKit: Failed to request authorization for \(category.displayName): \(error.localizedDescription)")
+        }
+    }
+
+    /// Check if authorization needs to be requested for a specific type
+    /// Uses HealthKit's official API to determine if the user has already seen the permission prompt
+    private func shouldRequestAuthorization(for type: HKSampleType) async -> Bool {
+        await withCheckedContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: [type]) { status, _ in
+                continuation.resume(returning: status == .shouldRequest)
+            }
         }
     }
 
@@ -809,25 +827,11 @@ class HealthKitService: NSObject {
         // Use consistent date-only format for sampleId (no timezone issues)
         let sampleId = "steps-\(Self.dateOnlyFormatter.string(from: today))"
 
-        // Skip if already processed today (in-memory check)
-        if let lastDate = lastStepDate, Calendar.current.isDate(lastDate, inSameDayAs: today) {
-            return
-        }
-
-        // Skip if already in processedSampleIds
-        guard !processedSampleIds.contains(sampleId) else {
-            // Update lastStepDate to prevent repeated checks
-            lastStepDate = today
-            saveLastStepDate()
-            return
-        }
-
-        // Database-level deduplication: check if event already exists in SwiftData
-        if await eventExistsWithHealthKitSampleId(sampleId) {
-            print("Steps event already exists in database for \(sampleId), skipping")
-            markSampleAsProcessed(sampleId)
-            lastStepDate = today
-            saveLastStepDate()
+        // Throttle: don't process more than once per 5 minutes for the same day
+        // This prevents excessive processing while still allowing updates throughout the day
+        if let lastDate = lastStepDate,
+           Calendar.current.isDate(lastDate, inSameDayAs: today),
+           Date().timeIntervalSince(lastDate) < 300 {
             return
         }
 
@@ -855,10 +859,45 @@ class HealthKitService: NSObject {
 
         guard let steps = totalSteps, steps > 0 else { return }
 
-        print("Processing daily steps: \(Int(steps))")
+        // Check for existing event to update
+        if let existingEvent = await findEventByHealthKitSampleId(sampleId) {
+            // Compare values - only update if step count changed significantly (>= 1 step)
+            let existingSteps = existingEvent.properties["Step Count"]?.doubleValue ?? 0
+            if abs(existingSteps - steps) < 1 {
+                // No significant change, skip update but update throttle timestamp
+                lastStepDate = Date()
+                saveLastStepDate()
+                return
+            }
+
+            Log.data.info("Updating daily steps", context: .with { ctx in
+                ctx.add("previousSteps", Int(existingSteps))
+                ctx.add("newSteps", Int(steps))
+            })
+
+            let properties: [String: PropertyValue] = [
+                "Step Count": PropertyValue(type: .number, value: steps),
+                "Date": PropertyValue(type: .date, value: today)
+            ]
+
+            await updateHealthKitEvent(
+                existingEvent,
+                properties: properties,
+                notes: "Auto-logged: \(Int(steps)) steps"
+            )
+
+            lastStepDate = Date()
+            saveLastStepDate()
+            return
+        }
+
+        // No existing event - create new one
+        Log.data.info("Creating daily steps event", context: .with { ctx in
+            ctx.add("steps", Int(steps))
+        })
 
         guard let eventType = await ensureEventType(for: .steps) else {
-            print("Failed to get/create EventType for steps")
+            Log.data.error("Failed to get/create EventType for steps")
             return
         }
 
@@ -877,8 +916,8 @@ class HealthKitService: NSObject {
             healthKitSampleId: sampleId
         )
 
-        markSampleAsProcessed(sampleId)
-        lastStepDate = today
+        // Don't mark as processed - daily aggregates can be updated throughout the day
+        lastStepDate = Date()
         saveLastStepDate()
     }
 
@@ -902,13 +941,11 @@ class HealthKitService: NSObject {
         // Use consistent date-only format for sampleId (no timezone issues)
         let sampleId = "activeEnergy-\(Self.dateOnlyFormatter.string(from: today))"
 
-        // Skip if already in processedSampleIds
-        guard !processedSampleIds.contains(sampleId) else { return }
-
-        // Database-level deduplication: check if event already exists in SwiftData
-        if await eventExistsWithHealthKitSampleId(sampleId) {
-            print("Active energy event already exists in database for \(sampleId), skipping")
-            markSampleAsProcessed(sampleId)
+        // Throttle: don't process more than once per 5 minutes for the same day
+        // This prevents excessive processing while still allowing updates throughout the day
+        if let lastDate = lastActiveEnergyDate,
+           Calendar.current.isDate(lastDate, inSameDayAs: today),
+           Date().timeIntervalSince(lastDate) < 300 {
             return
         }
 
@@ -934,9 +971,47 @@ class HealthKitService: NSObject {
 
         guard let calories = totalCalories, calories > 0 else { return }
 
-        print("Processing daily active energy: \(Int(calories)) kcal")
+        // Check for existing event to update
+        if let existingEvent = await findEventByHealthKitSampleId(sampleId) {
+            // Compare values - only update if calories changed significantly (>= 1 kcal)
+            let existingCalories = existingEvent.properties["Calories"]?.doubleValue ?? 0
+            if abs(existingCalories - calories) < 1 {
+                // No significant change, skip update but update throttle timestamp
+                lastActiveEnergyDate = Date()
+                saveLastActiveEnergyDate()
+                return
+            }
 
-        guard let eventType = await ensureEventType(for: .activeEnergy) else { return }
+            Log.data.info("Updating daily active energy", context: .with { ctx in
+                ctx.add("previousCalories", Int(existingCalories))
+                ctx.add("newCalories", Int(calories))
+            })
+
+            let properties: [String: PropertyValue] = [
+                "Calories": PropertyValue(type: .number, value: calories),
+                "Date": PropertyValue(type: .date, value: today)
+            ]
+
+            await updateHealthKitEvent(
+                existingEvent,
+                properties: properties,
+                notes: "Auto-logged: \(Int(calories)) kcal burned"
+            )
+
+            lastActiveEnergyDate = Date()
+            saveLastActiveEnergyDate()
+            return
+        }
+
+        // No existing event - create new one
+        Log.data.info("Creating daily active energy event", context: .with { ctx in
+            ctx.add("calories", Int(calories))
+        })
+
+        guard let eventType = await ensureEventType(for: .activeEnergy) else {
+            Log.data.error("Failed to get/create EventType for activeEnergy")
+            return
+        }
 
         let properties: [String: PropertyValue] = [
             "Calories": PropertyValue(type: .number, value: calories),
@@ -953,7 +1028,9 @@ class HealthKitService: NSObject {
             healthKitSampleId: sampleId
         )
 
-        markSampleAsProcessed(sampleId)
+        // Don't mark as processed - daily aggregates can be updated throughout the day
+        lastActiveEnergyDate = Date()
+        saveLastActiveEnergyDate()
     }
 
     // MARK: - Mindfulness Processing
@@ -1079,6 +1156,57 @@ class HealthKitService: NSObject {
             print("Error checking for existing HealthKit event: \(error.localizedDescription)")
             // In case of error, assume it doesn't exist to avoid blocking new events
             return false
+        }
+    }
+
+    /// Find an event by its HealthKit sample ID
+    /// Returns the actual Event object for updates, not just existence check
+    @MainActor
+    private func findEventByHealthKitSampleId(_ sampleId: String) async -> Event? {
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.healthKitSampleId == sampleId
+            }
+        )
+
+        do {
+            return try modelContext.fetch(descriptor).first
+        } catch {
+            Log.data.error("Error finding HealthKit event", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add(error: error)
+            })
+            return nil
+        }
+    }
+
+    /// Update an existing HealthKit event with new values
+    /// Used when daily aggregated metrics (steps, active energy) change throughout the day
+    @MainActor
+    private func updateHealthKitEvent(
+        _ event: Event,
+        properties: [String: PropertyValue],
+        notes: String
+    ) async {
+        event.properties = properties
+        event.notes = notes
+        event.syncStatus = .pending
+
+        do {
+            try modelContext.save()
+            Log.data.info("Updated HealthKit event locally", context: .with { ctx in
+                ctx.add("category", event.healthKitCategory ?? "unknown")
+                ctx.add("sampleId", event.healthKitSampleId ?? "none")
+                ctx.add("event_id", event.id)
+            })
+
+            // Use UPDATE sync (not CREATE) to ensure backend receives the new values
+            // CREATE would return 409 Conflict for existing events and the update would be lost
+            await eventStore.syncHealthKitEventUpdate(event)
+        } catch {
+            Log.data.error("Failed to update HealthKit event", context: .with { ctx in
+                ctx.add(error: error)
+            })
         }
     }
 
@@ -1208,6 +1336,16 @@ class HealthKitService: NSObject {
         Self.sharedDefaults.set(lastSleepDate, forKey: lastSleepDateKey)
     }
 
+    /// Load last active energy date from shared UserDefaults (persists across reinstalls)
+    private func loadLastActiveEnergyDate() {
+        lastActiveEnergyDate = Self.sharedDefaults.object(forKey: lastActiveEnergyDateKey) as? Date
+    }
+
+    /// Save last active energy date to shared UserDefaults (persists across reinstalls)
+    private func saveLastActiveEnergyDate() {
+        Self.sharedDefaults.set(lastActiveEnergyDate, forKey: lastActiveEnergyDateKey)
+    }
+
     // MARK: - Debug Properties (Available in all builds)
 
     /// Debug: Last sleep date for diagnostics
@@ -1215,6 +1353,9 @@ class HealthKitService: NSObject {
 
     /// Debug: Last step date for diagnostics
     var lastStepDateDebug: Date? { lastStepDate }
+
+    /// Debug: Last active energy date for diagnostics
+    var lastActiveEnergyDateDebug: Date? { lastActiveEnergyDate }
 
     /// Debug: Active observer categories
     var activeObserverCategories: [HealthDataCategory] {
@@ -1229,6 +1370,97 @@ class HealthKitService: NSObject {
     /// Debug: Whether using App Group storage
     var isUsingAppGroupStorage: Bool {
         Self.isUsingAppGroup
+    }
+
+    /// Debug: Query daily step counts from HealthKit for the last 7 days
+    func debugQueryStepData() async -> [(date: Date, steps: Double, source: String)] {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            return []
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let queryStart = calendar.date(byAdding: .day, value: -7, to: calendar.startOfDay(for: now)) ?? now
+
+        var results: [(date: Date, steps: Double, source: String)] = []
+
+        // Query each day separately for better granularity
+        for dayOffset in 0..<7 {
+            guard let dayStart = calendar.date(byAdding: .day, value: -dayOffset, to: calendar.startOfDay(for: now)),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
+                continue
+            }
+
+            let predicate = HKQuery.predicateForSamples(withStart: dayStart, end: dayEnd, options: .strictStartDate)
+
+            let daySteps = await withCheckedContinuation { (continuation: CheckedContinuation<Double?, Never>) in
+                let query = HKStatisticsQuery(
+                    quantityType: stepType,
+                    quantitySamplePredicate: predicate,
+                    options: .cumulativeSum
+                ) { _, statistics, error in
+                    guard let sum = statistics?.sumQuantity() else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: sum.doubleValue(for: .count()))
+                }
+                healthStore.execute(query)
+            }
+
+            if let steps = daySteps, steps > 0 {
+                results.append((date: dayStart, steps: steps, source: "HealthKit"))
+            }
+        }
+
+        return results.sorted { $0.date > $1.date }
+    }
+
+    /// Debug: Query workout data from HealthKit for the last 7 days
+    func debugQueryWorkoutData() async -> [(start: Date, end: Date, duration: TimeInterval, workoutType: String, calories: Double?, distance: Double?, source: String)] {
+        let calendar = Calendar.current
+        let now = Date()
+        let queryStart = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+
+        let predicate = HKQuery.predicateForSamples(withStart: queryStart, end: now, options: .strictStartDate)
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<[(start: Date, end: Date, duration: TimeInterval, workoutType: String, calories: Double?, distance: Double?, source: String)], Never>) in
+            let query = HKSampleQuery(
+                sampleType: HKWorkoutType.workoutType(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, results, error in
+                if let error = error {
+                    print("Debug workout query error: \(error.localizedDescription)")
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                guard let workouts = results as? [HKWorkout] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let data = workouts.map { workout -> (start: Date, end: Date, duration: TimeInterval, workoutType: String, calories: Double?, distance: Double?, source: String) in
+                    let calories = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
+                    let distance = workout.totalDistance?.doubleValue(for: .meter())
+
+                    return (
+                        start: workout.startDate,
+                        end: workout.endDate,
+                        duration: workout.duration,
+                        workoutType: workout.workoutActivityType.name,
+                        calories: calories,
+                        distance: distance,
+                        source: workout.sourceRevision.source.name
+                    )
+                }
+
+                continuation.resume(returning: data)
+            }
+            healthStore.execute(query)
+        }
     }
 
     /// Debug: Query raw sleep data from HealthKit for the last 48 hours
@@ -1302,6 +1534,42 @@ class HealthKitService: NSObject {
         }
     }
 
+    /// Debug: Force steps aggregation check (bypasses date cache)
+    @MainActor
+    func forceStepsCheck() async {
+        print("🔧 Debug: Forcing steps aggregation check...")
+        // Temporarily clear the lastStepDate to force a check
+        let savedDate = lastStepDate
+        lastStepDate = nil
+
+        // Also remove the daily step sampleId from processed set
+        let today = Calendar.current.startOfDay(for: Date())
+        let sampleId = "steps-\(Self.dateOnlyFormatter.string(from: today))"
+        processedSampleIds.remove(sampleId)
+
+        await aggregateDailySteps()
+
+        // If no event was created, restore the date
+        if lastStepDate == nil {
+            lastStepDate = savedDate
+        }
+    }
+
+    /// Debug: Force refresh all enabled HealthKit categories
+    /// This actively queries HealthKit for each category instead of waiting for observer callbacks
+    @MainActor
+    func forceRefreshAllCategories() async {
+        print("🔧 Debug: Force refreshing all HealthKit categories...")
+        let enabledCategories = HealthKitSettings.shared.enabledCategories
+
+        for category in enabledCategories {
+            print("🔧 Refreshing: \(category.displayName)")
+            await handleNewSamples(for: category)
+        }
+
+        print("🔧 Debug: Force refresh complete for \(enabledCategories.count) categories")
+    }
+
     /// Debug: Clear sleep processing cache
     func clearSleepCache() {
         print("🔧 Debug: Clearing sleep cache...")
@@ -1312,6 +1580,18 @@ class HealthKitService: NSObject {
         processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("sleep-") }
         saveProcessedSampleIds()
         print("🔧 Debug: Sleep cache cleared")
+    }
+
+    /// Debug: Clear steps processing cache
+    func clearStepsCache() {
+        print("🔧 Debug: Clearing steps cache...")
+        lastStepDate = nil
+        Self.sharedDefaults.removeObject(forKey: lastStepDateKey)
+
+        // Remove steps-related processed sample IDs
+        processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("steps-") }
+        saveProcessedSampleIds()
+        print("🔧 Debug: Steps cache cleared")
     }
 
     /// Debug: Refresh all observers

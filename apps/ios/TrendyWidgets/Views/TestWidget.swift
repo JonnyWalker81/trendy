@@ -39,7 +39,7 @@ struct TestWidgetView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(.green)
-            Text("Trendy")
+            Text("TrendSight")
                 .font(.headline)
             Text("Widget Works!")
                 .font(.caption)

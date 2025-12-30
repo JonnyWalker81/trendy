@@ -30,7 +30,7 @@ struct LoadingView: View {
                 )
             
             VStack(spacing: 8) {
-                Text("Trendy")
+                Text("TrendSight")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                 
