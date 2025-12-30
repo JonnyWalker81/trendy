@@ -24,15 +24,15 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>4</string>
+	<string>5</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>This app needs full access to your calendar to import events for tracking and visualization.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>This app needs access to your calendar to import events for tracking and visualization.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Trendy reads your health data to automatically log events when workouts, sleep, and other health activities are detected.</string>
+	<string>TrendSight reads your health data to automatically log events when workouts, sleep, and other health activities are detected.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Trendy does not write health data.</string>
+	<string>TrendSight does not write health data.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs access to your location even when in the background to automatically track events when you enter or exit geofenced locations.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
