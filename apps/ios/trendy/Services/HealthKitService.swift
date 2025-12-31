@@ -539,7 +539,21 @@ class HealthKitService: NSObject {
     @MainActor
     private func processWorkoutSample(_ workout: HKWorkout) async {
         let sampleId = workout.uuid.uuidString
+
+        // In-memory duplicate check (fast path)
         guard !processedSampleIds.contains(sampleId) else { return }
+
+        // Database-level duplicate check (handles race conditions where observer fires twice)
+        // This is critical because multiple concurrent calls can pass the in-memory check
+        // before either marks the sample as processed
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            Log.data.debug("Workout already in database, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("workoutType", workout.workoutActivityType.name)
+            })
+            markSampleAsProcessed(sampleId)
+            return
+        }
 
         print("Processing workout: \(workout.workoutActivityType.name)")
 
@@ -1039,7 +1053,18 @@ class HealthKitService: NSObject {
     @MainActor
     private func processMindfulnessSample(_ sample: HKCategorySample) async {
         let sampleId = sample.uuid.uuidString
+
+        // In-memory duplicate check (fast path)
         guard !processedSampleIds.contains(sampleId) else { return }
+
+        // Database-level duplicate check (handles race conditions)
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            Log.data.debug("Mindfulness session already in database, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+            })
+            markSampleAsProcessed(sampleId)
+            return
+        }
 
         print("Processing mindfulness session")
 
@@ -1071,7 +1096,18 @@ class HealthKitService: NSObject {
     @MainActor
     private func processWaterSample(_ sample: HKQuantitySample) async {
         let sampleId = sample.uuid.uuidString
+
+        // In-memory duplicate check (fast path)
         guard !processedSampleIds.contains(sampleId) else { return }
+
+        // Database-level duplicate check (handles race conditions)
+        if await eventExistsWithHealthKitSampleId(sampleId) {
+            Log.data.debug("Water intake already in database, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+            })
+            markSampleAsProcessed(sampleId)
+            return
+        }
 
         let milliliters = sample.quantity.doubleValue(for: .literUnit(with: .milli))
 

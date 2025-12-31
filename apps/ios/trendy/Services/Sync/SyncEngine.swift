@@ -349,15 +349,16 @@ actor SyncEngine {
                 context.delete(mutation)
             } catch let error as APIError where error.isDuplicateError {
                 // Duplicate error - the entity already exists on the server
-                // This can happen if the create was successful but we didn't delete the mutation
-                Log.sync.warning("Duplicate detected, marking as synced", context: .with { ctx in
+                // This can happen due to race conditions (e.g., HealthKit observer fires twice)
+                // The "real" entity already synced, so delete this local duplicate
+                Log.sync.warning("Duplicate detected, deleting local duplicate", context: .with { ctx in
                     ctx.add("entity_type", mutation.entityType.rawValue)
                     ctx.add("operation", mutation.operation.rawValue)
                     ctx.add("entity_id", mutation.entityId)
                     ctx.add("error", error.localizedDescription ?? "unknown")
                 })
-                // Mark the local entity as synced since equivalent data exists on server
-                try markEntitySynced(mutation, localStore: localStore)
+                // Delete the local duplicate entity - the "real" one already exists and synced
+                try deleteLocalDuplicate(mutation, localStore: localStore)
                 context.delete(mutation)
             } catch let error as APIError {
                 // Other API error (not duplicate)
@@ -549,6 +550,28 @@ actor SyncEngine {
             try localStore.markGeofenceSynced(id: mutation.entityId)
         case .propertyDefinition:
             try localStore.markPropertyDefinitionSynced(id: mutation.entityId)
+        }
+    }
+
+    /// Handle duplicate error by deleting the local duplicate entity.
+    /// This happens when a race condition creates multiple local entities with different IDs
+    /// but the same unique constraint fields (e.g., healthKitSampleId). The "real" entity
+    /// already synced successfully, so this duplicate should be removed.
+    private func deleteLocalDuplicate(_ mutation: PendingMutation, localStore: LocalStore) throws {
+        Log.sync.info("Deleting local duplicate entity", context: .with { ctx in
+            ctx.add("entity_type", mutation.entityType.rawValue)
+            ctx.add("entity_id", mutation.entityId)
+        })
+
+        switch mutation.entityType {
+        case .event:
+            try localStore.deleteEvent(id: mutation.entityId)
+        case .eventType:
+            try localStore.deleteEventType(id: mutation.entityId)
+        case .geofence:
+            try localStore.deleteGeofence(id: mutation.entityId)
+        case .propertyDefinition:
+            try localStore.deletePropertyDefinition(id: mutation.entityId)
         }
     }
 
