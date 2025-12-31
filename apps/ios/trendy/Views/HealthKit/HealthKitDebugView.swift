@@ -15,9 +15,13 @@ struct HealthKitDebugView: View {
     @State private var sleepSamples: [(start: Date, end: Date, duration: TimeInterval, sleepType: String, source: String)] = []
     @State private var stepSamples: [(date: Date, steps: Double, source: String)] = []
     @State private var workoutSamples: [(start: Date, end: Date, duration: TimeInterval, workoutType: String, calories: Double?, distance: Double?, source: String)] = []
+    @State private var activeEnergySamples: [(date: Date, calories: Double, source: String)] = []
     @State private var isLoadingSleep = false
     @State private var isLoadingSteps = false
     @State private var isLoadingWorkouts = false
+    @State private var isLoadingActiveEnergy = false
+    @State private var isForcingActiveEnergy = false
+    @State private var isClearingActiveEnergy = false
     @State private var isForcing = false
     @State private var isForcingSteps = false
     @State private var isClearing = false
@@ -141,6 +145,18 @@ struct HealthKitDebugView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+
+                HStack {
+                    Text("Last Active Energy Date")
+                    Spacer()
+                    if let date = healthKitService?.lastActiveEnergyDateDebug {
+                        Text(date, style: .date)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Never")
+                            .foregroundStyle(.orange)
+                    }
+                }
             } header: {
                 Text("Cache Status")
             } footer: {
@@ -257,6 +273,57 @@ struct HealthKitDebugView: View {
                 Text("Raw Step Data (Last 7 Days)")
             } footer: {
                 Text("Shows daily step totals from HealthKit.")
+            }
+
+            // Raw Active Energy Data Section
+            Section {
+                if isLoadingActiveEnergy {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading active energy data...")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if activeEnergySamples.isEmpty {
+                    Text("No active energy data found in last 7 days")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                } else {
+                    ForEach(Array(activeEnergySamples.enumerated()), id: \.offset) { _, sample in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(sample.date, style: .date)
+                                    .font(.subheadline)
+                                Text(sample.source)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(Int(sample.calories)) kcal")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+
+                Button {
+                    loadActiveEnergyData()
+                } label: {
+                    HStack {
+                        if isLoadingActiveEnergy {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        Text("Refresh Active Energy Data")
+                    }
+                }
+                .disabled(isLoadingActiveEnergy)
+            } header: {
+                Text("Raw Active Energy Data (Last 7 Days)")
+            } footer: {
+                Text("Shows daily active energy totals from HealthKit.")
             }
 
             // Raw Workout Data Section
@@ -413,6 +480,37 @@ struct HealthKitDebugView: View {
                 .foregroundStyle(.orange)
 
                 Button {
+                    forceActiveEnergyCheck()
+                } label: {
+                    HStack {
+                        if isForcingActiveEnergy {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "flame.fill")
+                        }
+                        Text("Force Active Energy Check")
+                    }
+                }
+                .disabled(isForcingActiveEnergy)
+
+                Button {
+                    clearActiveEnergyCache()
+                } label: {
+                    HStack {
+                        if isClearingActiveEnergy {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "trash")
+                        }
+                        Text("Clear Active Energy Cache")
+                    }
+                }
+                .disabled(isClearingActiveEnergy)
+                .foregroundStyle(.orange)
+
+                Button {
                     refreshObservers()
                 } label: {
                     HStack {
@@ -489,6 +587,7 @@ struct HealthKitDebugView: View {
         .onAppear {
             loadSleepData()
             loadStepData()
+            loadActiveEnergyData()
             loadWorkoutData()
         }
     }
@@ -614,6 +713,39 @@ struct HealthKitDebugView: View {
         service.clearStepsCache()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isClearingSteps = false
+        }
+    }
+
+    private func loadActiveEnergyData() {
+        guard let service = healthKitService else { return }
+        isLoadingActiveEnergy = true
+        Task {
+            let data = await service.debugQueryActiveEnergyData()
+            await MainActor.run {
+                activeEnergySamples = data
+                isLoadingActiveEnergy = false
+            }
+        }
+    }
+
+    private func forceActiveEnergyCheck() {
+        guard let service = healthKitService else { return }
+        isForcingActiveEnergy = true
+        Task {
+            await service.forceActiveEnergyCheck()
+            await MainActor.run {
+                isForcingActiveEnergy = false
+                loadActiveEnergyData() // Refresh display
+            }
+        }
+    }
+
+    private func clearActiveEnergyCache() {
+        guard let service = healthKitService else { return }
+        isClearingActiveEnergy = true
+        service.clearActiveEnergyCache()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isClearingActiveEnergy = false
         }
     }
 

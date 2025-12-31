@@ -1452,6 +1452,49 @@ class HealthKitService: NSObject {
         return results.sorted { $0.date > $1.date }
     }
 
+    /// Debug: Query daily active energy totals from HealthKit for the last 7 days
+    func debugQueryActiveEnergyData() async -> [(date: Date, calories: Double, source: String)] {
+        guard let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else {
+            return []
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        var results: [(date: Date, calories: Double, source: String)] = []
+
+        // Query each day separately for better granularity
+        for dayOffset in 0..<7 {
+            guard let dayStart = calendar.date(byAdding: .day, value: -dayOffset, to: calendar.startOfDay(for: now)),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
+                continue
+            }
+
+            let predicate = HKQuery.predicateForSamples(withStart: dayStart, end: dayEnd, options: .strictStartDate)
+
+            let dayCalories = await withCheckedContinuation { (continuation: CheckedContinuation<Double?, Never>) in
+                let query = HKStatisticsQuery(
+                    quantityType: energyType,
+                    quantitySamplePredicate: predicate,
+                    options: .cumulativeSum
+                ) { _, statistics, error in
+                    guard let sum = statistics?.sumQuantity() else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: sum.doubleValue(for: .kilocalorie()))
+                }
+                healthStore.execute(query)
+            }
+
+            if let calories = dayCalories, calories > 0 {
+                results.append((date: dayStart, calories: calories, source: "HealthKit"))
+            }
+        }
+
+        return results.sorted { $0.date > $1.date }
+    }
+
     /// Debug: Query workout data from HealthKit for the last 7 days
     func debugQueryWorkoutData() async -> [(start: Date, end: Date, duration: TimeInterval, workoutType: String, calories: Double?, distance: Double?, source: String)] {
         let calendar = Calendar.current
@@ -1591,6 +1634,27 @@ class HealthKitService: NSObject {
         }
     }
 
+    /// Debug: Force active energy aggregation check (bypasses date cache)
+    @MainActor
+    func forceActiveEnergyCheck() async {
+        print("🔧 Debug: Forcing active energy aggregation check...")
+        // Temporarily clear the lastActiveEnergyDate to force a check
+        let savedDate = lastActiveEnergyDate
+        lastActiveEnergyDate = nil
+
+        // Also remove the daily active energy sampleId from processed set
+        let today = Calendar.current.startOfDay(for: Date())
+        let sampleId = "activeEnergy-\(Self.dateOnlyFormatter.string(from: today))"
+        processedSampleIds.remove(sampleId)
+
+        await aggregateDailyActiveEnergy()
+
+        // If no event was created, restore the date
+        if lastActiveEnergyDate == nil {
+            lastActiveEnergyDate = savedDate
+        }
+    }
+
     /// Debug: Force refresh all enabled HealthKit categories
     /// This actively queries HealthKit for each category instead of waiting for observer callbacks
     @MainActor
@@ -1628,6 +1692,18 @@ class HealthKitService: NSObject {
         processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("steps-") }
         saveProcessedSampleIds()
         print("🔧 Debug: Steps cache cleared")
+    }
+
+    /// Debug: Clear active energy processing cache
+    func clearActiveEnergyCache() {
+        print("🔧 Debug: Clearing active energy cache...")
+        lastActiveEnergyDate = nil
+        Self.sharedDefaults.removeObject(forKey: lastActiveEnergyDateKey)
+
+        // Remove active energy-related processed sample IDs
+        processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("activeEnergy-") }
+        saveProcessedSampleIds()
+        print("🔧 Debug: Active energy cache cleared")
     }
 
     /// Debug: Refresh all observers
