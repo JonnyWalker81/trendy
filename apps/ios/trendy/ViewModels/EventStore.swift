@@ -947,43 +947,79 @@ class EventStore {
                 return
             }
 
+            // Determine if this is an update (event already synced) or create (new event)
+            let isUpdate = freshEvent.syncStatus == .synced
+
             // Log the values being synced for debugging
             Log.sync.debug("syncEventToBackend: building request", context: .with { ctx in
                 ctx.add("event_id", eventId)
                 ctx.add("geofence_id", freshEvent.geofenceId ?? "nil")
                 ctx.add("location_name", freshEvent.locationName ?? "nil")
                 ctx.add("source_type", freshEvent.sourceType.rawValue)
+                ctx.add("sync_status", freshEvent.syncStatus.rawValue)
+                ctx.add("is_update", isUpdate)
+                ctx.add("end_date", freshEvent.endDate?.description ?? "nil")
             })
 
-            let request = CreateEventRequest(
-                id: freshEvent.id,  // Client-generated UUIDv7
-                eventTypeId: eventType.id,
-                timestamp: freshEvent.timestamp,
-                notes: freshEvent.notes,
-                isAllDay: freshEvent.isAllDay,
-                endDate: freshEvent.endDate,
-                sourceType: freshEvent.sourceType.rawValue,
-                externalId: freshEvent.externalId,
-                originalTitle: freshEvent.originalTitle,
-                geofenceId: freshEvent.geofenceId,
-                locationLatitude: freshEvent.locationLatitude,
-                locationLongitude: freshEvent.locationLongitude,
-                locationName: freshEvent.locationName,
-                healthKitSampleId: freshEvent.healthKitSampleId,
-                healthKitCategory: freshEvent.healthKitCategory,
-                properties: convertLocalPropertiesToAPI(freshEvent.properties)
-            )
-            let payload = try JSONEncoder().encode(request)
+            let payload: Data
+            let operation: MutationOperation
+
+            if isUpdate {
+                // Event already exists on backend - send UPDATE
+                let request = UpdateEventRequest(
+                    eventTypeId: eventType.id,
+                    timestamp: freshEvent.timestamp,
+                    notes: freshEvent.notes,
+                    isAllDay: freshEvent.isAllDay,
+                    endDate: freshEvent.endDate,
+                    sourceType: freshEvent.sourceType.rawValue,
+                    externalId: freshEvent.externalId,
+                    originalTitle: freshEvent.originalTitle,
+                    geofenceId: freshEvent.geofenceId,
+                    locationLatitude: freshEvent.locationLatitude,
+                    locationLongitude: freshEvent.locationLongitude,
+                    locationName: freshEvent.locationName,
+                    healthKitSampleId: freshEvent.healthKitSampleId,
+                    healthKitCategory: freshEvent.healthKitCategory,
+                    properties: convertLocalPropertiesToAPI(freshEvent.properties)
+                )
+                payload = try JSONEncoder().encode(request)
+                operation = .update
+            } else {
+                // Event not yet on backend - send CREATE
+                let request = CreateEventRequest(
+                    id: freshEvent.id,  // Client-generated UUIDv7
+                    eventTypeId: eventType.id,
+                    timestamp: freshEvent.timestamp,
+                    notes: freshEvent.notes,
+                    isAllDay: freshEvent.isAllDay,
+                    endDate: freshEvent.endDate,
+                    sourceType: freshEvent.sourceType.rawValue,
+                    externalId: freshEvent.externalId,
+                    originalTitle: freshEvent.originalTitle,
+                    geofenceId: freshEvent.geofenceId,
+                    locationLatitude: freshEvent.locationLatitude,
+                    locationLongitude: freshEvent.locationLongitude,
+                    locationName: freshEvent.locationName,
+                    healthKitSampleId: freshEvent.healthKitSampleId,
+                    healthKitCategory: freshEvent.healthKitCategory,
+                    properties: convertLocalPropertiesToAPI(freshEvent.properties)
+                )
+                payload = try JSONEncoder().encode(request)
+                operation = .create
+            }
+
             try await syncEngine.queueMutation(
                 entityType: .event,
-                operation: .create,
-                entityId: event.id,
+                operation: operation,
+                entityId: eventId,
                 payload: payload
             )
 
             Log.sync.info("Queued event for sync", context: .with { ctx in
-                ctx.add("event_id", event.id)
-                ctx.add("source_type", event.sourceType.rawValue)
+                ctx.add("event_id", eventId)
+                ctx.add("source_type", freshEvent.sourceType.rawValue)
+                ctx.add("operation", operation.rawValue)
             })
 
             // Trigger sync if online
