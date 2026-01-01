@@ -64,6 +64,17 @@ struct SupabaseConfiguration {
     }
 }
 
+/// Configuration for PostHog analytics
+struct PostHogConfiguration {
+    let apiKey: String
+    let host: String
+
+    var isValid: Bool {
+        !apiKey.isEmpty && !host.isEmpty &&
+        (host.hasPrefix("http://") || host.hasPrefix("https://"))
+    }
+}
+
 // MARK: - App Configuration
 
 /// Central configuration manager
@@ -76,6 +87,8 @@ struct AppConfiguration {
     let environment: AppEnvironment
     let apiConfiguration: APIConfiguration
     let supabaseConfiguration: SupabaseConfiguration
+    /// PostHog configuration - only loaded in Release builds
+    let posthogConfiguration: PostHogConfiguration?
 
     // MARK: - Initialization
 
@@ -112,6 +125,30 @@ struct AppConfiguration {
         guard supabaseConfiguration.isValid else {
             throw ConfigurationError.invalidValue("SUPABASE_URL or SUPABASE_ANON_KEY", "\(supabaseURL), \(supabaseKey)")
         }
+
+        // Read PostHog configuration (only required in TestFlight builds for now)
+        #if TESTFLIGHT
+        guard let posthogAPIKey = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String else {
+            throw ConfigurationError.missingKey("POSTHOG_API_KEY")
+        }
+
+        guard let posthogHost = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String else {
+            throw ConfigurationError.missingKey("POSTHOG_HOST")
+        }
+
+        let posthog = PostHogConfiguration(
+            apiKey: posthogAPIKey,
+            host: posthogHost
+        )
+
+        guard posthog.isValid else {
+            throw ConfigurationError.invalidValue("POSTHOG_API_KEY or POSTHOG_HOST", "\(posthogAPIKey), \(posthogHost)")
+        }
+
+        self.posthogConfiguration = posthog
+        #else
+        self.posthogConfiguration = nil
+        #endif
     }
 
     // MARK: - Debug Info
@@ -119,12 +156,22 @@ struct AppConfiguration {
     /// Returns a sanitized summary of the current configuration for debugging
     /// (Hides sensitive keys)
     var debugDescription: String {
-        """
+        var desc = """
         Environment: \(environment.displayName)
         API Base URL: \(apiConfiguration.baseURL)
         Supabase URL: \(supabaseConfiguration.url)
         Supabase Key: \(supabaseConfiguration.anonKey.prefix(20))...
         """
+        if let posthog = posthogConfiguration {
+            desc += """
+
+            PostHog Host: \(posthog.host)
+            PostHog Key: \(posthog.apiKey.prefix(10))...
+            """
+        } else {
+            desc += "\nPostHog: Disabled (non-TestFlight build)"
+        }
+        return desc
     }
 }
 

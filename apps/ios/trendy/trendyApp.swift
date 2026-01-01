@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 import FoundationModels
+import PostHog
 
 /// App Group identifier for sharing data with widgets
 let appGroupIdentifier = "group.com.memento.trendy"
@@ -264,6 +265,23 @@ struct trendyApp: App {
         print(appConfiguration.debugDescription)
         print("========================")
         #endif
+
+        // Initialize PostHog analytics (TestFlight builds only for now)
+        if let posthog = appConfiguration.posthogConfiguration {
+            let posthogConfig = PostHogConfig(
+                apiKey: posthog.apiKey,
+                host: posthog.host
+            )
+            PostHogSDK.shared.setup(posthogConfig)
+            print("📊 PostHog initialized for production analytics")
+
+            // Send app launch event to verify setup
+            PostHogSDK.shared.capture("app_launched", properties: [
+                "environment": appConfiguration.environment.rawValue,
+                "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+                "build_number": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+            ])
+        }
 
         // Initialize Supabase service with configuration
         self.supabaseService = SupabaseService(configuration: appConfiguration.supabaseConfiguration)
