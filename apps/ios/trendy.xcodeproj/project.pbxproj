@@ -230,6 +230,7 @@
 			name = trendy;
 			packageProductDependencies = (
 				471955AB2EC0349400C72F91 /* Supabase */,
+				4719560B2EF5B10100C72F91 /* PostHog */,
 			);
 			productName = trendy;
 			productReference = 47312F2C2E2B3EC800E7F111 /* trendy.app */;
@@ -334,6 +335,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				4719559F2EC032B500C72F91 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				4719560A2EF5B10000C72F91 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 47312F2D2E2B3EC800E7F111 /* Products */;
@@ -975,7 +977,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1007,7 +1009,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1039,7 +1041,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1071,7 +1073,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1244,7 +1246,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1343,6 +1345,14 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		4719560A2EF5B10000C72F91 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1350,6 +1360,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4719559F2EC032B500C72F91 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		4719560B2EF5B10100C72F91 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4719560A2EF5B10000C72F91 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

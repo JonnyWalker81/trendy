@@ -24,7 +24,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>This app needs full access to your calendar to import events for tracking and visualization.</string>
 	<key>NSCalendarsUsageDescription</key>
@@ -39,6 +39,10 @@
 	<string>This app needs access to your location to set up geofences for automatic event tracking.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>This app sends notifications when you enter or exit a geofenced location to keep you informed of automatic event tracking.</string>
+	<key>POSTHOG_API_KEY</key>
+	<string>$(POSTHOG_API_KEY)</string>
+	<key>POSTHOG_HOST</key>
+	<string>$(POSTHOG_HOST)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SUPABASE_URL</key>
