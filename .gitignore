@@ -71,3 +71,7 @@ apps/ios/*.cer
 /scratch.org
 /docs/
 /apps/ios/fastlane/SCREENSHOTS_README.md
+/events.data.sql
+/geofences.data.sql
+/my_table.data.sql
+/property_definitions.data.sql

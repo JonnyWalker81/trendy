@@ -555,6 +555,23 @@ class HealthKitService: NSObject {
             return
         }
 
+        // Timestamp-based duplicate check (handles different sample IDs for same workout)
+        // This catches cases where the same workout is synced from multiple devices
+        // or when a workout is edited in Health app (which creates a new sample ID)
+        if await eventExistsWithMatchingWorkoutTimestamp(
+            startDate: workout.startDate,
+            endDate: workout.endDate
+        ) {
+            Log.data.debug("Workout with matching timestamp already exists, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("startDate", workout.startDate.ISO8601Format())
+                ctx.add("endDate", workout.endDate.ISO8601Format())
+                ctx.add("workoutType", workout.workoutActivityType.name)
+            })
+            markSampleAsProcessed(sampleId)
+            return
+        }
+
         print("Processing workout: \(workout.workoutActivityType.name)")
 
         // Ensure EventType exists
@@ -1191,6 +1208,39 @@ class HealthKitService: NSObject {
         } catch {
             print("Error checking for existing HealthKit event: \(error.localizedDescription)")
             // In case of error, assume it doesn't exist to avoid blocking new events
+            return false
+        }
+    }
+
+    /// Check if a workout event with matching timestamps already exists
+    /// This handles the case where the same workout has different HealthKit sample IDs
+    /// (e.g., synced from multiple devices, or edited in Health app)
+    @MainActor
+    private func eventExistsWithMatchingWorkoutTimestamp(
+        startDate: Date,
+        endDate: Date?,
+        tolerance: TimeInterval = 1.0
+    ) async -> Bool {
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.healthKitCategory == "workout"
+            }
+        )
+
+        do {
+            let events = try modelContext.fetch(descriptor)
+            return events.contains { event in
+                let startMatches = abs(event.timestamp.timeIntervalSince(startDate)) < tolerance
+                let endMatches: Bool
+                if let eventEnd = event.endDate, let newEnd = endDate {
+                    endMatches = abs(eventEnd.timeIntervalSince(newEnd)) < tolerance
+                } else {
+                    endMatches = (event.endDate == nil && endDate == nil)
+                }
+                return startMatches && endMatches
+            }
+        } catch {
+            Log.data.error("Error checking for duplicate workout by timestamp", error: error)
             return false
         }
     }
