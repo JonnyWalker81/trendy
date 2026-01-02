@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import PostHog
 
 @Observable
 class AuthViewModel {
@@ -77,6 +78,13 @@ class AuthViewModel {
         do {
             let session = try await supabaseService.signUp(email: email, password: password)
 
+            // Identify user in PostHog (email is required)
+            if let email = session.user.email {
+                PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
+                    "email": email
+                ])
+            }
+
             await MainActor.run {
                 self.isAuthenticated = true
                 self.currentUserEmail = session.user.email
@@ -116,6 +124,13 @@ class AuthViewModel {
         do {
             let session = try await supabaseService.signIn(email: email, password: password)
 
+            // Identify user in PostHog (email is required)
+            if let email = session.user.email {
+                PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
+                    "email": email
+                ])
+            }
+
             await MainActor.run {
                 self.isAuthenticated = true
                 self.currentUserEmail = session.user.email
@@ -137,6 +152,9 @@ class AuthViewModel {
             self.isLoading = true
             self.errorMessage = nil
         }
+
+        // Reset PostHog identification before signing out
+        PostHogSDK.shared.reset()
 
         do {
             try await supabaseService.signOut()

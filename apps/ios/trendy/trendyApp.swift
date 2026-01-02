@@ -306,6 +306,21 @@ struct trendyApp: App {
         insights.configure(with: apiClient)
         _insightsViewModel = State(initialValue: insights)
 
+        // Identify user in PostHog if already authenticated (session restore)
+        if appConfiguration.posthogConfiguration != nil {
+            let supabase = supabaseService
+            Task {
+                await supabase.restoreSession()
+                if supabase.isAuthenticated,
+                   let session = supabase.currentSession,
+                   let email = session.user.email {
+                    PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
+                        "email": email
+                    ])
+                }
+            }
+        }
+
         // Register background tasks for AI insight generation
         AIBackgroundTaskScheduler.shared.registerTasks()
     }
