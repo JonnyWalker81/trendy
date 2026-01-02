@@ -296,6 +296,33 @@ class EventStore {
         Log.sync.info("Event relationship restoration completed")
     }
 
+    /// Restore broken Event→EventType relationships directly on fetched objects.
+    /// This handles SwiftData relationship detachment that occurs when fetching
+    /// from a fresh ModelContext, without needing the full SyncEngine machinery.
+    private func restoreBrokenRelationshipsInPlace(events: [Event], eventTypes: [EventType]) {
+        // Create lookup dictionary for fast EventType access
+        let eventTypeById = Dictionary(uniqueKeysWithValues: eventTypes.map { ($0.id, $0) })
+
+        var restoredCount = 0
+        for event in events {
+            // Skip if relationship is intact
+            guard event.eventType == nil else { continue }
+
+            // Try to restore from backup eventTypeId
+            if let eventTypeId = event.eventTypeId,
+               let eventType = eventTypeById[eventTypeId] {
+                event.eventType = eventType
+                restoredCount += 1
+            }
+        }
+
+        if restoredCount > 0 {
+            Log.sync.info("Restored broken Event→EventType relationships in-place", context: .with { ctx in
+                ctx.add("restored_count", restoredCount)
+            })
+        }
+    }
+
     // MARK: - Data Fetching
 
     /// Fetch data - performs sync if online, otherwise loads from local cache
@@ -355,6 +382,10 @@ class EventStore {
 
         events = try freshContext.fetch(eventDescriptor)
         eventTypes = try freshContext.fetch(typeDescriptor)
+
+        // Restore broken Event→EventType relationships that can occur
+        // when fetching from a fresh ModelContext (SwiftData relationship detachment)
+        restoreBrokenRelationshipsInPlace(events: events, eventTypes: eventTypes)
 
         Log.sync.info("🔧 fetchFromLocal: loaded data", context: .with { ctx in
             ctx.add("events_count", events.count)

@@ -736,20 +736,7 @@ class HealthKitService: NSObject {
         for (sleepDate, nightSamples) in sleepNights.sorted(by: { $0.key < $1.key }) {
             let sampleId = "sleep-\(Self.dateOnlyFormatter.string(from: sleepDate))"
 
-            // Skip if already processed
-            if processedSampleIds.contains(sampleId) {
-                print("🌙 Already processed: \(sampleId)")
-                continue
-            }
-
-            // Database-level deduplication
-            if await eventExistsWithHealthKitSampleId(sampleId) {
-                print("🌙 Already in database: \(sampleId)")
-                markSampleAsProcessed(sampleId)
-                continue
-            }
-
-            // Aggregate this night's samples
+            // Aggregate this night's samples first (before checking for updates)
             var totalSleepDuration: TimeInterval = 0
             var coreSleepDuration: TimeInterval = 0
             var deepSleepDuration: TimeInterval = 0
@@ -798,12 +785,7 @@ class HealthKitService: NSObject {
 
             let hours = Int(totalSleepDuration / 3600)
             let minutes = Int((totalSleepDuration.truncatingRemainder(dividingBy: 3600)) / 60)
-            print("🌙 Creating event for \(sampleId): \(hours)h \(minutes)m")
-
-            guard let eventType = await ensureEventType(for: .sleep) else {
-                print("🌙 Failed to get/create EventType for sleep")
-                continue
-            }
+            let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
 
             // Build properties
             var properties: [String: PropertyValue] = [
@@ -830,7 +812,42 @@ class HealthKitService: NSObject {
                 properties["Time Awake"] = PropertyValue(type: .duration, value: awakeDuration)
             }
 
-            let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+            // Check for existing event to update
+            if let existingEvent = await findEventByHealthKitSampleId(sampleId) {
+                // Compare total sleep duration - only update if changed significantly (>= 1 minute)
+                let existingSleep = existingEvent.properties["Total Sleep"]?.doubleValue ?? 0
+                if abs(existingSleep - totalSleepDuration) < 60 {
+                    // No significant change, skip update
+                    print("🌙 No significant change for \(sampleId): \(Int(existingSleep / 60))m -> \(Int(totalSleepDuration / 60))m")
+                    markSampleAsProcessed(sampleId)
+                    continue
+                }
+
+                Log.data.info("Updating daily sleep", context: .with { ctx in
+                    ctx.add("previousSleep", Int(existingSleep / 60))
+                    ctx.add("newSleep", Int(totalSleepDuration / 60))
+                })
+
+                await updateHealthKitEvent(
+                    existingEvent,
+                    properties: properties,
+                    notes: "Auto-logged: \(durationText) of sleep",
+                    isAllDay: true
+                )
+
+                markSampleAsProcessed(sampleId)
+                lastSleepDate = sleepDate
+                saveLastSleepDate()
+                continue
+            }
+
+            // No existing event - create new one
+            print("🌙 Creating event for \(sampleId): \(hours)h \(minutes)m")
+
+            guard let eventType = await ensureEventType(for: .sleep) else {
+                print("🌙 Failed to get/create EventType for sleep")
+                continue
+            }
 
             await createEvent(
                 eventType: eventType,
@@ -839,7 +856,8 @@ class HealthKitService: NSObject {
                 endDate: sleepEnd,
                 notes: "Auto-logged: \(durationText) of sleep",
                 properties: properties,
-                healthKitSampleId: sampleId
+                healthKitSampleId: sampleId,
+                isAllDay: true
             )
 
             markSampleAsProcessed(sampleId)
@@ -914,7 +932,8 @@ class HealthKitService: NSObject {
             await updateHealthKitEvent(
                 existingEvent,
                 properties: properties,
-                notes: "Auto-logged: \(Int(steps)) steps"
+                notes: "Auto-logged: \(Int(steps)) steps",
+                isAllDay: true
             )
 
             lastStepDate = Date()
@@ -944,7 +963,8 @@ class HealthKitService: NSObject {
             endDate: nil,
             notes: "Auto-logged: \(Int(steps)) steps",
             properties: properties,
-            healthKitSampleId: sampleId
+            healthKitSampleId: sampleId,
+            isAllDay: true
         )
 
         // Don't mark as processed - daily aggregates can be updated throughout the day
@@ -1026,7 +1046,8 @@ class HealthKitService: NSObject {
             await updateHealthKitEvent(
                 existingEvent,
                 properties: properties,
-                notes: "Auto-logged: \(Int(calories)) kcal burned"
+                notes: "Auto-logged: \(Int(calories)) kcal burned",
+                isAllDay: true
             )
 
             lastActiveEnergyDate = Date()
@@ -1056,7 +1077,8 @@ class HealthKitService: NSObject {
             endDate: nil,
             notes: "Auto-logged: \(Int(calories)) kcal burned",
             properties: properties,
-            healthKitSampleId: sampleId
+            healthKitSampleId: sampleId,
+            isAllDay: true
         )
 
         // Don't mark as processed - daily aggregates can be updated throughout the day
@@ -1161,14 +1183,15 @@ class HealthKitService: NSObject {
         endDate: Date?,
         notes: String,
         properties: [String: PropertyValue],
-        healthKitSampleId: String
+        healthKitSampleId: String,
+        isAllDay: Bool = false
     ) async {
         let event = Event(
             timestamp: timestamp,
             eventType: eventType,
             notes: notes,
             sourceType: .healthKit,
-            isAllDay: false,
+            isAllDay: isAllDay,
             endDate: endDate,
             healthKitSampleId: healthKitSampleId,
             healthKitCategory: category.rawValue,
@@ -1267,15 +1290,19 @@ class HealthKitService: NSObject {
     }
 
     /// Update an existing HealthKit event with new values
-    /// Used when daily aggregated metrics (steps, active energy) change throughout the day
+    /// Used when daily aggregated metrics (steps, active energy, sleep) change throughout the day
     @MainActor
     private func updateHealthKitEvent(
         _ event: Event,
         properties: [String: PropertyValue],
-        notes: String
+        notes: String,
+        isAllDay: Bool? = nil
     ) async {
         event.properties = properties
         event.notes = notes
+        if let isAllDay = isAllDay {
+            event.isAllDay = isAllDay
+        }
         event.syncStatus = .pending
 
         do {
