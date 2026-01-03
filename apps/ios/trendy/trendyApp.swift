@@ -272,8 +272,28 @@ struct trendyApp: App {
                 apiKey: posthog.apiKey,
                 host: posthog.host
             )
+
+            // Enable session replay (required for console log capture)
+            posthogConfig.sessionReplay = true
+            posthogConfig.sessionReplayConfig.screenshotMode = true  // Required for SwiftUI
+
+            // Enable console log capture (disabled by default for privacy)
+            posthogConfig.sessionReplayConfig.captureLogs = true
+            // Capture all log levels, not just errors (default is .error)
+            posthogConfig.sessionReplayConfig.captureLogsConfig.minLogLevel = .info
+
+            // Mask sensitive content in session replays
+            posthogConfig.sessionReplayConfig.maskAllTextInputs = true
+            posthogConfig.sessionReplayConfig.maskAllImages = false  // Keep images visible
+
+            // Enable SDK debug logging in debug builds
+            #if DEBUG
+            posthogConfig.debug = true
+            #endif
+
+            posthogConfig.captureApplicationLifecycleEvents = true
             PostHogSDK.shared.setup(posthogConfig)
-            print("📊 PostHog initialized for production analytics")
+            print("📊 PostHog initialized with session replay and console log capture")
 
             // Send app launch event to verify setup
             PostHogSDK.shared.capture("app_launched", properties: [
@@ -311,12 +331,14 @@ struct trendyApp: App {
             let supabase = supabaseService
             Task {
                 await supabase.restoreSession()
-                if supabase.isAuthenticated,
-                   let session = supabase.currentSession,
-                   let email = session.user.email {
-                    PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
-                        "email": email
-                    ])
+                // Get session directly from auth client to avoid race condition
+                if let session = try? await supabase.client.auth.session {
+                    var userProperties: [String: Any] = [:]
+                    if let email = session.user.email {
+                        userProperties["email"] = email
+                    }
+                    print("📊 PostHog identify (session restore): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+                    PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
                 }
             }
         }

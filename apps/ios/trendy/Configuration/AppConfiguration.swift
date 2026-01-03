@@ -126,29 +126,26 @@ struct AppConfiguration {
             throw ConfigurationError.invalidValue("SUPABASE_URL or SUPABASE_ANON_KEY", "\(supabaseURL), \(supabaseKey)")
         }
 
-        // Read PostHog configuration (only required in TestFlight builds for now)
-        #if TESTFLIGHT
-        guard let posthogAPIKey = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String else {
-            throw ConfigurationError.missingKey("POSTHOG_API_KEY")
+        // Read PostHog configuration (optional - enabled when valid keys are present)
+        if let posthogAPIKey = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_API_KEY") as? String,
+           let posthogHost = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String,
+           !posthogAPIKey.isEmpty,
+           !posthogHost.isEmpty,
+           !posthogAPIKey.hasPrefix("phc_your_") {  // Skip placeholder keys
+
+            let posthog = PostHogConfiguration(
+                apiKey: posthogAPIKey,
+                host: posthogHost
+            )
+
+            if posthog.isValid {
+                self.posthogConfiguration = posthog
+            } else {
+                self.posthogConfiguration = nil
+            }
+        } else {
+            self.posthogConfiguration = nil
         }
-
-        guard let posthogHost = Bundle.main.object(forInfoDictionaryKey: "POSTHOG_HOST") as? String else {
-            throw ConfigurationError.missingKey("POSTHOG_HOST")
-        }
-
-        let posthog = PostHogConfiguration(
-            apiKey: posthogAPIKey,
-            host: posthogHost
-        )
-
-        guard posthog.isValid else {
-            throw ConfigurationError.invalidValue("POSTHOG_API_KEY or POSTHOG_HOST", "\(posthogAPIKey), \(posthogHost)")
-        }
-
-        self.posthogConfiguration = posthog
-        #else
-        self.posthogConfiguration = nil
-        #endif
     }
 
     // MARK: - Debug Info
@@ -169,7 +166,7 @@ struct AppConfiguration {
             PostHog Key: \(posthog.apiKey.prefix(10))...
             """
         } else {
-            desc += "\nPostHog: Disabled (non-TestFlight build)"
+            desc += "\nPostHog: Disabled (no valid keys configured)"
         }
         return desc
     }

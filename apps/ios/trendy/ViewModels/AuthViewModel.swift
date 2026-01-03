@@ -78,12 +78,13 @@ class AuthViewModel {
         do {
             let session = try await supabaseService.signUp(email: email, password: password)
 
-            // Identify user in PostHog (email is required)
+            // Identify user in PostHog (always identify, email is optional property)
+            var userProperties: [String: Any] = [:]
             if let email = session.user.email {
-                PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
-                    "email": email
-                ])
+                userProperties["email"] = email
             }
+            print("📊 PostHog identify (signUp): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             await MainActor.run {
                 self.isAuthenticated = true
@@ -124,12 +125,13 @@ class AuthViewModel {
         do {
             let session = try await supabaseService.signIn(email: email, password: password)
 
-            // Identify user in PostHog (email is required)
+            // Identify user in PostHog (always identify, email is optional property)
+            var userProperties: [String: Any] = [:]
             if let email = session.user.email {
-                PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
-                    "email": email
-                ])
+                userProperties["email"] = email
             }
+            print("📊 PostHog identify (signIn): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             await MainActor.run {
                 self.isAuthenticated = true
