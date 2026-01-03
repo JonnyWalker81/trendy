@@ -196,10 +196,12 @@ struct AddGeofenceView: View {
     // MARK: - Actions
 
     private func useCurrentLocation() {
-        let manager = CLLocationManager()
-        if let location = manager.location {
-            selectedCoordinate = location.coordinate
-            print("📍 Using current location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        // Use GeofenceManager's location instead of creating a transient CLLocationManager
+        if let coordinate = geofenceManager?.currentLocation {
+            selectedCoordinate = coordinate
+            Log.geofence.debug("Using current location: \(coordinate.latitude), \(coordinate.longitude)")
+        } else {
+            Log.geofence.warning("Current location unavailable")
         }
     }
 
@@ -294,6 +296,7 @@ struct AddGeofenceView: View {
 
 struct GeofenceMapPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
     @Binding var selectedCoordinate: CLLocationCoordinate2D?
     let radius: Double
     
@@ -399,10 +402,10 @@ struct GeofenceMapPickerView: View {
     }
     
     private func useCurrentLocation() {
-        let manager = CLLocationManager()
-        if let location = manager.location {
-            tempCoordinate = location.coordinate
-            mapPosition = .camera(MapCamera(centerCoordinate: location.coordinate, distance: 2000))
+        // Use GeofenceManager's location instead of creating a transient CLLocationManager
+        if let coordinate = geofenceManager?.currentLocation {
+            tempCoordinate = coordinate
+            mapPosition = .camera(MapCamera(centerCoordinate: coordinate, distance: 2000))
         }
     }
 }
@@ -435,7 +438,6 @@ struct AddGeofenceViewWithMapReader: View {
     // Map state
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var selectedCoordinate: CLLocationCoordinate2D?
-    @State private var locationManager = CLLocationManager()
     @State private var showingMap = false
 
     // Validation
@@ -591,8 +593,9 @@ struct AddGeofenceViewWithMapReader: View {
     // MARK: - Actions
 
     private func useCurrentLocation() {
-        if let location = locationManager.location {
-            selectedCoordinate = location.coordinate
+        // Use GeofenceManager's location instead of transient CLLocationManager
+        if let coordinate = geofenceManager?.currentLocation {
+            selectedCoordinate = coordinate
         }
     }
 
@@ -682,6 +685,7 @@ struct AddGeofenceViewWithMapReader: View {
 
 struct MapPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(GeofenceManager.self) private var geofenceManager: GeofenceManager?
     @Binding var selectedCoordinate: CLLocationCoordinate2D?
 
     @State private var mapPosition: MapCameraPosition = .automatic
@@ -735,10 +739,11 @@ struct MapPickerView: View {
                             pitch: 0
                         )
                     )
-                } else if let location = CLLocationManager().location {
+                } else if let coordinate = geofenceManager?.currentLocation {
+                    // Use GeofenceManager's location instead of transient CLLocationManager
                     mapPosition = .camera(
                         MapCamera(
-                            centerCoordinate: location.coordinate,
+                            centerCoordinate: coordinate,
                             distance: 500,
                             heading: 0,
                             pitch: 0

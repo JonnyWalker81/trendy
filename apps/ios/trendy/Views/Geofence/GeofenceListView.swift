@@ -182,28 +182,18 @@ struct GeofenceListView: View {
     
     private func requestLocationPermission() {
         guard let manager = geofenceManager else {
-            print("❌ GeofenceManager not available")
+            Log.geofence.error("GeofenceManager not available")
             return
         }
-        
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            // First, request "When In Use", then "Always"
-            manager.requestWhenInUseAuthorization()
-            // After a delay, request Always (iOS requires this two-step process)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                manager.requestAlwaysAuthorization()
-            }
-        case .authorizedWhenInUse:
-            // Already have "When In Use", now request "Always"
-            manager.requestAlwaysAuthorization()
-        case .denied, .restricted:
-            // Need to open settings
+
+        // Use the GeofenceManager's proper two-step authorization flow
+        // The delegate will handle requesting "Always" after "When In Use" is granted
+        let needsSettingsRedirect = manager.requestGeofencingAuthorization()
+
+        if needsSettingsRedirect {
             if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(settingsURL)
             }
-        default:
-            break
         }
     }
 

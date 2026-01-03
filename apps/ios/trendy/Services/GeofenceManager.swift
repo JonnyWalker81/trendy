@@ -24,6 +24,9 @@ class GeofenceManager: NSObject {
     /// Current authorization status
     var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
+    /// Flag to track if we're waiting to upgrade from "When In Use" to "Always" authorization
+    private var pendingAlwaysAuthorizationRequest = false
+
     /// Whether location services are available
     var isLocationServicesEnabled: Bool {
         CLLocationManager.locationServicesEnabled()
@@ -87,6 +90,58 @@ class GeofenceManager: NSObject {
         @unknown default:
             return false
         }
+    }
+
+    /// Current location if available (requires at least When In Use authorization)
+    var currentLocation: CLLocationCoordinate2D? {
+        guard authorizationStatus == .authorizedWhenInUse ||
+              authorizationStatus == .authorizedAlways else {
+            return nil
+        }
+        return locationManager.location?.coordinate
+    }
+
+    /// Request geofencing authorization using the proper two-step flow.
+    /// This method handles the iOS requirement that "When In Use" must be granted
+    /// before "Always" can be requested. The delegate callback will automatically
+    /// request "Always" after "When In Use" is granted.
+    /// - Returns: `true` if a settings redirect is needed (denied/restricted), `false` otherwise
+    @discardableResult
+    func requestGeofencingAuthorization() -> Bool {
+        switch authorizationStatus {
+        case .notDetermined:
+            // Step 1: Request "When In Use" first, the delegate will handle step 2
+            pendingAlwaysAuthorizationRequest = true
+            locationManager.requestWhenInUseAuthorization()
+            Log.geofence.info("Requesting When In Use authorization (step 1 of 2)")
+            return false
+
+        case .authorizedWhenInUse:
+            // Step 2: Already have "When In Use", request upgrade to "Always"
+            locationManager.requestAlwaysAuthorization()
+            Log.geofence.info("Requesting Always authorization (upgrade from When In Use)")
+            return false
+
+        case .denied, .restricted:
+            // Can't request programmatically, user must go to Settings
+            Log.geofence.warning("Authorization denied/restricted, settings redirect needed")
+            return true
+
+        case .authorizedAlways:
+            // Already have full authorization
+            Log.geofence.debug("Already have Always authorization")
+            return false
+
+        @unknown default:
+            Log.geofence.warning("Unknown authorization status: \(authorizationStatus.rawValue)")
+            return false
+        }
+    }
+
+    // MARK: - Lifecycle
+
+    deinit {
+        locationManager.delegate = nil
     }
 
     // MARK: - Geofence Management
@@ -477,16 +532,39 @@ class GeofenceManager: NSObject {
 extension GeofenceManager: CLLocationManagerDelegate {
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let previousStatus = authorizationStatus
         authorizationStatus = manager.authorizationStatus
+        let servicesEnabled = CLLocationManager.locationServicesEnabled()
 
-        print("📍 Location authorization changed: \(authorizationStatus.description)")
-        print("   🔑 Has geofencing authorization: \(hasGeofencingAuthorization)")
-        print("   📍 Location services enabled: \(isLocationServicesEnabled)")
+        Log.geofence.info("Authorization changed", context: .with { ctx in
+            ctx.add("previous", previousStatus.description)
+            ctx.add("current", authorizationStatus.description)
+            ctx.add("servicesEnabled", servicesEnabled)
+            ctx.add("hasGeofencingAuth", hasGeofencingAuthorization)
+        })
 
-        // Start monitoring if we now have authorization
-        if hasGeofencingAuthorization && monitoredRegions.isEmpty {
-            print("📍 Starting to monitor all geofences...")
-            startMonitoringAllGeofences()
+        // Handle two-step authorization flow:
+        // If we just got "When In Use" and we were waiting to request "Always", do it now
+        if authorizationStatus == .authorizedWhenInUse && pendingAlwaysAuthorizationRequest {
+            pendingAlwaysAuthorizationRequest = false
+            Log.geofence.info("Requesting Always authorization (step 2 of 2)")
+            locationManager.requestAlwaysAuthorization()
+            return
+        }
+
+        // Clear the pending flag if authorization was denied or we got a final state
+        if authorizationStatus == .denied || authorizationStatus == .restricted || authorizationStatus == .authorizedAlways {
+            pendingAlwaysAuthorizationRequest = false
+        }
+
+        // Handle authorization gain: refresh monitored geofences
+        // We refresh ALL regions (not just when empty) to handle authorization regain scenarios
+        if hasGeofencingAuthorization {
+            let previouslyHadAuth = previousStatus == .authorizedAlways
+            if !previouslyHadAuth || monitoredRegions.isEmpty {
+                Log.geofence.info("Starting to monitor all geofences (auth granted or regained)")
+                refreshMonitoredGeofences()
+            }
         }
     }
 
