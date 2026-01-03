@@ -24,7 +24,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>8</string>
+	<string>9</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>This app needs full access to your calendar to import events for tracking and visualization.</string>
 	<key>NSCalendarsUsageDescription</key>
