@@ -104,7 +104,7 @@ export function Login() {
             <div className="text-center pt-4">
               <Link
                 to="/signup"
-                className="text-sm text-primary hover:text-primary/80 font-medium transition duration-200"
+                className="text-sm text-link hover:text-link/80 font-medium transition duration-200"
               >
                 Don't have an account? Sign up
               </Link>

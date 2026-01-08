@@ -23,7 +23,7 @@ struct SignupView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "person.crop.circle.fill.badge.plus")
                         .font(.system(size: 60))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.dsPrimary)
 
                     Text("Create Account")
                         .font(.largeTitle)
@@ -68,7 +68,7 @@ struct SignupView: View {
                     if let errorMessage = localError ?? authViewModel.errorMessage {
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.dsDestructive)
                             .padding(.horizontal)
                     }
 

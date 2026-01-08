@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB"/>
+      <stop offset="100%" style="stop-color:#60A5FA"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F172A"/>
+      <stop offset="100%" style="stop-color:#1E293B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="600" fill="#F8FAFC"/>
+
+  <!-- Title -->
+  <text x="400" y="45" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="600" fill="#1E293B" text-anchor="middle">Trendy Color Palette</text>
+
+  <!-- Primary Colors Row -->
+  <text x="40" y="90" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">PRIMARY</text>
+
+  <rect x="40" y="100" width="120" height="80" rx="12" fill="#2563EB"/>
+  <text x="100" y="200" font-family="monospace" font-size="11" fill="#64748B" text-anchor="middle">#2563EB</text>
+  <text x="100" y="215" font-family="system-ui, sans-serif" font-size="10" fill="#94A3B8" text-anchor="middle">Primary Light</text>
+
+  <rect x="180" y="100" width="120" height="80" rx="12" fill="#60A5FA"/>
+  <text x="240" y="200" font-family="monospace" font-size="11" fill="#64748B" text-anchor="middle">#60A5FA</text>
+  <text x="240" y="215" font-family="system-ui, sans-serif" font-size="10" fill="#94A3B8" text-anchor="middle">Primary Dark</text>
+
+  <rect x="320" y="100" width="120" height="80" rx="12" fill="url(#primaryGrad)"/>
+  <text x="380" y="200" font-family="system-ui, sans-serif" font-size="11" fill="#64748B" text-anchor="middle">Gradient</text>
+  <text x="380" y="215" font-family="system-ui, sans-serif" font-size="10" fill="#94A3B8" text-anchor="middle">For icons</text>
+
+  <!-- Semantic Colors Row -->
+  <text x="40" y="260" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">SEMANTIC</text>
+
+  <rect x="40" y="270" width="90" height="60" rx="10" fill="#059669"/>
+  <text x="85" y="350" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#059669</text>
+  <text x="85" y="363" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Success</text>
+
+  <rect x="145" y="270" width="90" height="60" rx="10" fill="#D97706"/>
+  <text x="190" y="350" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#D97706</text>
+  <text x="190" y="363" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Warning</text>
+
+  <rect x="250" y="270" width="90" height="60" rx="10" fill="#DC2626"/>
+  <text x="295" y="350" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#DC2626</text>
+  <text x="295" y="363" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Destructive</text>
+
+  <rect x="355" y="270" width="90" height="60" rx="10" fill="#2563EB"/>
+  <text x="400" y="350" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#2563EB</text>
+  <text x="400" y="363" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Link</text>
+
+  <!-- Background Colors Row -->
+  <text x="40" y="408" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">BACKGROUNDS</text>
+
+  <rect x="40" y="418" width="90" height="60" rx="10" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="85" y="498" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#FFFFFF</text>
+  <text x="85" y="511" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Light BG</text>
+
+  <rect x="145" y="418" width="90" height="60" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="190" y="498" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#F8FAFC</text>
+  <text x="190" y="511" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Card Light</text>
+
+  <rect x="250" y="418" width="90" height="60" rx="10" fill="#0F172A"/>
+  <text x="295" y="498" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#0F172A</text>
+  <text x="295" y="511" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Dark BG</text>
+
+  <rect x="355" y="418" width="90" height="60" rx="10" fill="#1E293B"/>
+  <text x="400" y="498" font-family="monospace" font-size="10" fill="#64748B" text-anchor="middle">#1E293B</text>
+  <text x="400" y="511" font-family="system-ui, sans-serif" font-size="9" fill="#94A3B8" text-anchor="middle">Card Dark</text>
+
+  <!-- Chart Colors Row -->
+  <text x="500" y="90" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">CHART COLORS</text>
+
+  <rect x="500" y="100" width="50" height="50" rx="8" fill="#2563EB"/>
+  <rect x="560" y="100" width="50" height="50" rx="8" fill="#059669"/>
+  <rect x="620" y="100" width="50" height="50" rx="8" fill="#D97706"/>
+  <rect x="680" y="100" width="50" height="50" rx="8" fill="#7C3AED"/>
+  <rect x="740" y="100" width="50" height="50" rx="8" fill="#DB2777"/>
+
+  <text x="525" y="170" font-family="monospace" font-size="9" fill="#64748B" text-anchor="middle">1</text>
+  <text x="585" y="170" font-family="monospace" font-size="9" fill="#64748B" text-anchor="middle">2</text>
+  <text x="645" y="170" font-family="monospace" font-size="9" fill="#64748B" text-anchor="middle">3</text>
+  <text x="705" y="170" font-family="monospace" font-size="9" fill="#64748B" text-anchor="middle">4</text>
+  <text x="765" y="170" font-family="monospace" font-size="9" fill="#64748B" text-anchor="middle">5</text>
+
+  <!-- Text Colors -->
+  <text x="500" y="220" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">TEXT</text>
+
+  <rect x="500" y="230" width="140" height="40" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="570" y="256" font-family="system-ui, sans-serif" font-size="13" font-weight="500" fill="#1E293B" text-anchor="middle">Foreground Light</text>
+
+  <rect x="650" y="230" width="140" height="40" rx="8" fill="#0F172A"/>
+  <text x="720" y="256" font-family="system-ui, sans-serif" font-size="13" font-weight="500" fill="#F1F5F9" text-anchor="middle">Foreground Dark</text>
+
+  <rect x="500" y="280" width="140" height="40" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="570" y="306" font-family="system-ui, sans-serif" font-size="13" fill="#64748B" text-anchor="middle">Muted Light</text>
+
+  <rect x="650" y="280" width="140" height="40" rx="8" fill="#0F172A"/>
+  <text x="720" y="306" font-family="system-ui, sans-serif" font-size="13" fill="#94A3B8" text-anchor="middle">Muted Dark</text>
+
+  <!-- Icon Samples -->
+  <text x="500" y="360" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#64748B">ICON SAMPLES</text>
+
+  <!-- Light icon sample -->
+  <rect x="500" y="375" width="100" height="100" rx="20" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <rect x="520" y="395" width="60" height="60" rx="14" fill="url(#primaryGrad)"/>
+  <path d="M535 435 L550 410 L565 425 L575 415" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="550" y="495" font-family="system-ui, sans-serif" font-size="10" fill="#94A3B8" text-anchor="middle">Light Mode</text>
+
+  <!-- Dark icon sample -->
+  <rect x="620" y="375" width="100" height="100" rx="20" fill="#0F172A"/>
+  <rect x="640" y="395" width="60" height="60" rx="14" fill="url(#primaryGrad)"/>
+  <path d="M655 435 L670 410 L685 425 L695 415" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="670" y="495" font-family="system-ui, sans-serif" font-size="10" fill="#94A3B8" text-anchor="middle">Dark Mode</text>
+
+  <!-- Footer -->
+  <text x="400" y="570" font-family="system-ui, sans-serif" font-size="11" fill="#94A3B8" text-anchor="middle">Generated from tokens/colors.json</text>
+</svg>

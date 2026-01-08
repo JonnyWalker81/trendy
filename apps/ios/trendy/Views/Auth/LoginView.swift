@@ -20,7 +20,7 @@ struct LoginView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .font(.system(size: 60))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.dsPrimary)
 
                     Text("trendy")
                         .font(.largeTitle)
@@ -53,7 +53,7 @@ struct LoginView: View {
                     if let errorMessage = authViewModel.errorMessage {
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.dsDestructive)
                             .padding(.horizontal)
                     }
 
@@ -89,9 +89,10 @@ struct LoginView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text("Don't have an account?")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.dsMutedForeground)
                         Text("Sign Up")
                             .fontWeight(.semibold)
+                            .foregroundStyle(Color.dsLink)
                     }
                 }
                 .padding(.bottom, 40)

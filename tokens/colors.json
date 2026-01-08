@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Trendy design system color tokens - single source of truth for iOS and Web",
+  "colors": {
+    "background": {
+      "description": "Main app background",
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "foreground": {
+      "description": "Primary text color",
+      "light": "#1E293B",
+      "dark": "#F1F5F9"
+    },
+    "card": {
+      "description": "Card and elevated surface background",
+      "light": "#F8FAFC",
+      "dark": "#1E293B"
+    },
+    "cardForeground": {
+      "description": "Text on card surfaces",
+      "light": "#1E293B",
+      "dark": "#F1F5F9"
+    },
+    "popover": {
+      "description": "Popover and dropdown background",
+      "light": "#FFFFFF",
+      "dark": "#1E293B"
+    },
+    "popoverForeground": {
+      "description": "Text in popovers",
+      "light": "#1E293B",
+      "dark": "#F1F5F9"
+    },
+    "primary": {
+      "description": "Primary brand color for buttons, links, focus states",
+      "light": "#2563EB",
+      "dark": "#60A5FA"
+    },
+    "primaryForeground": {
+      "description": "Text on primary colored backgrounds",
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "secondary": {
+      "description": "Secondary buttons and less prominent elements",
+      "light": "#E2E8F0",
+      "dark": "#334155"
+    },
+    "secondaryForeground": {
+      "description": "Text on secondary backgrounds",
+      "light": "#475569",
+      "dark": "#E2E8F0"
+    },
+    "muted": {
+      "description": "Muted backgrounds for subtle distinction",
+      "light": "#F1F5F9",
+      "dark": "#1E293B"
+    },
+    "mutedForeground": {
+      "description": "Secondary/muted text",
+      "light": "#64748B",
+      "dark": "#94A3B8"
+    },
+    "accent": {
+      "description": "Accent color for highlights and hover states",
+      "light": "#EFF6FF",
+      "dark": "#1E3A5F"
+    },
+    "accentForeground": {
+      "description": "Text on accent backgrounds",
+      "light": "#1E40AF",
+      "dark": "#BFDBFE"
+    },
+    "destructive": {
+      "description": "Danger/error states and destructive actions",
+      "light": "#DC2626",
+      "dark": "#EF4444"
+    },
+    "destructiveForeground": {
+      "description": "Text on destructive backgrounds",
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "success": {
+      "description": "Success states and confirmations",
+      "light": "#059669",
+      "dark": "#34D399"
+    },
+    "successForeground": {
+      "description": "Text on success backgrounds",
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "warning": {
+      "description": "Warning states and cautions",
+      "light": "#D97706",
+      "dark": "#FBBF24"
+    },
+    "warningForeground": {
+      "description": "Text on warning backgrounds",
+      "light": "#FFFFFF",
+      "dark": "#0F172A"
+    },
+    "link": {
+      "description": "Link text color (distinct from primary)",
+      "light": "#2563EB",
+      "dark": "#93C5FD"
+    },
+    "border": {
+      "description": "Default border color",
+      "light": "#E2E8F0",
+      "dark": "#334155"
+    },
+    "input": {
+      "description": "Input field borders",
+      "light": "#CBD5E1",
+      "dark": "#475569"
+    },
+    "ring": {
+      "description": "Focus ring color",
+      "light": "#2563EB",
+      "dark": "#60A5FA"
+    },
+    "chart1": {
+      "description": "Chart color 1",
+      "light": "#2563EB",
+      "dark": "#60A5FA"
+    },
+    "chart2": {
+      "description": "Chart color 2",
+      "light": "#059669",
+      "dark": "#34D399"
+    },
+    "chart3": {
+      "description": "Chart color 3",
+      "light": "#D97706",
+      "dark": "#FBBF24"
+    },
+    "chart4": {
+      "description": "Chart color 4",
+      "light": "#7C3AED",
+      "dark": "#A78BFA"
+    },
+    "chart5": {
+      "description": "Chart color 5",
+      "light": "#DB2777",
+      "dark": "#F472B6"
+    }
+  },
+  "contrastPairs": [
+    { "foreground": "foreground", "background": "background", "minRatio": 4.5 },
+    { "foreground": "cardForeground", "background": "card", "minRatio": 4.5 },
+    { "foreground": "mutedForeground", "background": "background", "minRatio": 4.5 },
+    { "foreground": "mutedForeground", "background": "card", "minRatio": 4.5 },
+    { "foreground": "primaryForeground", "background": "primary", "minRatio": 4.5 },
+    { "foreground": "secondaryForeground", "background": "secondary", "minRatio": 4.5 },
+    { "foreground": "destructiveForeground", "background": "destructive", "minRatio": 4.5 },
+    { "foreground": "link", "background": "background", "minRatio": 4.5 },
+    { "foreground": "link", "background": "card", "minRatio": 4.5 }
+  ]
+}

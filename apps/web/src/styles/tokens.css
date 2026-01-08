@@ -1,0 +1,104 @@
+/**
+ * Trendy Design System - Color Tokens
+ * Generated from tokens/colors.json
+ * DO NOT EDIT DIRECTLY - Run: node tokens/generate.js
+ */
+
+:root {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 96%;
+  --card: 217 33% 17%;
+  --card-foreground: 210 40% 96%;
+  --popover: 217 33% 17%;
+  --popover-foreground: 210 40% 96%;
+  --primary: 213 94% 68%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 215 25% 27%;
+  --secondary-foreground: 214 32% 91%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 214 52% 25%;
+  --accent-foreground: 213 97% 87%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 222 47% 11%;
+  --success: 158 64% 52%;
+  --success-foreground: 222 47% 11%;
+  --warning: 43 96% 56%;
+  --warning-foreground: 222 47% 11%;
+  --link: 212 96% 78%;
+  --border: 215 25% 27%;
+  --input: 215 19% 35%;
+  --ring: 213 94% 68%;
+  --chart1: 213 94% 68%;
+  --chart2: 158 64% 52%;
+  --chart3: 43 96% 56%;
+  --chart4: 255 92% 76%;
+  --chart5: 329 86% 70%;
+  --radius: 0.5rem;
+}
+
+.light {
+  --background: 0 0% 100%;
+  --foreground: 217 33% 17%;
+  --card: 210 40% 98%;
+  --card-foreground: 217 33% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 217 33% 17%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 32% 91%;
+  --secondary-foreground: 215 19% 35%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 214 100% 97%;
+  --accent-foreground: 226 71% 40%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 161 94% 30%;
+  --success-foreground: 0 0% 100%;
+  --warning: 32 95% 44%;
+  --warning-foreground: 0 0% 100%;
+  --link: 221 83% 53%;
+  --border: 214 32% 91%;
+  --input: 213 27% 84%;
+  --ring: 221 83% 53%;
+  --chart1: 221 83% 53%;
+  --chart2: 161 94% 30%;
+  --chart3: 32 95% 44%;
+  --chart4: 262 83% 58%;
+  --chart5: 333 71% 51%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+    --background: 0 0% 100%;
+    --foreground: 217 33% 17%;
+    --card: 210 40% 98%;
+    --card-foreground: 217 33% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 217 33% 17%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 215 19% 35%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 214 100% 97%;
+    --accent-foreground: 226 71% 40%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 161 94% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+    --link: 221 83% 53%;
+    --border: 214 32% 91%;
+    --input: 213 27% 84%;
+    --ring: 221 83% 53%;
+    --chart1: 221 83% 53%;
+    --chart2: 161 94% 30%;
+    --chart3: 32 95% 44%;
+    --chart4: 262 83% 58%;
+    --chart5: 333 71% 51%;
+  }
+}
