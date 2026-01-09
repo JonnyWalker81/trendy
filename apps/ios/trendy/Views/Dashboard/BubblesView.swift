@@ -99,7 +99,13 @@ struct BubblesView: View {
             }
             .task {
                 await eventStore.fetchData()
-                // Fetch insights if needed
+
+                #if DEBUG
+                // In screenshot mode, inject mock insights instead of fetching from API
+                insightsViewModel.injectMockInsightsForScreenshots()
+                #endif
+
+                // Fetch insights if needed (will be skipped if mock data was injected)
                 if insightsViewModel.needsRefresh {
                     await insightsViewModel.fetchInsights()
                 }

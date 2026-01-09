@@ -56,8 +56,15 @@ final class ScreenshotTests: XCTestCase {
         let bubblesGrid = app.otherElements["bubblesGrid"]
         XCTAssertTrue(bubblesGrid.waitForExistence(timeout: 15), "Dashboard bubbles grid should appear")
 
-        // Give time for animations to complete
-        sleep(1)
+        // Wait for Top Insights section to fully load
+        waitForIdle()
+
+        // Give extra time for insights data to populate and animations to complete
+        // Insights section makes async API calls that need time to resolve
+        sleep(8)
+
+        // Additional idle wait after sleep to ensure UI has settled
+        waitForIdle()
 
         snapshot("01_Dashboard")
     }

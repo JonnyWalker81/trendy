@@ -398,4 +398,164 @@ class InsightsViewModel {
         weeklyReflection = nil
         aiExplanations.removeAll()
     }
+
+    // MARK: - Screenshot Mode Support
+
+    #if DEBUG
+    /// Inject mock insights for screenshot mode
+    func injectMockInsightsForScreenshots() {
+        guard ProcessInfo.processInfo.arguments.contains("--screenshot-mode") ||
+              ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] == "1" else {
+            return
+        }
+
+        let now = Date()
+        let futureDate = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+
+        // Create mock insights data with full API model structure
+        let mockStreaks = [
+            APIInsight(
+                id: "streak-1",
+                userId: "mock-user",
+                insightType: .streak,
+                category: .streak,
+                title: "Running Streak",
+                description: "You've logged Running for 7 consecutive days! Keep it up!",
+                eventTypeAId: "running-type",
+                eventTypeBId: nil,
+                propertyKey: nil,
+                metricValue: 7,
+                pValue: nil,
+                sampleSize: 7,
+                confidence: .high,
+                direction: .positive,
+                metadata: nil,
+                computedAt: now,
+                validUntil: futureDate,
+                createdAt: now,
+                eventTypeA: nil,
+                eventTypeB: nil
+            ),
+            APIInsight(
+                id: "streak-2",
+                userId: "mock-user",
+                insightType: .streak,
+                category: .streak,
+                title: "Meditation Streak",
+                description: "5 day meditation streak - you're building a habit!",
+                eventTypeAId: "meditation-type",
+                eventTypeBId: nil,
+                propertyKey: nil,
+                metricValue: 5,
+                pValue: nil,
+                sampleSize: 5,
+                confidence: .high,
+                direction: .positive,
+                metadata: nil,
+                computedAt: now,
+                validUntil: futureDate,
+                createdAt: now,
+                eventTypeA: nil,
+                eventTypeB: nil
+            )
+        ]
+
+        let mockCorrelations = [
+            APIInsight(
+                id: "corr-1",
+                userId: "mock-user",
+                insightType: .correlation,
+                category: .crossEvent,
+                title: "Sleep & Workout Connection",
+                description: "When you sleep well, you're 40% more likely to workout the next day",
+                eventTypeAId: "sleep-type",
+                eventTypeBId: "workout-type",
+                propertyKey: nil,
+                metricValue: 0.72,
+                pValue: 0.01,
+                sampleSize: 30,
+                confidence: .medium,
+                direction: .positive,
+                metadata: nil,
+                computedAt: now,
+                validUntil: futureDate,
+                createdAt: now,
+                eventTypeA: nil,
+                eventTypeB: nil
+            )
+        ]
+
+        let mockPatterns = [
+            APIInsight(
+                id: "pattern-1",
+                userId: "mock-user",
+                insightType: .pattern,
+                category: .timeOfDay,
+                title: "Morning Person",
+                description: "75% of your Running events happen before 9 AM",
+                eventTypeAId: "running-type",
+                eventTypeBId: nil,
+                propertyKey: nil,
+                metricValue: 75,
+                pValue: nil,
+                sampleSize: 20,
+                confidence: .high,
+                direction: .neutral,
+                metadata: nil,
+                computedAt: now,
+                validUntil: futureDate,
+                createdAt: now,
+                eventTypeA: nil,
+                eventTypeB: nil
+            )
+        ]
+
+        let mockWeeklySummary = [
+            APIWeeklySummary(
+                eventTypeId: "running-type",
+                eventTypeName: "Running",
+                eventTypeColor: "#FF5722",
+                eventTypeIcon: "figure.run",
+                thisWeekCount: 5,
+                lastWeekCount: 3,
+                changePercent: 66.7,
+                direction: "up"
+            ),
+            APIWeeklySummary(
+                eventTypeId: "meditation-type",
+                eventTypeName: "Meditation",
+                eventTypeColor: "#9C27B0",
+                eventTypeIcon: "brain.head.profile",
+                thisWeekCount: 7,
+                lastWeekCount: 4,
+                changePercent: 75.0,
+                direction: "up"
+            ),
+            APIWeeklySummary(
+                eventTypeId: "coffee-type",
+                eventTypeName: "Coffee",
+                eventTypeColor: "#795548",
+                eventTypeIcon: "cup.and.saucer.fill",
+                thisWeekCount: 4,
+                lastWeekCount: 6,
+                changePercent: -33.3,
+                direction: "down"
+            )
+        ]
+
+        insights = APIInsightsResponse(
+            correlations: mockCorrelations,
+            patterns: mockPatterns,
+            streaks: mockStreaks,
+            weeklySummary: mockWeeklySummary,
+            computedAt: now,
+            dataSufficient: true,
+            minDaysNeeded: 0,
+            totalDays: 30
+        )
+
+        isLoading = false
+        lastRefreshed = Date()
+    }
+    #endif
 }

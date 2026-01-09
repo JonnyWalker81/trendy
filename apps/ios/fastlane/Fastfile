@@ -231,17 +231,24 @@ platform :ios do
     # Clear existing screenshots
     sh("rm -rf ./screenshots/raw/*") if Dir.exist?("./screenshots/raw")
 
+    # Boot simulator manually before running capture_screenshots
+    device = "iPhone 17 Pro Max"
+    udid = sh("xcrun simctl list devices 2>/dev/null | grep '#{device}' | head -1 | awk -F'[()]' '{print $2}'", log: false).strip rescue nil
+    if udid && !udid.empty?
+      sh("xcrun simctl boot '#{udid}' 2>/dev/null || true", log: false)
+      UI.message("Booted simulator #{device} (#{udid})")
+      sleep(10)  # Wait for simulator to fully boot
+    end
+
     capture_screenshots(
       project: PROJECT_PATH,
       scheme: "trendy (local)",
       output_directory: "./screenshots/raw",
       clear_previous_screenshots: true,
-      devices: [
-        "iPhone 16 Pro Max"        # 6.9" display (1320x2868) - required for App Store
-      ],
+      devices: [device],
       languages: ["en-US"],
       override_status_bar: true,
-      concurrent_simulators: true,
+      concurrent_simulators: false,
       stop_after_first_error: false,
       launch_arguments: [
         "-FASTLANE_SNAPSHOT",
