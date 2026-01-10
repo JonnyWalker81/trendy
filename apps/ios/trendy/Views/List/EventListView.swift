@@ -9,6 +9,7 @@ import SwiftUI
 
 struct EventListView: View {
     @Environment(EventStore.self) private var eventStore
+    @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
     @State private var searchText = ""
     @State private var selectedEventTypeID: String?
 
@@ -56,6 +57,12 @@ struct EventListView: View {
                         await eventStore.fetchData(force: true)
                     }
                 )
+
+                // HealthKit refresh indicator
+                if healthKitService?.isRefreshingDailyAggregates == true {
+                    HealthKitRefreshBanner()
+                        .animation(.easeInOut(duration: 0.3), value: healthKitService?.isRefreshingDailyAggregates)
+                }
 
                 List {
                     if !eventStore.eventTypes.isEmpty {
@@ -188,5 +195,30 @@ struct FilterChip: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+/// Banner shown when HealthKit data is being refreshed
+struct HealthKitRefreshBanner: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(0.8)
+                .tint(.pink)
+
+            Text("Updating health data...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Image(systemName: "heart.fill")
+                .foregroundStyle(.pink)
+                .font(.caption)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

@@ -102,6 +102,9 @@ class HealthKitService: NSObject {
         HKHealthStore.isHealthDataAvailable()
     }
 
+    /// Whether daily aggregates (steps/active energy) are currently being refreshed
+    var isRefreshingDailyAggregates: Bool = false
+
     /// Active observer queries for background delivery
     private var observerQueries: [HealthDataCategory: HKObserverQuery] = [:]
 
@@ -1738,11 +1741,20 @@ class HealthKitService: NSObject {
     public func refreshDailyAggregates() async {
         let enabledCategories = HealthKitSettings.shared.enabledCategories
 
-        if enabledCategories.contains(.steps) {
+        // Only refresh if steps or active energy are enabled
+        let hasSteps = enabledCategories.contains(.steps)
+        let hasActiveEnergy = enabledCategories.contains(.activeEnergy)
+
+        guard hasSteps || hasActiveEnergy else { return }
+
+        isRefreshingDailyAggregates = true
+        defer { isRefreshingDailyAggregates = false }
+
+        if hasSteps {
             await forceStepsCheck()
         }
 
-        if enabledCategories.contains(.activeEnergy) {
+        if hasActiveEnergy {
             await forceActiveEnergyCheck()
         }
     }
