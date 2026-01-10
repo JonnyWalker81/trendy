@@ -81,6 +81,11 @@ struct MainTabView: View {
                 // Sync data and reconcile geofences when app becomes active
                 if let store = eventStore {
                     Task {
+                        // Refresh HealthKit daily aggregates first to ensure fresh data
+                        if let hkService = healthKitService, hkService.hasHealthKitAuthorization {
+                            await hkService.refreshDailyAggregates()
+                        }
+
                         // Sync with backend (now always includes geofence sync)
                         await store.fetchData()
 

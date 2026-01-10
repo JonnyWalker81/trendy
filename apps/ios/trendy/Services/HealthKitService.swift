@@ -1732,6 +1732,21 @@ class HealthKitService: NSObject {
         }
     }
 
+    /// Refresh daily aggregates (steps and active energy) for today
+    /// Call this when the app becomes active to ensure fresh HealthKit data
+    @MainActor
+    public func refreshDailyAggregates() async {
+        let enabledCategories = HealthKitSettings.shared.enabledCategories
+
+        if enabledCategories.contains(.steps) {
+            await forceStepsCheck()
+        }
+
+        if enabledCategories.contains(.activeEnergy) {
+            await forceActiveEnergyCheck()
+        }
+    }
+
     /// Debug: Force refresh all enabled HealthKit categories
     /// This actively queries HealthKit for each category instead of waiting for observer callbacks
     @MainActor
