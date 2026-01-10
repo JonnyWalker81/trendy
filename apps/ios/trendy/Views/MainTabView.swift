@@ -78,21 +78,21 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
-                // Re-verify geofences when app becomes active
-                if let geoManager = geofenceManager, geoManager.hasGeofencingAuthorization {
-                    // Check if geofences need to be re-registered
-                    if geoManager.monitoredRegions.isEmpty {
-                        #if DEBUG
-                        print("📍 App became active - re-registering geofences")
-                        #endif
-                        geoManager.startMonitoringAllGeofences()
-                    }
-                }
-
-                // Trigger sync when app becomes active
+                // Sync data and reconcile geofences when app becomes active
                 if let store = eventStore {
                     Task {
+                        // Sync with backend (now always includes geofence sync)
                         await store.fetchData()
+
+                        // ALWAYS reconcile geofences with device after sync
+                        // This ensures server-side changes (create/update/delete) are reflected on device
+                        if let geoManager = geofenceManager, geoManager.hasGeofencingAuthorization {
+                            let definitions = store.getLocalGeofenceDefinitions()
+                            geoManager.reconcileRegions(desired: definitions)
+                            #if DEBUG
+                            print("📍 App became active - reconciled \(definitions.count) geofences with device")
+                            #endif
+                        }
                     }
                 }
             }
@@ -223,13 +223,17 @@ struct MainTabView: View {
         // Set up widget notification observer to sync widget-created events
         store.setupWidgetNotificationObserver()
 
-        // Load initial data
+        // Load and sync data (fetchData now always syncs geofences from server)
         await store.fetchData()
 
-        // Reconcile geofences with backend after data is loaded
+        // Reconcile geofences with device after data is synced
+        // fetchData already synced from server, so just get local definitions
         if geoManager.hasGeofencingAuthorization {
-            let definitions = await store.reconcileGeofencesWithBackend()
+            let definitions = store.getLocalGeofenceDefinitions()
             geoManager.reconcileRegions(desired: definitions)
+            #if DEBUG
+            print("📍 App launch - reconciled \(definitions.count) geofences with device")
+            #endif
         }
 
         // Hide loading screen

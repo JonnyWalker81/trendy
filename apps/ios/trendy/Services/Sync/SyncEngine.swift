@@ -169,23 +169,22 @@ actor SyncEngine {
             } else {
                 try await pullChanges()
 
-                // Step 4: If we have no geofences locally but the server might have some,
-                // fetch them directly. This handles the case where geofences were created
-                // before the change_log system was implemented.
-                let localGeofenceCount = getLocalGeofenceCount()
-                if localGeofenceCount == 0 {
-                    Log.sync.info("No local geofences found, fetching from server")
-                    do {
-                        let syncedCount = try await syncGeofences()
-                        Log.sync.info("Auto-synced geofences", context: .with { ctx in
-                            ctx.add("count", syncedCount)
-                        })
-                    } catch {
-                        Log.sync.warning("Failed to auto-sync geofences", context: .with { ctx in
-                            ctx.add("error", error.localizedDescription)
-                        })
-                        // Don't fail the entire sync for this
-                    }
+                // Step 4: Always sync geofences from server to ensure we have the latest state.
+                // This handles:
+                // - Geofences created before the change_log system was implemented
+                // - Geofences created on other devices or via web app
+                // - Any geofence changes that may have been missed
+                Log.sync.info("Syncing geofences from server")
+                do {
+                    let syncedCount = try await syncGeofences()
+                    Log.sync.info("Synced geofences from server", context: .with { ctx in
+                        ctx.add("count", syncedCount)
+                    })
+                } catch {
+                    Log.sync.warning("Failed to sync geofences from server", context: .with { ctx in
+                        ctx.add("error", error.localizedDescription)
+                    })
+                    // Don't fail the entire sync for this
                 }
             }
 

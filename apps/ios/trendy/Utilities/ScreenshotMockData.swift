@@ -118,14 +118,11 @@ struct ScreenshotMockData {
     static func injectMockData(into context: ModelContext) {
         guard shouldInjectMockData else { return }
 
-        // Check if data already exists
-        let existingTypesCount = (try? context.fetchCount(FetchDescriptor<EventType>())) ?? 0
-        if existingTypesCount > 0 {
-            print("📸 Screenshot mode: Mock data already exists")
-            return
-        }
+        // Always clear and inject fresh mock data in screenshot mode
+        // This ensures we never accidentally show real user data
+        clearMockData(from: context)
 
-        print("📸 Screenshot mode: Injecting mock data for screenshots")
+        print("📸 Screenshot mode: Injecting fresh mock data for screenshots")
 
         // Create event types
         var createdEventTypes: [EventType] = []

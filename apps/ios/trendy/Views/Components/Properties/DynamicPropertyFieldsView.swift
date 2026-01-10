@@ -116,14 +116,8 @@ struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
                     }
                 )
             }
-
-            // Debug: show current property count (also uses refreshTrigger to force updates)
-            Text("DEBUG: \(storage.properties.count) properties [\(refreshTrigger.uuidString.prefix(4))]")
-                .font(.caption)
-                .foregroundColor(.gray)
         }
     }
-
 }
 
 // MARK: - Custom Property Row (Separate view to isolate button actions from SwiftUI confusion)

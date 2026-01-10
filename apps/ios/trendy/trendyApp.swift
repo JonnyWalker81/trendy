@@ -39,18 +39,6 @@ struct trendyApp: App {
     // MARK: - SwiftData
 
     var sharedModelContainer: ModelContainer = {
-        // Ensure App Group container directories exist before SwiftData tries to use them
-        ensureAppGroupDirectoriesExist()
-
-        // Check if we need to clear container data (set by DebugStorageView)
-        if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
-            print("🗑️ Debug: Clearing App Group container on launch...")
-            UserDefaults.standard.removeObject(forKey: "debug_clear_container_on_launch")
-            UserDefaults.standard.synchronize()
-            clearDatabaseFiles()
-            print("🗑️ Debug: Container cleared")
-        }
-
         // Schema V2: Uses UUIDv7 String IDs (single canonical ID)
         // Note: Migration from V1 requires database reset (UUID→String type change)
         let schema = Schema([
@@ -62,6 +50,39 @@ struct trendyApp: App {
             PendingMutation.self,
             HealthKitConfiguration.self
         ])
+
+        // Screenshot mode: Use in-memory container for complete isolation from real data
+        let isScreenshotMode = ProcessInfo.processInfo.arguments.contains("--screenshot-mode") ||
+                               ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] == "1"
+
+        if isScreenshotMode {
+            print("📸 Screenshot mode: Using in-memory database (no persistence)")
+            let inMemoryConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true,
+                allowsSave: true
+            )
+            do {
+                let container = try ModelContainer(for: schema, configurations: [inMemoryConfig])
+                print("📸 In-memory ModelContainer created successfully")
+                return container
+            } catch {
+                fatalError("📸 Could not create in-memory ModelContainer for screenshots: \(error)")
+            }
+        }
+
+        // Normal production path: Use persistent App Group container
+        // Ensure App Group container directories exist before SwiftData tries to use them
+        ensureAppGroupDirectoriesExist()
+
+        // Check if we need to clear container data (set by DebugStorageView)
+        if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
+            print("🗑️ Debug: Clearing App Group container on launch...")
+            UserDefaults.standard.removeObject(forKey: "debug_clear_container_on_launch")
+            UserDefaults.standard.synchronize()
+            clearDatabaseFiles()
+            print("🗑️ Debug: Container cleared")
+        }
 
         // Use App Group container for widget sharing
         // Explicitly disable CloudKit sync - we use our own backend for sync

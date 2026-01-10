@@ -100,6 +100,9 @@ struct EventEditView: View {
     // Use @StateObject - guaranteed to create only ONE instance that survives view recreation
     @StateObject private var formState = EventEditFormState()
 
+    // Track saving state for loading indicator
+    @State private var isSaving = false
+
     // Computed property definitions for this event type
     private var propertyDefinitions: [PropertyDefinition] {
         allPropertyDefinitions
@@ -181,6 +184,7 @@ struct EventEditView: View {
                     }
                 }
             }
+            .disabled(isSaving)
             .navigationTitle(existingEvent == nil ? "New Event" : "Edit Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -188,13 +192,18 @@ struct EventEditView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .disabled(isSaving)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveEvent()
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            saveEvent()
+                        }
+                        .fontWeight(.semibold)
                     }
-                    .fontWeight(.semibold)
                 }
             }
         }
@@ -209,6 +218,7 @@ struct EventEditView: View {
     }
     
     private func saveEvent() {
+        isSaving = true
         Task {
             // Log for debugging property issues (works in all builds)
             Log.data.info("EventEditView.saveEvent() - formState.properties count: \(formState.properties.count)")
@@ -240,6 +250,7 @@ struct EventEditView: View {
                     properties: formState.properties
                 )
             }
+            isSaving = false
             dismiss()
         }
     }

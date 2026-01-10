@@ -234,7 +234,7 @@ class GeofenceManager: NSObject {
     /// - Parameter desired: Array of GeofenceDefinitions representing desired state
     func reconcileRegions(desired: [GeofenceDefinition]) {
         guard hasGeofencingAuthorization else {
-            print("⚠️ Cannot reconcile regions: insufficient authorization")
+            Log.geofence.warning("Cannot reconcile regions: insufficient authorization")
             return
         }
 
@@ -252,12 +252,19 @@ class GeofenceManager: NSObject {
         var stoppedCount = 0
         var startedCount = 0
 
+        Log.geofence.info("Starting region reconciliation", context: .with { ctx in
+            ctx.add("desired_count", desiredLimited.count)
+            ctx.add("system_count", systemRegions.count)
+        })
+
         // 1. Remove stale regions (in system but not in desired)
         for region in systemRegions {
             if !desiredIds.contains(region.identifier) {
                 locationManager.stopMonitoring(for: region)
                 stoppedCount += 1
-                print("📍 Stopped monitoring stale region: \(region.identifier)")
+                Log.geofence.debug("Stopped monitoring stale region", context: .with { ctx in
+                    ctx.add("region_id", region.identifier)
+                })
             }
         }
 
@@ -276,10 +283,18 @@ class GeofenceManager: NSObject {
             locationManager.requestState(for: region)
             startedCount += 1
 
-            print("📍 Started monitoring region: \(def.identifier) (\(def.name))")
+            Log.geofence.debug("Started monitoring region", context: .with { ctx in
+                ctx.add("region_id", def.identifier)
+                ctx.add("name", def.name)
+            })
         }
 
-        print("📍 Region reconciliation complete: \(desiredLimited.count) desired, \(stoppedCount) stopped, \(startedCount) started, \(locationManager.monitoredRegions.count) total monitored")
+        Log.geofence.info("Region reconciliation complete", context: .with { ctx in
+            ctx.add("desired", desiredLimited.count)
+            ctx.add("stopped", stoppedCount)
+            ctx.add("started", startedCount)
+            ctx.add("total_monitored", locationManager.monitoredRegions.count)
+        })
     }
 
     // MARK: - Debug/Testing Methods
