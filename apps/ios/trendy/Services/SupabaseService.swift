@@ -12,8 +12,8 @@ import Supabase
 @Observable
 class SupabaseService {
     private(set) var client: SupabaseClient
-    private(set) var currentSession: Session?
-    private(set) var isAuthenticated = false
+    var currentSession: Session?
+    var isAuthenticated = false
 
     /// Initialize SupabaseService with configuration
     /// - Parameter configuration: Supabase configuration containing URL and anon key
@@ -63,9 +63,18 @@ class SupabaseService {
         return session.accessToken
     }
 
-    /// Get current user ID
+    /// Get current user ID (async version)
     func getUserId() async throws -> String {
         let session = try await client.auth.session
+        return session.user.id.uuidString
+    }
+
+    /// Get current user ID synchronously from cached session
+    /// - Throws: AuthError.noSession if no session is available
+    func getUserId() throws -> String {
+        guard let session = currentSession else {
+            throw AuthError.noSession
+        }
         return session.user.id.uuidString
     }
 
@@ -110,6 +119,37 @@ class SupabaseService {
 
         #if DEBUG
         print("✅ User signed in: \(email)")
+        #endif
+        return session
+    }
+
+    /// Sign in with ID token from external OAuth provider (Google, Apple)
+    /// - Parameters:
+    ///   - provider: The OAuth provider (e.g., .google, .apple)
+    ///   - idToken: The ID token obtained from the OAuth provider
+    ///   - accessToken: Optional access token (required for some providers like Google)
+    /// - Returns: The authenticated session
+    /// - Note: For iOS Google Sign-In, ensure "Skip nonce check" is enabled in Supabase Dashboard
+    func signInWithIdToken(
+        provider: OpenIDConnectCredentials.Provider,
+        idToken: String,
+        accessToken: String? = nil
+    ) async throws -> Session {
+        let session = try await client.auth.signInWithIdToken(
+            credentials: OpenIDConnectCredentials(
+                provider: provider,
+                idToken: idToken,
+                accessToken: accessToken
+            )
+        )
+
+        await MainActor.run {
+            self.currentSession = session
+            self.isAuthenticated = true
+        }
+
+        #if DEBUG
+        print("✅ User signed in with \(provider): \(session.user.email ?? "unknown")")
         #endif
         return session
     }

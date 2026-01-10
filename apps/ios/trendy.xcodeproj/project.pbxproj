@@ -8,15 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		471955AC2EC0349400C72F91 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 471955AB2EC0349400C72F91 /* Supabase */; };
-		47CA3F3C2EC418A3004C79DB /* Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */; };
-		47CA3F3E2EC418BB004C79DB /* Staging.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */; };
-		47CA3F402EC418C5004C79DB /* TestFlight.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */; };
-		47CA3F422EC418CF004C79DB /* Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F412EC418CF004C79DB /* Release.xcconfig */; };
+		47CA3F3C2EC418A3004C79DB /* Config/Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */; };
+		47CA3F3E2EC418BB004C79DB /* Config/Staging.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */; };
+		47CA3F402EC418C5004C79DB /* Config/TestFlight.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */; };
+		47CA3F422EC418CF004C79DB /* Config/Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */; };
 		DE23C4D62EDD063000709B97 /* FoundationModels.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE23C4D52EDD063000709B97 /* FoundationModels.framework */; };
 		DE6E7D142ED7CEA8006CA4DD /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE6E7D132ED7CEA8006CA4DD /* WidgetKit.framework */; };
 		DE6E7D162ED7CEA8006CA4DD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE6E7D152ED7CEA8006CA4DD /* SwiftUI.framework */; };
 		DE6E7D272ED7CEAA006CA4DD /* TrendyWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DE6E7D122ED7CEA8006CA4DD /* TrendyWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		DE6E7D5B2EF4A100006CA4DD /* ProductionDebug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DE6E7D5A2EF4A100006CA4DD /* ProductionDebug.xcconfig */; };
+		DE6E7D5B2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = DE6E7D5A2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig */; };
 		DEEE12F62F0A0BC100610F03 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 4719560B2EF5B10100C72F91 /* PostHog */; };
 /* End PBXBuildFile section */
 
@@ -62,10 +62,10 @@
 		47312F2C2E2B3EC800E7F111 /* trendy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = trendy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		47312F3B2E2B3ECA00E7F111 /* trendyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = trendyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		47312F452E2B3ECA00E7F111 /* trendyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = trendyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = "<group>"; };
-		47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Staging.xcconfig; sourceTree = "<group>"; };
-		47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/TestFlight.xcconfig; sourceTree = "<group>"; };
-		47CA3F412EC418CF004C79DB /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
+		47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = "<group>"; };
+		47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Staging.xcconfig; sourceTree = "<group>"; };
+		47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/TestFlight.xcconfig; sourceTree = "<group>"; };
+		47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
 		DE23C4D52EDD063000709B97 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = System/Library/Frameworks/FoundationModels.framework; sourceTree = SDKROOT; };
 		DE6E7A3A2ED1651D006CA4DD /* TestGeofence.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = TestGeofence.gpx; path = trendy/Models/TestGeofence.gpx; sourceTree = "<group>"; };
 		DE6E7A3B2ED1651D006CA4DD /* TestGeofence 2.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = "TestGeofence 2.gpx"; path = "trendy/Models/TestGeofence 2.gpx"; sourceTree = "<group>"; };
@@ -73,7 +73,7 @@
 		DE6E7D132ED7CEA8006CA4DD /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		DE6E7D152ED7CEA8006CA4DD /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		DE6E7D582ED7D164006CA4DD /* TrendyWidgetsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TrendyWidgetsExtension.entitlements; sourceTree = "<group>"; };
-		DE6E7D5A2EF4A100006CA4DD /* ProductionDebug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/ProductionDebug.xcconfig; sourceTree = "<group>"; };
+		DE6E7D5A2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/ProductionDebug.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -109,15 +109,11 @@
 		};
 		47312F3E2E2B3ECA00E7F111 /* trendyTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = trendyTests;
 			sourceTree = "<group>";
 		};
 		47312F482E2B3ECA00E7F111 /* trendyUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = trendyUITests;
 			sourceTree = "<group>";
 		};
@@ -190,11 +186,11 @@
 				DE6E7D172ED7CEA8006CA4DD /* TrendyWidgets */,
 				471955A02EC0349400C72F91 /* Frameworks */,
 				47312F2D2E2B3EC800E7F111 /* Products */,
-				47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */,
-				47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */,
-				47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */,
-				47CA3F412EC418CF004C79DB /* Release.xcconfig */,
-				DE6E7D5A2EF4A100006CA4DD /* ProductionDebug.xcconfig */,
+				47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */,
+				47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */,
+				47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */,
+				47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */,
+				DE6E7D5A2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -357,11 +353,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				47CA3F3E2EC418BB004C79DB /* Staging.xcconfig in Resources */,
-				47CA3F422EC418CF004C79DB /* Release.xcconfig in Resources */,
-				47CA3F3C2EC418A3004C79DB /* Debug.xcconfig in Resources */,
-				47CA3F402EC418C5004C79DB /* TestFlight.xcconfig in Resources */,
-				DE6E7D5B2EF4A100006CA4DD /* ProductionDebug.xcconfig in Resources */,
+				47CA3F3E2EC418BB004C79DB /* Config/Staging.xcconfig in Resources */,
+				47CA3F422EC418CF004C79DB /* Config/Release.xcconfig in Resources */,
+				47CA3F3C2EC418A3004C79DB /* Config/Debug.xcconfig in Resources */,
+				47CA3F402EC418C5004C79DB /* Config/TestFlight.xcconfig in Resources */,
+				DE6E7D5B2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -440,7 +436,7 @@
 /* Begin XCBuildConfiguration section */
 		47312F4D2E2B3ECA00E7F111 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */;
+			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -506,7 +502,7 @@
 		};
 		47312F4E2E2B3ECA00E7F111 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Release.xcconfig */;
+			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -565,7 +561,7 @@
 		};
 		47312F502E2B3ECA00E7F111 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Debug.xcconfig */;
+			baseConfigurationReference = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -598,7 +594,7 @@
 		};
 		47312F512E2B3ECA00E7F111 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Release.xcconfig */;
+			baseConfigurationReference = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -707,7 +703,7 @@
 		};
 		47CA3F332EC41867004C79DB /* Staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */;
+			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -773,7 +769,7 @@
 		};
 		47CA3F342EC41867004C79DB /* Staging */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Staging.xcconfig */;
+			baseConfigurationReference = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -844,7 +840,7 @@
 		};
 		47CA3F372EC41873004C79DB /* TestFlight */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */;
+			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -903,7 +899,7 @@
 		};
 		47CA3F382EC41873004C79DB /* TestFlight */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* TestFlight.xcconfig */;
+			baseConfigurationReference = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -979,7 +975,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1011,7 +1007,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1043,7 +1039,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1075,7 +1071,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;
@@ -1102,7 +1098,7 @@
 		};
 		DE6E7D5C2EF4A100006CA4DD /* ProductionDebug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DE6E7D5A2EF4A100006CA4DD /* ProductionDebug.xcconfig */;
+			baseConfigurationReference = DE6E7D5A2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1168,7 +1164,7 @@
 		};
 		DE6E7D5D2EF4A100006CA4DD /* ProductionDebug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DE6E7D5A2EF4A100006CA4DD /* ProductionDebug.xcconfig */;
+			baseConfigurationReference = DE6E7D5A2EF4A100006CA4DD /* Config/ProductionDebug.xcconfig */;
 			buildSettings = {
 				API_BASE_URL = "https:/$()/trendy-api-prod-541486728137.us-central1.run.app/api/v1";
 				"API_BASE_URL[arch=*]" = "https:/$()/trendy-api-prod-541486728137.us-central1.run.app/api/v1";
@@ -1248,7 +1244,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = TrendyWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 6H6N882H4S;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TrendyWidgets/Info.plist;

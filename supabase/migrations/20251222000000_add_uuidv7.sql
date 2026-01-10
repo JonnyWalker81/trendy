@@ -37,7 +37,7 @@ BEGIN
     v_unix_ms := (EXTRACT(EPOCH FROM v_time) * 1000)::bigint;
 
     -- Generate 10 bytes of cryptographically secure random data
-    v_rand := gen_random_bytes(10);
+    v_rand := extensions.gen_random_bytes(10);
 
     -- Build UUIDv7 byte sequence:
     v_uuid :=
