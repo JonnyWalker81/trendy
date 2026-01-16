@@ -49,12 +49,12 @@ struct trendyApp: App {
     var sharedModelContainer: ModelContainer = {
         // Schema V2: Uses UUIDv7 String IDs (single canonical ID)
         // Note: Migration from V1 requires database reset (UUID→String type change)
+        // Note: QueuedOperation was removed - replaced by PendingMutation
         let schema = Schema([
             Event.self,
             EventType.self,
             Geofence.self,
             PropertyDefinition.self,
-            QueuedOperation.self,
             PendingMutation.self,
             HealthKitConfiguration.self
         ])
@@ -151,7 +151,6 @@ struct trendyApp: App {
         checkModel(Geofence.self, name: "Geofence")
         checkModel(PropertyDefinition.self, name: "PropertyDefinition")
         checkModel(HealthKitConfiguration.self, name: "HealthKitConfiguration")
-        checkModel(QueuedOperation.self, name: "QueuedOperation")
         checkModel(PendingMutation.self, name: "PendingMutation")
 
         let schemaValid = failedModels.isEmpty
@@ -164,7 +163,6 @@ struct trendyApp: App {
             print("   Geofences: \(modelCounts["Geofence"] ?? 0)")
             print("   PropertyDefinitions: \(modelCounts["PropertyDefinition"] ?? 0)")
             print("   HealthKitConfigs: \(modelCounts["HealthKitConfiguration"] ?? 0)")
-            print("   QueuedOperations: \(modelCounts["QueuedOperation"] ?? 0)")
             print("   PendingMutations: \(modelCounts["PendingMutation"] ?? 0)")
 
             // Force a save to ensure the database file is created on disk

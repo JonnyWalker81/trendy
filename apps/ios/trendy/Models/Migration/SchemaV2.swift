@@ -11,6 +11,7 @@ import SwiftData
 
 /// Schema V2: Unified ID schema with client-generated UUIDv7 string IDs
 /// Migrated from V1's dual-ID pattern (UUID id + serverId) to single String id
+/// Note: QueuedOperation was removed - replaced by PendingMutation
 enum SchemaV2: VersionedSchema {
     static var versionIdentifier = Schema.Version(2, 0, 0)
 
@@ -20,7 +21,6 @@ enum SchemaV2: VersionedSchema {
             EventType.self,
             Geofence.self,
             PropertyDefinition.self,
-            QueuedOperation.self,
             PendingMutation.self,
             HealthKitConfiguration.self
         ]
