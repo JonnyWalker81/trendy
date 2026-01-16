@@ -11,11 +11,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### HealthKit (iOS)
 
-- [ ] **HLTH-01**: User's workout and active energy data is captured via background delivery within iOS timing constraints (1-60 min backgrounded, up to 4 hours if terminated)
-- [ ] **HLTH-02**: Observer queries are properly configured for each enabled HealthKit data type
-- [ ] **HLTH-03**: Client sends HealthKit samples with external IDs; server handles deduplication
-- [ ] **HLTH-04**: User can see when HealthKit data was last updated (freshness indicator)
-- [ ] **HLTH-05**: Debug view shows which background delivery queries are actively running
+- [x] **HLTH-01**: User's workout and active energy data is captured via background delivery within iOS timing constraints (1-60 min backgrounded, up to 4 hours if terminated)
+- [x] **HLTH-02**: Observer queries are properly configured for each enabled HealthKit data type
+- [x] **HLTH-03**: Client sends HealthKit samples with external IDs; server handles deduplication
+- [x] **HLTH-04**: User can see when HealthKit data was last updated (freshness indicator)
+- [x] **HLTH-05**: Debug view shows which background delivery queries are actively running
 
 ### Geofence (iOS)
 
@@ -99,11 +99,11 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HLTH-01 | Phase 2 | Pending |
-| HLTH-02 | Phase 2 | Pending |
-| HLTH-03 | Phase 2 | Pending |
-| HLTH-04 | Phase 2 | Pending |
-| HLTH-05 | Phase 2 | Pending |
+| HLTH-01 | Phase 2 | Complete |
+| HLTH-02 | Phase 2 | Complete |
+| HLTH-03 | Phase 2 | Complete |
+| HLTH-04 | Phase 2 | Complete |
+| HLTH-05 | Phase 2 | Complete |
 | GEO-01 | Phase 3 | Pending |
 | GEO-02 | Phase 3 | Pending |
 | GEO-03 | Phase 3 | Pending |
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-15 after roadmap creation (all requirements mapped to phases)*
+*Last updated: 2026-01-15 after Phase 2 completion (HLTH-01 through HLTH-05 complete)*

@@ -11,7 +11,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Foundation** - Structured logging, entitlement verification, error handling foundation
-- [ ] **Phase 2: HealthKit Reliability** - Background delivery, observer queries, server deduplication
+- [x] **Phase 2: HealthKit Reliability** - Background delivery, observer queries, server deduplication
 - [ ] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
 - [ ] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
 - [ ] **Phase 5: Sync Engine** - Offline-first CRUD, automatic sync, mutation persistence
@@ -50,8 +50,8 @@ Plans:
 **Research topics**: HKAnchoredObjectQuery with persistent anchors, HKObserverQuery completion handler patterns, background delivery frequency configuration
 
 Plans:
-- [ ] 02-01: Anchor persistence and background reliability (HKAnchoredObjectQuery with persistent anchors)
-- [ ] 02-02: Freshness indicators (per-category last update timestamps in UI)
+- [x] 02-01: Anchor persistence and background reliability (HKAnchoredObjectQuery with persistent anchors)
+- [x] 02-02: Freshness indicators (per-category last update timestamps in UI)
 
 ### Phase 3: Geofence Reliability
 **Goal**: Persistent geofence monitoring that survives iOS lifecycle events
@@ -138,7 +138,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/4 | Complete | 2026-01-15 |
-| 2. HealthKit Reliability | 0/2 | Planned | - |
+| 2. HealthKit Reliability | 2/2 | Complete | 2026-01-15 |
 | 3. Geofence Reliability | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |
 | 5. Sync Engine | 0/? | Not started | - |
