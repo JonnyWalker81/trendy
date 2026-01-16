@@ -55,6 +55,11 @@ class EventStore {
         }
     }
 
+    // Cached sync state for UI binding (updated periodically)
+    private(set) var currentSyncState: SyncState = .idle
+    private(set) var currentPendingCount: Int = 0
+    private(set) var currentLastSyncTime: Date?
+
     // MARK: - Initialization
 
     /// Initialize EventStore with APIClient
@@ -96,6 +101,7 @@ class EventStore {
     private func handleNetworkRestored() async {
         Log.sync.info("Network restored - starting sync")
         await performSync()
+        await refreshSyncStateForUI()
     }
 
     // MARK: - Widget Integration
@@ -235,6 +241,8 @@ class EventStore {
                 await syncEngine.performSync()
             }
 
+            await refreshSyncStateForUI()
+
         } catch {
             Log.sync.error("queueMutationsForUnsyncedEvents failed", error: error)
         }
@@ -249,6 +257,13 @@ class EventStore {
         // Initialize SyncEngine if we have an API client
         if let apiClient = apiClient {
             self.syncEngine = SyncEngine(apiClient: apiClient, modelContainer: context.container)
+        }
+
+        // Refresh cached sync state after syncEngine is set up
+        if syncEngine != nil {
+            Task {
+                await refreshSyncStateForUI()
+            }
         }
     }
 
@@ -266,6 +281,7 @@ class EventStore {
         await syncEngine.performSync()
         // Refresh local data after sync
         try? await fetchFromLocal()
+        await refreshSyncStateForUI()
     }
 
     /// Force a full resync by resetting the cursor and re-fetching all data from the backend.
@@ -281,6 +297,7 @@ class EventStore {
         try? await fetchFromLocal()
         isLoading = false
         Log.sync.info("Force full resync completed")
+        await refreshSyncStateForUI()
     }
 
     /// Restore broken Event→EventType relationships.
@@ -324,6 +341,14 @@ class EventStore {
         get async {
             await syncEngine?.circuitBreakerBackoffRemaining ?? 0
         }
+    }
+
+    /// Refresh cached sync state from SyncEngine for UI binding
+    func refreshSyncStateForUI() async {
+        guard let syncEngine = syncEngine else { return }
+        currentSyncState = await syncEngine.state
+        currentPendingCount = await syncEngine.pendingCount
+        currentLastSyncTime = await syncEngine.lastSyncTime
     }
 
     /// Restore broken Event→EventType relationships directly on fetched objects.
@@ -384,12 +409,14 @@ class EventStore {
 
             // Always load from local cache after sync
             try await fetchFromLocal()
+            await refreshSyncStateForUI()
 
         } catch {
             Log.data.error("Fetch error", error: error)
             errorMessage = "Failed to sync. Showing cached data."
             // Still show cached data on error
             try? await fetchFromLocal()
+            await refreshSyncStateForUI()
         }
 
         lastFetchTime = Date()
