@@ -644,7 +644,7 @@ class EventStore {
     func updateEvent(_ event: Event) async {
         guard let modelContext else { return }
 
-        // Update system calendar if synced
+        // Update system calendar if synced (external system, order doesn't matter for data safety)
         if syncWithCalendar,
            let calendarManager = calendarManager,
            calendarManager.isAuthorized,
@@ -663,22 +663,9 @@ class EventStore {
             }
         }
 
-        // Step 1: Save update locally
-        do {
-            try modelContext.save()
-            reloadWidgets()
-
-            Log.sync.info("Event updated locally", context: .with { ctx in
-                ctx.add("event_id", event.id)
-                ctx.add("is_online", isOnline)
-            })
-        } catch {
-            Log.data.error("Failed to save event update locally", error: error)
-            errorMessage = EventError.saveFailed.localizedDescription
-            return
-        }
-
-        // Step 2: Queue mutation for sync (separate try block)
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
         if let syncEngine = syncEngine {
             do {
                 let request = UpdateEventRequest(
@@ -710,12 +697,31 @@ class EventStore {
                     ctx.add("event_id", event.id)
                 })
             } catch {
+                // Log error but don't block - we still want to save the event locally
                 Log.sync.error("Failed to queue update mutation", error: error, context: .with { ctx in
                     ctx.add("event_id", event.id)
                 })
             }
+        }
 
-            // Always refresh sync state after queueing
+        // Step 2: Save update locally (after mutation is queued)
+        do {
+            try modelContext.save()
+            reloadWidgets()
+
+            Log.sync.info("Event updated locally", context: .with { ctx in
+                ctx.add("event_id", event.id)
+                ctx.add("is_online", isOnline)
+            })
+        } catch {
+            Log.data.error("Failed to save event update locally", error: error)
+            errorMessage = EventError.saveFailed.localizedDescription
+            return  // Can't continue if save failed
+        }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine {
+            // Always refresh sync state after queueing (shows pending count)
             await refreshSyncStateForUI()
 
             // Trigger sync if online, then refresh data
