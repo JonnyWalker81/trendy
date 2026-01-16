@@ -50,10 +50,11 @@ struct EventListView: View {
             VStack(spacing: 0) {
                 // Sync status banner at top
                 SyncStatusBanner(
-                    syncState: .idle,
-                    pendingCount: 0,
+                    syncState: eventStore.currentSyncState,
+                    pendingCount: eventStore.currentPendingCount,
+                    lastSyncTime: eventStore.currentLastSyncTime,
                     onRetry: {
-                        await eventStore.fetchData(force: true)
+                        await eventStore.performSync()
                     }
                 )
 
