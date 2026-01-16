@@ -27,7 +27,6 @@ struct DebugStorageView: View {
     @State private var eventTypeCount = 0
     @State private var geofenceCount = 0
     @State private var pendingMutationCount = 0
-    @State private var queuedOperationCount = 0
     @State private var propertyDefinitionCount = 0
     @State private var healthKitConfigCount = 0
 
@@ -265,7 +264,6 @@ struct DebugStorageView: View {
             countRow("Property Definitions", count: propertyDefinitionCount, errorKey: "PropertyDefinition")
             countRow("HealthKit Configs", count: healthKitConfigCount, errorKey: "HealthKitConfiguration")
             countRow("Pending Mutations", count: pendingMutationCount, errorKey: "PendingMutation")
-            countRow("Queued Operations", count: queuedOperationCount, errorKey: "QueuedOperation")
         } header: {
             Text("SwiftData Records")
         } footer: {
@@ -659,7 +657,6 @@ struct DebugStorageView: View {
         eventTypeCount = safeCount(EventType.self, name: "EventType")
         geofenceCount = safeCount(Geofence.self, name: "Geofence")
         pendingMutationCount = safeCount(PendingMutation.self, name: "PendingMutation")
-        queuedOperationCount = safeCount(QueuedOperation.self, name: "QueuedOperation")
         propertyDefinitionCount = safeCount(PropertyDefinition.self, name: "PropertyDefinition")
         healthKitConfigCount = safeCount(HealthKitConfiguration.self, name: "HealthKitConfiguration")
     }

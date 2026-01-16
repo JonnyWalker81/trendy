@@ -62,6 +62,7 @@ actor SyncEngine {
 
     @MainActor public private(set) var state: SyncState = .idle
     @MainActor public private(set) var pendingCount: Int = 0
+    @MainActor public private(set) var lastSyncTime: Date?
 
     /// Track entity IDs with pending DELETE mutations to prevent resurrection by pullChanges
     private var pendingDeleteIds: Set<String> = []
@@ -84,10 +85,11 @@ actor SyncEngine {
         self.lastSyncCursor = Int64(UserDefaults.standard.integer(forKey: cursorKeyValue))
 
         // DIAGNOSTIC: Log cursor state on init
-        Log.sync.info("🔧 SyncEngine init", context: .with { ctx in
+        Log.sync.info("SyncEngine init", context: .with { ctx in
             ctx.add("cursor_key", cursorKeyValue)
             ctx.add("loaded_cursor", Int(self.lastSyncCursor))
             ctx.add("environment", AppEnvironment.current.rawValue)
+            ctx.add("last_sync_time", "nil (fresh init)")
         })
     }
 
@@ -208,6 +210,7 @@ actor SyncEngine {
                 }
             }
 
+            await updateLastSyncTime()
             await updateState(.idle)
             Log.sync.info("Sync completed successfully", context: .with { ctx in
                 ctx.add("new_cursor", Int(lastSyncCursor))
@@ -1225,6 +1228,11 @@ actor SyncEngine {
     @MainActor
     private func updateState(_ newState: SyncState) {
         state = newState
+    }
+
+    @MainActor
+    private func updateLastSyncTime() {
+        lastSyncTime = Date()
     }
 
     private func updatePendingCount() async {
