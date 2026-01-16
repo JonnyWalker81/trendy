@@ -17,6 +17,13 @@ let appGroupIdentifier = "group.com.memento.trendy"
 
 @main
 struct trendyApp: App {
+    // MARK: - App Delegate
+
+    /// AppDelegate for handling background location launches.
+    /// This must be declared first to ensure it's initialized before SwiftUI scene lifecycle begins.
+    /// When iOS relaunches the app due to a geofence event, the AppDelegate receives pending events.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     // MARK: - Configuration and Services
 
     /// App configuration initialized from Info.plist (which reads from xcconfig files)
