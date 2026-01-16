@@ -106,6 +106,12 @@ class HealthKitService: NSObject {
     /// Whether daily aggregates (steps/active energy) are currently being refreshed
     var isRefreshingDailyAggregates: Bool = false
 
+    /// Whether any HealthKit data is currently being refreshed
+    private(set) var isRefreshing: Bool = false
+
+    /// Categories currently being refreshed
+    private(set) var refreshingCategories: Set<HealthDataCategory> = []
+
     /// Active observer queries for background delivery
     private var observerQueries: [HealthDataCategory: HKObserverQuery] = [:]
 
@@ -1936,8 +1942,13 @@ class HealthKitService: NSObject {
     }
 
     /// Debug: Force sleep aggregation check (bypasses date cache)
+    @MainActor
     func forceSleepCheck() async {
         Log.healthKit.debug("Forcing sleep aggregation check")
+
+        isRefreshing = true
+        refreshingCategories.insert(.sleep)
+
         // Temporarily clear the lastSleepDate to force a check
         let savedDate = lastSleepDate
         lastSleepDate = nil
@@ -1946,12 +1957,19 @@ class HealthKitService: NSObject {
         if lastSleepDate == nil {
             lastSleepDate = savedDate
         }
+
+        refreshingCategories.remove(.sleep)
+        isRefreshing = !refreshingCategories.isEmpty
     }
 
     /// Debug: Force steps aggregation check (bypasses date cache)
     @MainActor
     func forceStepsCheck() async {
         Log.healthKit.debug("Forcing steps aggregation check")
+
+        isRefreshing = true
+        refreshingCategories.insert(.steps)
+
         // Temporarily clear the lastStepDate to force a check
         let savedDate = lastStepDate
         lastStepDate = nil
@@ -1967,12 +1985,19 @@ class HealthKitService: NSObject {
         if lastStepDate == nil {
             lastStepDate = savedDate
         }
+
+        refreshingCategories.remove(.steps)
+        isRefreshing = !refreshingCategories.isEmpty
     }
 
     /// Debug: Force active energy aggregation check (bypasses date cache)
     @MainActor
     func forceActiveEnergyCheck() async {
         Log.healthKit.debug("Forcing active energy aggregation check")
+
+        isRefreshing = true
+        refreshingCategories.insert(.activeEnergy)
+
         // Temporarily clear the lastActiveEnergyDate to force a check
         let savedDate = lastActiveEnergyDate
         lastActiveEnergyDate = nil
@@ -1988,6 +2013,9 @@ class HealthKitService: NSObject {
         if lastActiveEnergyDate == nil {
             lastActiveEnergyDate = savedDate
         }
+
+        refreshingCategories.remove(.activeEnergy)
+        isRefreshing = !refreshingCategories.isEmpty
     }
 
     /// Refresh daily aggregates (steps and active energy) for today
@@ -2021,12 +2049,19 @@ class HealthKitService: NSObject {
         Log.healthKit.debug("Force refreshing all categories")
         let enabledCategories = HealthKitSettings.shared.enabledCategories
 
+        isRefreshing = true
+        refreshingCategories = enabledCategories
+
         for category in enabledCategories {
             Log.healthKit.debug("Refreshing category", context: .with { ctx in
                 ctx.add("category", category.displayName)
             })
             await handleNewSamples(for: category)
+            refreshingCategories.remove(category)
         }
+
+        isRefreshing = false
+        refreshingCategories = []
 
         Log.healthKit.debug("Force refresh complete", context: .with { ctx in
             ctx.add("categoryCount", enabledCategories.count)
