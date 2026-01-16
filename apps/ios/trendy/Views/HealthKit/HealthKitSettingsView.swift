@@ -21,6 +21,7 @@ struct HealthKitSettingsView: View {
     @State private var categoryToDelete: HealthDataCategory?
     @State private var isRequestingPermission = false
     @State private var refreshTrigger = false
+    @State private var isManuallyRefreshing = false
 
     private let settings = HealthKitSettings.shared
 
@@ -217,6 +218,24 @@ struct HealthKitSettingsView: View {
                         Label("Add More Health Data", systemImage: "plus.circle")
                     }
                 }
+
+                Button {
+                    Task {
+                        await manualRefresh()
+                    }
+                } label: {
+                    HStack {
+                        if isManuallyRefreshing || (healthKitService?.isRefreshing ?? false) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Refreshing...")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Label("Refresh Health Data", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
+                .disabled(isManuallyRefreshing || (healthKitService?.isRefreshing ?? false))
             }
 
             Section {
@@ -284,6 +303,13 @@ struct HealthKitSettingsView: View {
         healthKitService?.stopMonitoring(category: category)
         settings.setEnabled(category, enabled: false)
         categoryToDelete = nil
+    }
+
+    private func manualRefresh() async {
+        isManuallyRefreshing = true
+        await healthKitService?.forceRefreshAllCategories()
+        isManuallyRefreshing = false
+        refreshTrigger.toggle()
     }
 }
 
