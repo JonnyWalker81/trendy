@@ -35,9 +35,10 @@ class HealthKitService: NSObject {
             return appGroupDefaults
         } else {
             // This should not happen if entitlements are configured correctly
-            print("⚠️ WARNING: App Group UserDefaults not available! Falling back to standard UserDefaults.")
-            print("⚠️ This means HealthKit settings will NOT persist across app reinstalls.")
-            print("⚠️ Check that '\(appGroupIdentifier)' is in both entitlements AND provisioning profile.")
+            Log.healthKit.warning("App Group UserDefaults not available, falling back to standard UserDefaults", context: .with { ctx in
+                ctx.add("appGroupId", appGroupIdentifier)
+                ctx.add("consequence", "Settings will NOT persist across reinstalls")
+            })
             isUsingAppGroup = false
             return .standard
         }
@@ -73,7 +74,7 @@ class HealthKitService: NSObject {
             // If they are, user previously set up health tracking, so consider authorized
             if !HealthKitSettings.shared.enabledCategories.isEmpty {
                 // Sync the flag back to UserDefaults so future checks are faster
-                print("📱 HealthKit: Found enabled categories, restoring authorization flag")
+                Log.healthKit.debug("Found enabled categories, restoring authorization flag")
                 authorizationRequestedInDefaults = true
                 return true
             }
@@ -186,13 +187,15 @@ class HealthKitService: NSObject {
         let readValue = Self.sharedDefaults.string(forKey: testKey)
 
         if readValue == testValue {
-            print("✅ HealthKit: App Group UserDefaults is working correctly")
-            print("   Using App Group: \(Self.isUsingAppGroup)")
-            print("   App Group ID: \(Self.appGroupIdentifier)")
+            Log.healthKit.info("App Group UserDefaults verified", context: .with { ctx in
+                ctx.add("isUsingAppGroup", Self.isUsingAppGroup)
+                ctx.add("appGroupId", Self.appGroupIdentifier)
+            })
         } else {
-            print("❌ HealthKit: App Group UserDefaults verification FAILED!")
-            print("   Written: \(testValue)")
-            print("   Read back: \(readValue ?? "nil")")
+            Log.healthKit.error("App Group UserDefaults verification FAILED", context: .with { ctx in
+                ctx.add("written", testValue)
+                ctx.add("readBack", readValue ?? "nil")
+            })
         }
 
         // Clean up test value
@@ -201,15 +204,14 @@ class HealthKitService: NSObject {
 
     /// Log current HealthKit state for debugging
     private func logCurrentState() {
-        print("📊 HealthKit Service State:")
-        print("   App Group ID: \(Self.appGroupIdentifier)")
-        print("   isUsingAppGroup: \(Self.isUsingAppGroup)")
-        print("   authorizationInDefaults: \(authorizationRequestedInDefaults)")
-        print("   authorizationRequested (combined): \(authorizationRequested)")
-        print("   hasHealthKitAuthorization: \(hasHealthKitAuthorization)")
-        print("   lastStepDate: \(lastStepDate?.description ?? "nil")")
-        print("   lastSleepDate: \(lastSleepDate?.description ?? "nil")")
-        print("   processedSampleIds count: \(processedSampleIds.count)")
+        Log.healthKit.debug("Service state", context: .with { ctx in
+            ctx.add("appGroupId", Self.appGroupIdentifier)
+            ctx.add("isUsingAppGroup", Self.isUsingAppGroup)
+            ctx.add("authInDefaults", authorizationRequestedInDefaults)
+            ctx.add("authRequested", authorizationRequested)
+            ctx.add("hasAuthorization", hasHealthKitAuthorization)
+            ctx.add("processedSampleCount", processedSampleIds.count)
+        })
 
         // Log HealthKitSettings state
         HealthKitSettings.shared.logCurrentState()
@@ -229,33 +231,33 @@ class HealthKitService: NSObject {
         if let data = standardDefaults.data(forKey: processedSampleIdsKey),
            Self.sharedDefaults.data(forKey: processedSampleIdsKey) == nil {
             Self.sharedDefaults.set(data, forKey: processedSampleIdsKey)
-            print("Migrated processedSampleIds to App Group")
+            Log.healthKit.info("Migrated processedSampleIds to App Group")
         }
 
         // Migrate last step date
         if let date = standardDefaults.object(forKey: lastStepDateKey) as? Date,
            Self.sharedDefaults.object(forKey: lastStepDateKey) == nil {
             Self.sharedDefaults.set(date, forKey: lastStepDateKey)
-            print("Migrated lastStepDate to App Group")
+            Log.healthKit.info("Migrated lastStepDate to App Group")
         }
 
         // Migrate last sleep date
         if let date = standardDefaults.object(forKey: lastSleepDateKey) as? Date,
            Self.sharedDefaults.object(forKey: lastSleepDateKey) == nil {
             Self.sharedDefaults.set(date, forKey: lastSleepDateKey)
-            print("Migrated lastSleepDate to App Group")
+            Log.healthKit.info("Migrated lastSleepDate to App Group")
         }
 
         // Migrate authorization requested flag
         if standardDefaults.bool(forKey: Self.authorizationRequestedKey),
            !Self.sharedDefaults.bool(forKey: Self.authorizationRequestedKey) {
             Self.sharedDefaults.set(true, forKey: Self.authorizationRequestedKey)
-            print("Migrated authorizationRequested to App Group")
+            Log.healthKit.info("Migrated authorizationRequested to App Group")
         }
 
         // Mark migration as completed
         Self.sharedDefaults.set(true, forKey: Self.migrationCompletedKey)
-        print("HealthKit UserDefaults migration completed")
+        Log.healthKit.info("UserDefaults migration to App Group completed")
     }
 
     // MARK: - Authorization
@@ -264,7 +266,7 @@ class HealthKitService: NSObject {
     @MainActor
     func requestAuthorization() async throws {
         guard isHealthKitAvailable else {
-            print("HealthKit is not available on this device")
+            Log.healthKit.warning("HealthKit is not available on this device")
             return
         }
 
@@ -292,7 +294,7 @@ class HealthKitService: NSObject {
         // If the request completed without throwing, the user has seen the permission prompt.
         authorizationRequested = true
 
-        print("HealthKit authorization completed")
+        Log.healthKit.info("Authorization completed")
     }
 
     /// Check if we have sufficient authorization for HealthKit monitoring
@@ -312,7 +314,7 @@ class HealthKitService: NSObject {
     /// Start monitoring all enabled HealthKit categories
     func startMonitoringAllConfigurations() {
         guard isHealthKitAvailable else {
-            print("HealthKit is not available on this device")
+            Log.healthKit.warning("HealthKit is not available on this device")
             return
         }
 
@@ -322,7 +324,9 @@ class HealthKitService: NSObject {
             startMonitoring(category: category)
         }
 
-        print("Started monitoring \(enabledCategories.count) HealthKit configurations")
+        Log.healthKit.info("Started monitoring configurations", context: .with { ctx in
+            ctx.add("count", enabledCategories.count)
+        })
     }
 
     /// Start monitoring a specific HealthKit category
@@ -330,12 +334,16 @@ class HealthKitService: NSObject {
     func startMonitoring(category: HealthDataCategory) {
         // Skip if already monitoring this category
         if observerQueries[category] != nil {
-            print("Already monitoring \(category.displayName)")
+            Log.healthKit.debug("Already monitoring category", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
             return
         }
 
         guard let sampleType = category.hkSampleType else {
-            print("No sample type for category: \(category.displayName)")
+            Log.healthKit.warning("No sample type for category", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
             return
         }
 
@@ -368,9 +376,13 @@ class HealthKitService: NSObject {
         do {
             try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
             authorizationRequested = true
-            print("✅ HealthKit: Authorization requested for \(category.displayName)")
+            Log.healthKit.info("Authorization requested", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         } catch {
-            print("⚠️ HealthKit: Failed to request authorization for \(category.displayName): \(error.localizedDescription)")
+            Log.healthKit.warning("Failed to request authorization", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
     }
 
@@ -398,12 +410,16 @@ class HealthKitService: NSObject {
             }
 
             if let error = error {
-                print("Observer query error for \(category.displayName): \(error.localizedDescription)")
+                Log.healthKit.error("Observer query error", error: error, context: .with { ctx in
+                    ctx.add("category", category.displayName)
+                })
                 completionHandler()
                 return
             }
 
-            print("HealthKit update received for \(category.displayName)")
+            Log.healthKit.debug("Update received", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
 
             // Process new samples
             Task {
@@ -419,7 +435,9 @@ class HealthKitService: NSObject {
         // Enable background delivery
         await enableBackgroundDelivery(for: category)
 
-        print("Started monitoring: \(category.displayName)")
+        Log.healthKit.info("Started monitoring", context: .with { ctx in
+            ctx.add("category", category.displayName)
+        })
     }
 
     /// Stop monitoring a specific HealthKit category
@@ -428,7 +446,9 @@ class HealthKitService: NSObject {
         if let query = observerQueries[category] {
             healthStore.stop(query)
             observerQueries.removeValue(forKey: category)
-            print("Stopped monitoring: \(category.displayName)")
+            Log.healthKit.info("Stopped monitoring", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
     }
 
@@ -436,7 +456,9 @@ class HealthKitService: NSObject {
     func stopMonitoringAll() {
         for (category, query) in observerQueries {
             healthStore.stop(query)
-            print("Stopped monitoring: \(category.displayName)")
+            Log.healthKit.debug("Stopped monitoring", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
         observerQueries.removeAll()
     }
@@ -455,9 +477,13 @@ class HealthKitService: NSObject {
 
         do {
             try await healthStore.enableBackgroundDelivery(for: sampleType, frequency: category.backgroundDeliveryFrequency)
-            print("Background delivery enabled for \(category.displayName)")
+            Log.healthKit.info("Background delivery enabled", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         } catch {
-            print("Failed to enable background delivery for \(category.displayName): \(error.localizedDescription)")
+            Log.healthKit.error("Failed to enable background delivery", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
     }
 
@@ -481,7 +507,9 @@ class HealthKitService: NSObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
             ) { _, samples, error in
                 if let error = error {
-                    print("Sample query error for \(category.displayName): \(error.localizedDescription)")
+                    Log.healthKit.error("Sample query error", error: error, context: .with { ctx in
+                        ctx.add("category", category.displayName)
+                    })
                     continuation.resume(returning: [])
                     return
                 }
@@ -575,11 +603,13 @@ class HealthKitService: NSObject {
             return
         }
 
-        print("Processing workout: \(workout.workoutActivityType.name)")
+        Log.healthKit.debug("Processing workout", context: .with { ctx in
+            ctx.add("workoutType", workout.workoutActivityType.name)
+        })
 
         // Ensure EventType exists
         guard let eventType = await ensureEventType(for: .workout) else {
-            print("Failed to get/create EventType for workout")
+            Log.healthKit.error("Failed to get/create EventType for workout")
             return
         }
 
@@ -685,7 +715,10 @@ class HealthKitService: NSObject {
         let queryStart = calendar.date(byAdding: .hour, value: -48, to: now) ?? now
         let queryEnd = now
 
-        print("🌙 Sleep aggregation: querying \(queryStart) to \(queryEnd)")
+        Log.healthKit.debug("Sleep aggregation query", context: .with { ctx in
+            ctx.add("queryStart", queryStart.ISO8601Format())
+            ctx.add("queryEnd", queryEnd.ISO8601Format())
+        })
 
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
 
@@ -699,7 +732,7 @@ class HealthKitService: NSObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
             ) { _, results, error in
                 if let error = error {
-                    print("🌙 Sleep query error: \(error.localizedDescription)")
+                    Log.healthKit.error("Sleep query error", error: error)
                     continuation.resume(returning: [])
                     return
                 }
@@ -708,10 +741,12 @@ class HealthKitService: NSObject {
             healthStore.execute(query)
         }
 
-        print("🌙 Found \(samples.count) sleep samples")
+        Log.healthKit.debug("Sleep samples found", context: .with { ctx in
+            ctx.add("count", samples.count)
+        })
 
         if samples.isEmpty {
-            print("🌙 No sleep samples found in HealthKit")
+            Log.healthKit.debug("No sleep samples found in HealthKit")
             return
         }
 
@@ -733,7 +768,9 @@ class HealthKitService: NSObject {
             sleepNights[sleepDate, default: []].append(sample)
         }
 
-        print("🌙 Grouped into \(sleepNights.count) sleep night(s)")
+        Log.healthKit.debug("Sleep nights grouped", context: .with { ctx in
+            ctx.add("nights", sleepNights.count)
+        })
 
         // Process each sleep night
         for (sleepDate, nightSamples) in sleepNights.sorted(by: { $0.key < $1.key }) {
@@ -782,7 +819,10 @@ class HealthKitService: NSObject {
 
             // Require at least 30 minutes of sleep
             guard totalSleepDuration >= 1800 else {
-                print("🌙 Not enough sleep for \(sampleId): \(Int(totalSleepDuration / 60)) minutes")
+                Log.healthKit.debug("Not enough sleep to record", context: .with { ctx in
+                    ctx.add("sampleId", sampleId)
+                    ctx.add("minutes", Int(totalSleepDuration / 60))
+                })
                 continue
             }
 
@@ -821,7 +861,11 @@ class HealthKitService: NSObject {
                 let existingSleep = existingEvent.properties["Total Sleep"]?.doubleValue ?? 0
                 if abs(existingSleep - totalSleepDuration) < 60 {
                     // No significant change, skip update
-                    print("🌙 No significant change for \(sampleId): \(Int(existingSleep / 60))m -> \(Int(totalSleepDuration / 60))m")
+                    Log.healthKit.debug("No significant sleep change", context: .with { ctx in
+                        ctx.add("sampleId", sampleId)
+                        ctx.add("existingMin", Int(existingSleep / 60))
+                        ctx.add("newMin", Int(totalSleepDuration / 60))
+                    })
                     markSampleAsProcessed(sampleId)
                     continue
                 }
@@ -845,10 +889,14 @@ class HealthKitService: NSObject {
             }
 
             // No existing event - create new one
-            print("🌙 Creating event for \(sampleId): \(hours)h \(minutes)m")
+            Log.healthKit.info("Creating sleep event", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("hours", hours)
+                ctx.add("minutes", minutes)
+            })
 
             guard let eventType = await ensureEventType(for: .sleep) else {
-                print("🌙 Failed to get/create EventType for sleep")
+                Log.healthKit.error("Failed to get/create EventType for sleep")
                 continue
             }
 
@@ -1108,7 +1156,7 @@ class HealthKitService: NSObject {
             return
         }
 
-        print("Processing mindfulness session")
+        Log.healthKit.debug("Processing mindfulness session")
 
         guard let eventType = await ensureEventType(for: .mindfulness) else { return }
 
@@ -1153,7 +1201,9 @@ class HealthKitService: NSObject {
 
         let milliliters = sample.quantity.doubleValue(for: .literUnit(with: .milli))
 
-        print("Processing water intake: \(Int(milliliters)) ml")
+        Log.healthKit.debug("Processing water intake", context: .with { ctx in
+            ctx.add("milliliters", Int(milliliters))
+        })
 
         guard let eventType = await ensureEventType(for: .water) else { return }
 
@@ -1205,7 +1255,9 @@ class HealthKitService: NSObject {
 
         do {
             try modelContext.save()
-            print("Created HealthKit event: \(category.displayName)")
+            Log.healthKit.info("Created event", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
 
             // Send notification if configured
             await sendNotificationIfEnabled(for: category, eventTypeName: eventType.name, details: notes)
@@ -1214,7 +1266,9 @@ class HealthKitService: NSObject {
             await eventStore.syncEventToBackend(event)
 
         } catch {
-            print("Failed to save HealthKit event: \(error.localizedDescription)")
+            Log.healthKit.error("Failed to save event", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
     }
 
@@ -1232,7 +1286,7 @@ class HealthKitService: NSObject {
             let existingEvents = try modelContext.fetch(descriptor)
             return !existingEvents.isEmpty
         } catch {
-            print("Error checking for existing HealthKit event: \(error.localizedDescription)")
+            Log.healthKit.error("Error checking for existing event", error: error)
             // In case of error, assume it doesn't exist to avoid blocking new events
             return false
         }
@@ -1342,7 +1396,10 @@ class HealthKitService: NSObject {
                 return eventType
             }
             // ID stored but EventType not found locally - might need sync
-            print("⚠️ HealthKit: EventType with id \(eventTypeId) not found locally for \(category.displayName)")
+            Log.healthKit.warning("EventType not found locally", context: .with { ctx in
+                ctx.add("eventTypeId", eventTypeId.uuidString)
+                ctx.add("category", category.displayName)
+            })
         }
 
         // 2. Check if an EventType with the default name already exists
@@ -1368,7 +1425,9 @@ class HealthKitService: NSObject {
         do {
             try modelContext.save()
         } catch {
-            print("Failed to create EventType for \(category.displayName): \(error.localizedDescription)")
+            Log.healthKit.error("Failed to create EventType", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
             return nil
         }
 
@@ -1378,7 +1437,10 @@ class HealthKitService: NSObject {
         // 5. Link new EventType to settings using id (available immediately with UUIDv7)
         settings.setEventTypeId(newEventType.id, for: category)
 
-        print("Auto-created EventType '\(newEventType.name)' for \(category.rawValue)")
+        Log.healthKit.info("Auto-created EventType", context: .with { ctx in
+            ctx.add("name", newEventType.name)
+            ctx.add("category", category.rawValue)
+        })
         return newEventType
     }
 
@@ -1591,7 +1653,7 @@ class HealthKitService: NSObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
             ) { _, results, error in
                 if let error = error {
-                    print("Debug workout query error: \(error.localizedDescription)")
+                    Log.healthKit.debug("Debug workout query error", error: error)
                     continuation.resume(returning: [])
                     return
                 }
@@ -1642,7 +1704,7 @@ class HealthKitService: NSObject {
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
             ) { _, results, error in
                 if let error = error {
-                    print("Debug sleep query error: \(error.localizedDescription)")
+                    Log.healthKit.debug("Debug sleep query error", error: error)
                     continuation.resume(returning: [])
                     return
                 }
@@ -1682,7 +1744,7 @@ class HealthKitService: NSObject {
 
     /// Debug: Force sleep aggregation check (bypasses date cache)
     func forceSleepCheck() async {
-        print("🔧 Debug: Forcing sleep aggregation check...")
+        Log.healthKit.debug("Forcing sleep aggregation check")
         // Temporarily clear the lastSleepDate to force a check
         let savedDate = lastSleepDate
         lastSleepDate = nil
@@ -1696,7 +1758,7 @@ class HealthKitService: NSObject {
     /// Debug: Force steps aggregation check (bypasses date cache)
     @MainActor
     func forceStepsCheck() async {
-        print("🔧 Debug: Forcing steps aggregation check...")
+        Log.healthKit.debug("Forcing steps aggregation check")
         // Temporarily clear the lastStepDate to force a check
         let savedDate = lastStepDate
         lastStepDate = nil
@@ -1717,7 +1779,7 @@ class HealthKitService: NSObject {
     /// Debug: Force active energy aggregation check (bypasses date cache)
     @MainActor
     func forceActiveEnergyCheck() async {
-        print("🔧 Debug: Forcing active energy aggregation check...")
+        Log.healthKit.debug("Forcing active energy aggregation check")
         // Temporarily clear the lastActiveEnergyDate to force a check
         let savedDate = lastActiveEnergyDate
         lastActiveEnergyDate = nil
@@ -1763,56 +1825,60 @@ class HealthKitService: NSObject {
     /// This actively queries HealthKit for each category instead of waiting for observer callbacks
     @MainActor
     func forceRefreshAllCategories() async {
-        print("🔧 Debug: Force refreshing all HealthKit categories...")
+        Log.healthKit.debug("Force refreshing all categories")
         let enabledCategories = HealthKitSettings.shared.enabledCategories
 
         for category in enabledCategories {
-            print("🔧 Refreshing: \(category.displayName)")
+            Log.healthKit.debug("Refreshing category", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
             await handleNewSamples(for: category)
         }
 
-        print("🔧 Debug: Force refresh complete for \(enabledCategories.count) categories")
+        Log.healthKit.debug("Force refresh complete", context: .with { ctx in
+            ctx.add("categoryCount", enabledCategories.count)
+        })
     }
 
     /// Debug: Clear sleep processing cache
     func clearSleepCache() {
-        print("🔧 Debug: Clearing sleep cache...")
+        Log.healthKit.debug("Clearing sleep cache")
         lastSleepDate = nil
         Self.sharedDefaults.removeObject(forKey: lastSleepDateKey)
 
         // Remove sleep-related processed sample IDs
         processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("sleep-") }
         saveProcessedSampleIds()
-        print("🔧 Debug: Sleep cache cleared")
+        Log.healthKit.debug("Sleep cache cleared")
     }
 
     /// Debug: Clear steps processing cache
     func clearStepsCache() {
-        print("🔧 Debug: Clearing steps cache...")
+        Log.healthKit.debug("Clearing steps cache")
         lastStepDate = nil
         Self.sharedDefaults.removeObject(forKey: lastStepDateKey)
 
         // Remove steps-related processed sample IDs
         processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("steps-") }
         saveProcessedSampleIds()
-        print("🔧 Debug: Steps cache cleared")
+        Log.healthKit.debug("Steps cache cleared")
     }
 
     /// Debug: Clear active energy processing cache
     func clearActiveEnergyCache() {
-        print("🔧 Debug: Clearing active energy cache...")
+        Log.healthKit.debug("Clearing active energy cache")
         lastActiveEnergyDate = nil
         Self.sharedDefaults.removeObject(forKey: lastActiveEnergyDateKey)
 
         // Remove active energy-related processed sample IDs
         processedSampleIds = processedSampleIds.filter { !$0.hasPrefix("activeEnergy-") }
         saveProcessedSampleIds()
-        print("🔧 Debug: Active energy cache cleared")
+        Log.healthKit.debug("Active energy cache cleared")
     }
 
     /// Debug: Refresh all observers
     func refreshAllObservers() {
-        print("🔧 Debug: Refreshing all observers...")
+        Log.healthKit.debug("Refreshing all observers")
         stopMonitoringAll()
         startMonitoringAllConfigurations()
     }
@@ -1822,10 +1888,10 @@ class HealthKitService: NSObject {
     #if DEBUG || STAGING
     /// Simulate a workout detection for testing purposes
     func simulateWorkoutDetection() async {
-        print("DEBUG: Simulating workout detection")
+        Log.healthKit.debug("Simulating workout detection")
 
         guard let eventType = await ensureEventType(for: .workout) else {
-            print("Failed to get/create EventType for simulated workout")
+            Log.healthKit.error("Failed to get/create EventType for simulated workout")
             return
         }
 
@@ -1850,10 +1916,10 @@ class HealthKitService: NSObject {
 
     /// Simulate a sleep detection for testing purposes
     func simulateSleepDetection() async {
-        print("DEBUG: Simulating sleep detection")
+        Log.healthKit.debug("Simulating sleep detection")
 
         guard let eventType = await ensureEventType(for: .sleep) else {
-            print("Failed to get/create EventType for simulated sleep")
+            Log.healthKit.error("Failed to get/create EventType for simulated sleep")
             return
         }
 
