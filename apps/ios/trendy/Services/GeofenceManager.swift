@@ -24,6 +24,10 @@ class GeofenceManager: NSObject {
     /// Current authorization status
     var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
+    /// Last error that occurred during geofence operations
+    /// UI can observe this to show alerts when geofence event saves fail
+    var lastError: GeofenceError?
+
     /// Flag to track if we're waiting to upgrade from "When In Use" to "Always" authorization
     private var pendingAlwaysAuthorizationRequest = false
 
@@ -497,6 +501,7 @@ class GeofenceManager: NSObject {
 
         } catch {
             Log.geofence.error("Failed to save geofence entry event", error: error)
+            lastError = .entryEventSaveFailed(geofence.name, error)
         }
     }
 
@@ -588,7 +593,13 @@ class GeofenceManager: NSObject {
 
         } catch {
             Log.geofence.error("Failed to save geofence exit event", error: error)
+            lastError = .exitEventSaveFailed(geofence.name, error)
         }
+    }
+
+    /// Clear the last error (call after UI has handled it)
+    func clearError() {
+        lastError = nil
     }
 }
 
