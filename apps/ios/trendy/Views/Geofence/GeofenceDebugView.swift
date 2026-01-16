@@ -19,6 +19,12 @@ struct GeofenceDebugView: View {
     @State private var refreshTrigger = false
     @State private var isSyncing = false
 
+    // MARK: - Health Status
+
+    private var healthStatus: GeofenceHealthStatus? {
+        geofenceManager?.healthStatus
+    }
+
     private var iosRegionCount: Int {
         geofenceManager?.monitoredRegions.count ?? 0
     }
@@ -27,17 +33,9 @@ struct GeofenceDebugView: View {
         activeGeofences.count
     }
 
-    private var isInSync: Bool {
-        iosRegionCount == appActiveCount && iosRegionCount > 0
-    }
-
-    private var hasMismatch: Bool {
-        iosRegionCount != appActiveCount
-    }
-
     var body: some View {
         List {
-            // Status Summary Section
+            // System Status Section
             Section {
                 statusRow(
                     title: "Authorization",
@@ -54,61 +52,96 @@ struct GeofenceDebugView: View {
                 Text("System Status")
             }
 
-            // Sync Status Section
+            // Health Status Section
             Section {
+                // Overall status indicator
                 HStack {
-                    VStack(alignment: .leading) {
-                        Text("iOS Monitored Regions")
-                            .font(.subheadline)
-                        Text("Regions registered with CLLocationManager")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("\(iosRegionCount)")
-                        .font(.title2.bold())
-                        .foregroundStyle(iosRegionCount > 0 ? Color.primary : Color.orange)
-                }
-
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("App Active Geofences")
-                            .font(.subheadline)
-                        Text("Geofences marked as active in database")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("\(appActiveCount)")
-                        .font(.title2.bold())
-                }
-
-                HStack {
-                    if isInSync {
-                        Label("In Sync", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else if iosRegionCount == 0 && appActiveCount == 0 {
-                        Label("No Geofences", systemImage: "circle.dashed")
-                            .foregroundStyle(.secondary)
-                    } else if iosRegionCount < appActiveCount {
-                        Label("iOS Missing Regions", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    } else if iosRegionCount > appActiveCount {
-                        Label("Orphan Regions in iOS", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                    if let status = healthStatus {
+                        if status.isHealthy {
+                            Label("Healthy", systemImage: "checkmark.shield.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Label(status.statusSummary, systemImage: "exclamationmark.shield.fill")
+                                .foregroundStyle(.orange)
+                        }
                     } else {
-                        Label("Unknown Status", systemImage: "questionmark.circle")
+                        Label("Unknown", systemImage: "questionmark.circle")
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                }
+
+                // Counts comparison
+                if let status = healthStatus {
+                    LabeledContent("Registered with iOS") {
+                        Text("\(status.registeredWithiOS.count)")
+                            .font(.title3.bold())
+                    }
+
+                    LabeledContent("Active in App") {
+                        Text("\(status.savedInApp.count)")
+                            .font(.title3.bold())
+                    }
                 }
             } header: {
-                Text("Sync Status")
-            } footer: {
-                if hasMismatch && iosRegionCount < appActiveCount {
-                    Text("iOS has fewer regions than expected. Tap 'Refresh Geofences' to re-register.")
-                } else if hasMismatch && iosRegionCount > appActiveCount {
-                    Text("iOS has more regions than expected. This may be from a previous app version.")
+                Text("Health Status")
+            }
+
+            // Missing from iOS Section
+            if let status = healthStatus, !status.missingFromiOS.isEmpty {
+                Section {
+                    ForEach(Array(status.missingFromiOS).sorted(), id: \.self) { identifier in
+                        let geofence = allGeofences.first { $0.regionIdentifier == identifier }
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading) {
+                                Text(geofence?.name ?? "Unknown")
+                                    .font(.subheadline)
+                                Text(identifier)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Text("Not Registered")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                } header: {
+                    Text("Missing from iOS (\(status.missingFromiOS.count))")
+                } footer: {
+                    Text("These geofences are active in the app but not registered with iOS. Tap 'Fix Registration Issues' to register them.")
+                }
+            }
+
+            // Orphaned in iOS Section
+            if let status = healthStatus, !status.orphanedIniOS.isEmpty {
+                Section {
+                    ForEach(Array(status.orphanedIniOS).sorted(), id: \.self) { identifier in
+                        HStack {
+                            Image(systemName: "questionmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading) {
+                                Text("Unknown Region")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(identifier)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Text("Orphaned")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Orphaned in iOS (\(status.orphanedIniOS.count))")
+                } footer: {
+                    Text("These regions are registered with iOS but have no matching geofence in the app. They may be from a previous app version. Use 'Fix Registration Issues' to clean up.")
                 }
             }
 
@@ -116,7 +149,8 @@ struct GeofenceDebugView: View {
             Section {
                 if let identifiers = geofenceManager?.monitoredRegionIdentifiers, !identifiers.isEmpty {
                     ForEach(identifiers, id: \.self) { identifier in
-                        let geofence = allGeofences.first { $0.id == identifier }
+                        let geofence = allGeofences.first { $0.regionIdentifier == identifier }
+                        let isOrphaned = healthStatus?.orphanedIniOS.contains(identifier) ?? false
                         HStack {
                             VStack(alignment: .leading) {
                                 if let geofence = geofence {
@@ -137,8 +171,13 @@ struct GeofenceDebugView: View {
                                 }
                             }
                             Spacer()
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                            if isOrphaned {
+                                Image(systemName: "questionmark.circle.fill")
+                                    .foregroundStyle(.orange)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
                         }
                     }
                 } else {
@@ -210,7 +249,7 @@ struct GeofenceDebugView: View {
 
                 Button {
                     isSyncing = true
-                    forceResync()
+                    fixRegistrationIssues()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         isSyncing = false
                     }
@@ -222,7 +261,7 @@ struct GeofenceDebugView: View {
                         } else {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
-                        Text("Force Complete Re-sync")
+                        Text("Fix Registration Issues")
                     }
                 }
                 .disabled(isSyncing)
@@ -236,7 +275,7 @@ struct GeofenceDebugView: View {
             } header: {
                 Text("Actions")
             } footer: {
-                Text("'Refresh' adds missing regions. 'Force Re-sync' clears all and re-registers. 'Clear All' removes all iOS region monitoring.")
+                Text("'Refresh' adds missing regions. 'Fix Registration Issues' reconciles iOS regions with app database (adds missing, removes orphaned). 'Clear All' removes all iOS region monitoring.")
             }
 
             // iOS Settings Reminder
@@ -291,17 +330,17 @@ struct GeofenceDebugView: View {
     // MARK: - Actions
 
     private func refreshGeofences() {
-        print("🔄 Debug: Refreshing geofences...")
+        Log.geofence.debug("Debug: Refreshing geofences...")
         geofenceManager?.startMonitoringAllGeofences()
     }
 
-    private func forceResync() {
-        print("🔄 Debug: Force re-syncing all geofences...")
-        geofenceManager?.refreshMonitoredGeofences()
+    private func fixRegistrationIssues() {
+        Log.geofence.debug("Debug: Fixing registration issues...")
+        geofenceManager?.ensureRegionsRegistered()
     }
 
     private func clearAllRegions() {
-        print("🗑️ Debug: Clearing all iOS regions...")
+        Log.geofence.debug("Debug: Clearing all iOS regions...")
         geofenceManager?.stopMonitoringAllGeofences()
     }
 }
