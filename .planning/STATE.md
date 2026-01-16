@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-15)
 ## Current Position
 
 Phase: 5 of 7 (Sync Engine)
-Plan: 2 of 4 in phase (05-02 complete)
+Plan: 2 of 4 in phase (05-01 and 05-02 complete)
 Status: In progress
-Last activity: 2026-01-16 — Completed 05-02-PLAN.md
+Last activity: 2026-01-16 — Completed 05-01-PLAN.md
 
-Progress: █████████░ 52% (13/25 plans complete)
+Progress: █████████░ 56% (14/25 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 6.5 min
-- Total execution time: ~82 minutes
+- Total plans completed: 14
+- Average duration: 6.7 min
+- Total execution time: ~94 minutes
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: █████████░ 52% (13/25 plans complete)
 | 2. HealthKit Reliability | 2/2 | 23 min | 11.5 min |
 | 3. Geofence Reliability | 4/4 | 23 min | 5.75 min |
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
-| 5. Sync Engine | 1/4 | 5 min | 5 min |
+| 5. Sync Engine | 2/4 | 17 min | 8.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (6m), 03-04 (3m), 04-01 (17m), 04-02 (10m), 05-02 (5m)
-- Trend: Cleanup plans are fast; refactoring takes longer
+- Last 5 plans: 03-04 (3m), 04-01 (17m), 04-02 (10m), 05-02 (5m), 05-01 (12m)
+- Trend: Sync engine plans are moderate complexity
 
 ## Accumulated Context
 
@@ -77,6 +77,9 @@ Recent decisions affecting current work:
 | 04-01 | Created HealthKit subdirectory | Groups 12 related files, matches existing pattern |
 | 04-02 | Changed private to internal for cross-extension access | Swift extensions in separate files need internal access |
 | 04-02 | Created Geofence subdirectory | Groups related functionality, matches existing pattern |
+| 05-01 | Cached sync state properties in EventStore | SwiftUI binding requires non-async properties |
+| 05-01 | refreshSyncStateForUI() after sync operations | Keeps UI in sync without polling |
+| 05-01 | RelativeDateTimeFormatter with abbreviated style | Shows '5 min ago' format compactly |
 | 05-02 | Use getEventTypes() for health check | Always returns data if connected; lightweight; reliable signal |
 | 05-02 | Health check before isSyncing guard | No point setting syncing state if we can't connect |
 | 05-02 | Keep QueuedOperationV1 in SchemaV1 | Required for V1->V2 migration support |
@@ -93,6 +96,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-16
-Stopped at: Completed 05-02-PLAN.md
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
 Next: Continue with 05-03-PLAN.md or 05-04-PLAN.md
