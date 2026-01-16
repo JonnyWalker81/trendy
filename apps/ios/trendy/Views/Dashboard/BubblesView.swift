@@ -11,11 +11,13 @@ import SwiftData
 struct BubblesView: View {
     @Environment(EventStore.self) private var eventStore
     @Environment(InsightsViewModel.self) private var insightsViewModel
+    @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var calendarManager: CalendarManager
     @State private var showingAddEventType = false
     @State private var selectedEventTypeID: String?
     @State private var showingInsightDetail: APIInsight?
+    @State private var isRefreshingHealthKit = false
 
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
@@ -35,6 +37,11 @@ struct BubblesView: View {
                         InsightsBannerView(viewModel: insightsViewModel) { insight in
                             showingInsightDetail = insight
                         }
+                    }
+
+                    // HealthKit status summary
+                    if let service = healthKitService, service.hasHealthKitAuthorization {
+                        healthKitSummarySection
                     }
 
                     if eventStore.eventTypes.isEmpty {
@@ -114,6 +121,77 @@ struct BubblesView: View {
         .accessibilityIdentifier("dashboardView")
     }
     
+    // MARK: - HealthKit Summary Section
+
+    private var healthKitSummarySection: some View {
+        let enabledCategories = Array(HealthKitSettings.shared.enabledCategories)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.pink)
+                Text("Health Tracking")
+                    .font(.headline)
+                Spacer()
+
+                Button {
+                    Task {
+                        await refreshHealthKit()
+                    }
+                } label: {
+                    if isRefreshingHealthKit || (healthKitService?.isRefreshing ?? false) {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isRefreshingHealthKit || (healthKitService?.isRefreshing ?? false))
+            }
+
+            if enabledCategories.isEmpty {
+                Text("No health data types enabled")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                let oldestUpdate = oldestCategoryUpdate(for: enabledCategories)
+                HStack {
+                    Text("\(enabledCategories.count) types active")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatRelativeTime(oldestUpdate))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(Color.chipBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal)
+    }
+
+    private func formatRelativeTime(_ date: Date?) -> String {
+        guard let date = date else { return "Never updated" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Updated \(formatter.localizedString(for: date, relativeTo: Date()))"
+    }
+
+    private func oldestCategoryUpdate(for categories: [HealthDataCategory]) -> Date? {
+        guard let service = healthKitService else { return nil }
+        let updates = categories.compactMap { service.lastUpdateTime(for: $0) }
+        return updates.min()
+    }
+
+    private func refreshHealthKit() async {
+        isRefreshingHealthKit = true
+        await healthKitService?.forceRefreshAllCategories()
+        isRefreshingHealthKit = false
+    }
+
     private var emptyStateView: some View {
         VStack(spacing: 20) {
             Image(systemName: "square.grid.2x2")
