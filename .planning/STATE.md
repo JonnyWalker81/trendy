@@ -5,34 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 2 — HealthKit Reliability (in progress)
+**Current focus:** Phase 2 — HealthKit Reliability (COMPLETE)
 
 ## Current Position
 
-Phase: 2 of 7 (HealthKit Reliability) — IN PROGRESS
-Plan: 1 of 2 in phase
-Status: Plan 02-01 complete, ready for 02-02
-Last activity: 2026-01-15 — Completed 02-01-PLAN.md (Anchor Persistence)
+Phase: 2 of 7 (HealthKit Reliability) — COMPLETE
+Plan: 2 of 2 in phase
+Status: Phase complete, ready for Phase 3
+Last activity: 2026-01-16 — Completed 02-02-PLAN.md (Timestamp Visibility)
 
-Progress: ███░░░░░░░ 21% (5/24 plans complete)
+Progress: ████░░░░░░ 25% (6/24 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 5.8 min
-- Total execution time: ~29 minutes
+- Total plans completed: 6
+- Average duration: 7.5 min
+- Total execution time: ~45 minutes
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation | 4/4 | 21 min | 5 min |
-| 2. HealthKit Reliability | 1/2 | 8 min | 8 min |
+| 2. HealthKit Reliability | 2/2 | 23 min | 11.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (5m), 01-04 (3m), 01-03 (8m), 02-01 (8m)
-- Trend: Stable
+- Last 5 plans: 01-04 (3m), 01-03 (8m), 02-01 (8m), 02-02 (15m)
+- Trend: Slightly increasing (more complex plans)
 
 ## Accumulated Context
 
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 | 02-01 | NSKeyedArchiver with secure coding for anchors | HKQueryAnchor conforms to NSSecureCoding |
 | 02-01 | Anchors in App Group UserDefaults | Consistent with existing HealthKit persistence |
 | 02-01 | Save anchor after query completion | Ensures anchor reflects latest processed position |
+| 02-02 | RelativeDateTimeFormatter for relative time | Native iOS API, auto-localizes, handles edge cases |
+| 02-02 | Oldest category update in Dashboard | Quick at-a-glance view of HealthKit sync status |
+| 02-02 | Set<HealthDataCategory> for refresh tracking | Allows concurrent refreshes with accurate isRefreshing state |
 
 ### Pending Todos
 
@@ -61,12 +64,12 @@ None.
 
 ### Blockers/Concerns
 
-- Xcode build verification blocked by missing FullDisclosureSDK package (local path dependency)
+- Xcode build verification blocked by unrelated SupabaseService.swift error (supabaseURL access level)
 - Swift syntax verification passed; full compilation verification deferred
 
 ## Session Continuity
 
-Last session: 2026-01-15
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-01-16
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
-Next: /gsd:execute-plan .planning/phases/02-healthkit-reliability/02-02-PLAN.md
+Next: Begin Phase 3 (Geofence Reliability) with 03-01-PLAN.md
