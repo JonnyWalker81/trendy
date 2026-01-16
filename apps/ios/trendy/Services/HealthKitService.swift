@@ -132,6 +132,7 @@ class HealthKitService: NSObject {
     private let lastActiveEnergyDateKey = "healthKitLastActiveEnergyDate"
     private let maxProcessedSampleIds = 1000
     private static let migrationCompletedKey = "healthKitMigrationToAppGroupCompleted"
+    private let queryAnchorKeyPrefix = "healthKitQueryAnchor_"
 
     /// Date formatter for consistent date-only sampleIds (no timezone issues)
     private static let dateOnlyFormatter: DateFormatter = {
@@ -166,6 +167,7 @@ class HealthKitService: NSObject {
         loadLastStepDate()
         loadLastSleepDate()
         loadLastActiveEnergyDate()
+        loadAllAnchors()
 
         // Debug: Log current state
         #if DEBUG
@@ -1457,7 +1459,7 @@ class HealthKitService: NSObject {
             }
             // ID stored but EventType not found locally - might need sync
             Log.healthKit.warning("EventType not found locally", context: .with { ctx in
-                ctx.add("eventTypeId", eventTypeId.uuidString)
+                ctx.add("eventTypeId", eventTypeId)
                 ctx.add("category", category.displayName)
             })
         }
@@ -1582,6 +1584,72 @@ class HealthKitService: NSObject {
     /// Save last active energy date to shared UserDefaults (persists across reinstalls)
     private func saveLastActiveEnergyDate() {
         Self.sharedDefaults.set(lastActiveEnergyDate, forKey: lastActiveEnergyDateKey)
+    }
+
+    // MARK: - Anchor Persistence
+
+    /// Save anchor for a category to persistent storage
+    private func saveAnchor(_ anchor: HKQueryAnchor, for category: HealthDataCategory) {
+        do {
+            let data = try NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true)
+            Self.sharedDefaults.set(data, forKey: "\(queryAnchorKeyPrefix)\(category.rawValue)")
+            Log.healthKit.debug("Saved anchor", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
+        } catch {
+            Log.healthKit.error("Failed to archive anchor", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
+        }
+    }
+
+    /// Load anchor for a category from persistent storage
+    private func loadAnchor(for category: HealthDataCategory) -> HKQueryAnchor? {
+        guard let data = Self.sharedDefaults.data(forKey: "\(queryAnchorKeyPrefix)\(category.rawValue)") else {
+            return nil
+        }
+        do {
+            let anchor = try NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+            Log.healthKit.debug("Loaded anchor", context: .with { ctx in
+                ctx.add("category", category.displayName)
+                ctx.add("found", anchor != nil)
+            })
+            return anchor
+        } catch {
+            Log.healthKit.error("Failed to unarchive anchor", error: error, context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
+            return nil
+        }
+    }
+
+    /// Clear anchor for a category (useful for debug/reset)
+    func clearAnchor(for category: HealthDataCategory) {
+        Self.sharedDefaults.removeObject(forKey: "\(queryAnchorKeyPrefix)\(category.rawValue)")
+        queryAnchors.removeValue(forKey: category)
+        Log.healthKit.info("Cleared anchor", context: .with { ctx in
+            ctx.add("category", category.displayName)
+        })
+    }
+
+    /// Clear all anchors (useful for full refresh)
+    func clearAllAnchors() {
+        for category in HealthDataCategory.allCases {
+            clearAnchor(for: category)
+        }
+        Log.healthKit.info("Cleared all anchors")
+    }
+
+    /// Load all persisted anchors into memory
+    private func loadAllAnchors() {
+        for category in HealthDataCategory.allCases {
+            if let anchor = loadAnchor(for: category) {
+                queryAnchors[category] = anchor
+            }
+        }
+        Log.healthKit.debug("Loaded anchors", context: .with { ctx in
+            ctx.add("count", queryAnchors.count)
+        })
     }
 
     // MARK: - Debug Properties (Available in all builds)
