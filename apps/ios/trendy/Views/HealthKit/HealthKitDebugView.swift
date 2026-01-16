@@ -184,6 +184,38 @@ struct HealthKitDebugView: View {
                 Text("'Last Sleep Date' prevents re-processing. Anchors enable incremental HealthKit queries.")
             }
 
+            // Category Update Times Section
+            Section {
+                if let service = healthKitService {
+                    ForEach(HealthDataCategory.allCases, id: \.rawValue) { category in
+                        HStack {
+                            Image(systemName: category.iconName)
+                                .frame(width: 20)
+                            Text(category.displayName)
+                                .font(.subheadline)
+                            Spacer()
+                            if let lastUpdate = service.lastUpdateTime(for: category) {
+                                VStack(alignment: .trailing) {
+                                    Text(lastUpdate, style: .time)
+                                        .font(.caption)
+                                    Text(lastUpdate, style: .date)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else {
+                                Text("Never")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Last Update Times")
+            } footer: {
+                Text("Shows when each category last received data from HealthKit.")
+            }
+
             // Raw Sleep Data Section
             Section {
                 if isLoadingSleep {
@@ -542,6 +574,16 @@ struct HealthKitDebugView: View {
                 .foregroundStyle(.red)
 
                 Button {
+                    clearAllUpdateTimes()
+                } label: {
+                    HStack {
+                        Image(systemName: "clock.badge.xmark")
+                        Text("Clear Update Times")
+                    }
+                }
+                .foregroundStyle(.orange)
+
+                Button {
                     refreshObservers()
                 } label: {
                     HStack {
@@ -782,6 +824,12 @@ struct HealthKitDebugView: View {
 
     private func clearAllAnchors() {
         healthKitService?.clearAllAnchors()
+    }
+
+    private func clearAllUpdateTimes() {
+        for category in HealthDataCategory.allCases {
+            healthKitService?.clearUpdateTime(for: category)
+        }
     }
 
     private func refreshObservers() {
