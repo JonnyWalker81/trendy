@@ -13,38 +13,37 @@ struct EventListView: View {
     @State private var searchText = ""
     @State private var selectedEventTypeID: String?
 
+    // Cached computed values to avoid expensive recalculations on every render
+    @State private var cachedGroupedEvents: [Date: [Event]] = [:]
+    @State private var cachedSortedDates: [Date] = []
+    @State private var lastEventsHash: Int = 0
+
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
     }
-    
-    var filteredEvents: [Event] {
+
+    private var filteredEvents: [Event] {
         let events = eventStore.events
-        
+
         guard !searchText.isEmpty || selectedEventType != nil else {
             return events
         }
-        
+
         return events.filter { event in
-            let matchesSearch = searchText.isEmpty || 
+            let matchesSearch = searchText.isEmpty ||
                 (event.eventType?.name.localizedCaseInsensitiveContains(searchText) ?? false) ||
                 (event.notes?.localizedCaseInsensitiveContains(searchText) ?? false)
-            
+
             let matchesType = selectedEventType == nil || event.eventType?.id == selectedEventType?.id
-            
+
             return matchesSearch && matchesType
         }
     }
-    
-    var groupedEvents: [Date: [Event]] {
-        Dictionary(grouping: filteredEvents) { event in
-            Calendar.current.startOfDay(for: event.timestamp)
-        }
-    }
-    
-    var sortedDates: [Date] {
-        groupedEvents.keys.sorted(by: >)
-    }
+
+    // Use cached values for rendering
+    private var groupedEvents: [Date: [Event]] { cachedGroupedEvents }
+    private var sortedDates: [Date] { cachedSortedDates }
     
     var body: some View {
         NavigationStack {
@@ -69,16 +68,23 @@ struct EventListView: View {
                         filterSection
                     }
 
-                    if filteredEvents.isEmpty {
+                    // Use cached data for empty check to avoid expensive recalculation
+                    if cachedSortedDates.isEmpty {
                         if eventStore.isLoading && !eventStore.hasLoadedOnce {
                             // Initial loading - show loading indicator
                             ProgressView("Loading...")
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 50)
                                 .listRowBackground(Color.clear)
-                        } else {
+                        } else if eventStore.hasLoadedOnce {
                             // Truly empty after loading completed
                             emptyStateView
+                        } else {
+                            // Cache not yet populated - show brief loading
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 50)
+                                .listRowBackground(Color.clear)
                         }
                     } else {
                         ForEach(sortedDates, id: \.self) { date in
@@ -103,10 +109,61 @@ struct EventListView: View {
                 await eventStore.fetchData(force: true)
             }
             .task {
-                await eventStore.fetchData()
+                // Only fetch if data hasn't been loaded yet
+                // MainTabView handles initial load; this is a fallback for edge cases
+                if !eventStore.hasLoadedOnce {
+                    await eventStore.fetchData()
+                }
+                // Initial cache population
+                updateCachedData()
+            }
+            .onChange(of: eventStore.events.count) { _, _ in
+                updateCachedData()
+            }
+            .onChange(of: searchText) { _, _ in
+                updateCachedData()
+            }
+            .onChange(of: selectedEventTypeID) { _, _ in
+                updateCachedData()
             }
         }
         .accessibilityIdentifier("eventListView")
+    }
+
+    /// Updates cached grouped events and sorted dates
+    /// Called only when underlying data changes, not on every render
+    /// Performs expensive grouping on background thread to keep UI responsive
+    private func updateCachedData() {
+        let events = filteredEvents
+        let newHash = events.count  // Simple hash based on count
+
+        // Skip if data hasn't meaningfully changed
+        if newHash == lastEventsHash && !cachedSortedDates.isEmpty {
+            return
+        }
+
+        lastEventsHash = newHash
+
+        // For small datasets, compute synchronously
+        if events.count < 100 {
+            cachedGroupedEvents = Dictionary(grouping: events) { event in
+                Calendar.current.startOfDay(for: event.timestamp)
+            }
+            cachedSortedDates = cachedGroupedEvents.keys.sorted(by: >)
+        } else {
+            // For large datasets, compute on background thread
+            let eventsCopy = events
+            Task.detached(priority: .userInitiated) {
+                let grouped = Dictionary(grouping: eventsCopy) { event in
+                    Calendar.current.startOfDay(for: event.timestamp)
+                }
+                let sorted = grouped.keys.sorted(by: >)
+                await MainActor.run {
+                    cachedGroupedEvents = grouped
+                    cachedSortedDates = sorted
+                }
+            }
+        }
     }
     
     private var filterSection: some View {

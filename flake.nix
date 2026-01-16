@@ -23,6 +23,7 @@
             # Node.js and package managers
             nodejs_20
             yarn
+            bun
 
             # Go toolchain and C compiler
             go
@@ -76,6 +77,7 @@
             echo "📦 Available tools:"
             echo "  - Node.js $(node --version)"
             echo "  - Yarn $(yarn --version)"
+            echo "  - Bun $(bun --version)"
             echo "  - Go $(go version | cut -d' ' -f3)"
             echo "  - Ruby $(ruby --version 2>/dev/null | cut -d' ' -f2 || echo 'not found')"
             echo "  - Just $(just --version)"

@@ -296,6 +296,36 @@ class EventStore {
         Log.sync.info("Event relationship restoration completed")
     }
 
+    /// Clear all pending mutations from the sync queue.
+    /// Use this to recover from a retry storm where mutations are continuously failing.
+    /// WARNING: This will abandon any unsynced local changes - they will NOT be synced to the backend.
+    /// - Returns: The number of mutations cleared
+    @discardableResult
+    func clearPendingMutations() async -> Int {
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("clearPendingMutations: no syncEngine available")
+            return 0
+        }
+        Log.sync.warning("User requested clearing pending mutations")
+        let count = await syncEngine.clearPendingMutations(markEntitiesFailed: true)
+        try? await fetchFromLocal()
+        return count
+    }
+
+    /// Check if the sync engine's circuit breaker is currently tripped
+    var isCircuitBreakerTripped: Bool {
+        get async {
+            await syncEngine?.isCircuitBreakerTripped ?? false
+        }
+    }
+
+    /// Get remaining circuit breaker backoff time in seconds
+    var circuitBreakerBackoffRemaining: TimeInterval {
+        get async {
+            await syncEngine?.circuitBreakerBackoffRemaining ?? 0
+        }
+    }
+
     /// Restore broken Event→EventType relationships directly on fetched objects.
     /// This handles SwiftData relationship detachment that occurs when fetching
     /// from a fresh ModelContext, without needing the full SyncEngine machinery.

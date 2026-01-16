@@ -79,17 +79,24 @@ class OnboardingViewModel {
     /// Determine initial state based on auth and profile
     /// Call this on app launch to route appropriately
     func determineInitialState() async {
+        Log.auth.debug("determineInitialState: Starting", context: .with { ctx in
+            ctx.add("supabaseService.isAuthenticated", String(supabaseService.isAuthenticated))
+            ctx.add("localCompleteKey", String(UserDefaults.standard.bool(forKey: Self.localCompleteKey)))
+        })
+
         isLoading = true
         defer { isLoading = false }
 
         // Check local completion flag first (fast path)
         if UserDefaults.standard.bool(forKey: Self.localCompleteKey) && supabaseService.isAuthenticated {
+            Log.auth.debug("determineInitialState: Already complete (fast path)")
             isComplete = true
             return
         }
 
         // Check if user is authenticated
         guard supabaseService.isAuthenticated else {
+            Log.auth.debug("determineInitialState: NOT authenticated, falling back to local state")
             // Not authenticated - check for local progress
             if let savedStep = UserDefaults.standard.string(forKey: Self.localStepKey),
                let step = OnboardingStep(rawValue: savedStep) {
@@ -106,13 +113,21 @@ class OnboardingViewModel {
             return
         }
 
+        Log.auth.debug("determineInitialState: IS authenticated, checking profile...")
+
         // Authenticated - check profile for onboarding status
         do {
             // Ensure profile exists
+            Log.auth.debug("determineInitialState: Calling ensureProfileExists...")
             let profile = try await profileService.ensureProfileExists()
+            Log.auth.debug("determineInitialState: Got profile", context: .with { ctx in
+                ctx.add("onboardingComplete", String(profile.onboardingComplete))
+                ctx.add("onboardingStep", profile.onboardingStep ?? "nil")
+            })
 
             if profile.onboardingComplete {
                 // Onboarding complete - signal to show main app
+                Log.auth.debug("determineInitialState: Profile says onboarding complete!")
                 UserDefaults.standard.set(true, forKey: Self.localCompleteKey)
                 isComplete = true
                 return
@@ -121,14 +136,17 @@ class OnboardingViewModel {
             // Determine step from profile or local storage
             if let stepRaw = profile.onboardingStep,
                let step = OnboardingStep(rawValue: stepRaw) {
+                Log.auth.debug("determineInitialState: Using step from profile: \(stepRaw)")
                 currentStep = step
             } else if let localStep = UserDefaults.standard.string(forKey: Self.localStepKey),
                       let step = OnboardingStep(rawValue: localStep),
                       step.requiresAuth {
                 // Use local step if it's past auth
+                Log.auth.debug("determineInitialState: Using step from local storage: \(localStep)")
                 currentStep = step
             } else {
                 // Start from event type creation (after auth)
+                Log.auth.debug("determineInitialState: No saved step, defaulting to createEventType")
                 currentStep = .createEventType
             }
 
@@ -137,14 +155,17 @@ class OnboardingViewModel {
 
             // Track viewed event for the determined step
             trackViewedEventForStep(currentStep)
+            Log.auth.debug("determineInitialState: Done, currentStep=\(currentStep.rawValue)")
 
         } catch {
-            Log.auth.error("Failed to determine onboarding state", error: error)
+            Log.auth.error("determineInitialState: Failed to check profile", error: error)
             // Fallback to local state
             if let savedStep = UserDefaults.standard.string(forKey: Self.localStepKey),
                let step = OnboardingStep(rawValue: savedStep) {
+                Log.auth.debug("determineInitialState: Fallback to local step: \(savedStep)")
                 currentStep = step
             } else {
+                Log.auth.debug("determineInitialState: Fallback to createEventType")
                 currentStep = .createEventType
             }
             trackViewedEventForStep(currentStep)
@@ -283,23 +304,33 @@ class OnboardingViewModel {
 
     /// Sign in with email and password
     func signIn(email: String, password: String) async {
+        Log.auth.debug("OnboardingViewModel.signIn: Starting", context: .with { ctx in
+            ctx.add("email", email)
+        })
+
         isLoading = true
         errorMessage = nil
 
         do {
             // Validate input
             guard isValidEmail(email) else {
+                Log.auth.debug("OnboardingViewModel.signIn: Invalid email format")
                 errorMessage = "Please enter a valid email address"
                 isLoading = false
                 return
             }
             guard !password.isEmpty else {
+                Log.auth.debug("OnboardingViewModel.signIn: Empty password")
                 errorMessage = "Please enter your password"
                 isLoading = false
                 return
             }
 
+            Log.auth.debug("OnboardingViewModel.signIn: Calling supabaseService.signIn...")
             let session = try await supabaseService.signIn(email: email, password: password)
+            Log.auth.info("OnboardingViewModel.signIn: Success", context: .with { ctx in
+                ctx.add("user_id", session.user.id.uuidString)
+            })
 
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: [
                 "email": email,
@@ -309,13 +340,28 @@ class OnboardingViewModel {
             trackEvent(.onboardingAuthSucceeded, properties: ["method": OnboardingAuthMethod.emailSignin.rawValue])
 
             // Check if returning user with complete onboarding
+            Log.auth.debug("OnboardingViewModel.signIn: Calling determineInitialState...")
             await determineInitialState()
+
+            // If we're still on auth step after sign-in, advance past it
+            // (auth step is complete since we just signed in successfully)
+            if currentStep == .auth && !isComplete {
+                Log.auth.debug("OnboardingViewModel.signIn: Auth complete, advancing past auth step")
+                await advanceToNextStep()
+            }
+
+            Log.auth.debug("OnboardingViewModel.signIn: determineInitialState complete", context: .with { ctx in
+                ctx.add("isComplete", String(isComplete))
+                ctx.add("currentStep", currentStep.rawValue)
+            })
         } catch {
+            Log.auth.error("OnboardingViewModel.signIn: Failed", error: error)
             errorMessage = "Invalid email or password"
             trackEvent(.onboardingAuthFailed, properties: ["method": OnboardingAuthMethod.emailSignin.rawValue])
         }
 
         isLoading = false
+        Log.auth.debug("OnboardingViewModel.signIn: Complete, isLoading=false")
     }
 
     /// Sign in with Google

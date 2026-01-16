@@ -43,6 +43,11 @@ struct DebugStorageView: View {
     @State private var showingGeofenceSyncSuccess = false
     @State private var geofenceSyncResult: String?
 
+    // Clear mutation queue
+    @State private var showingClearMutationsConfirmation = false
+    @State private var showingClearMutationsSuccess = false
+    @State private var clearMutationsResult: String?
+
     // User info
     @State private var currentUserId: String = "Loading..."
     @State private var geofenceTestResult: String?
@@ -128,6 +133,29 @@ struct DebugStorageView: View {
             }
         } message: {
             Text(geofenceSyncResult ?? "Geofences have been synced from the server.")
+        }
+        .confirmationDialog(
+            "Clear Mutation Queue?",
+            isPresented: $showingClearMutationsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Queue", role: .destructive) {
+                Task {
+                    await clearMutationQueue()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear all pending sync mutations. Any unsynced local changes will be lost and NOT synced to the backend. Use this to recover from a retry storm.")
+        }
+        .alert("Mutation Queue Cleared", isPresented: $showingClearMutationsSuccess) {
+            Button("OK") {
+                Task {
+                    await loadSwiftDataCounts()
+                }
+            }
+        } message: {
+            Text(clearMutationsResult ?? "The mutation queue has been cleared.")
         }
     }
 
@@ -354,10 +382,27 @@ struct DebugStorageView: View {
                 }
             }
             .disabled(isSyncingGeofences || isSyncing)
+
+            // Clear mutation queue (for retry storm recovery)
+            if pendingMutationCount > 0 {
+                Button(role: .destructive) {
+                    showingClearMutationsConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                        Text("Clear Mutation Queue (\(pendingMutationCount))")
+                    }
+                }
+                .disabled(isSyncing)
+            }
         } header: {
             Text("Sync Actions")
         } footer: {
-            Text("'Sync Geofences' fetches geofences from the server without a full resync. 'Force Full Resync' re-downloads all data and removes stale local data.")
+            if pendingMutationCount > 0 {
+                Text("'Clear Mutation Queue' abandons unsynced changes to recover from a retry storm. Use with caution - data will be lost.")
+            } else {
+                Text("'Sync Geofences' fetches geofences from the server without a full resync. 'Force Full Resync' re-downloads all data and removes stale local data.")
+            }
         }
     }
 
@@ -377,6 +422,16 @@ struct DebugStorageView: View {
             geofenceSyncResult = "Error: \(error.localizedDescription)"
             showingGeofenceSyncSuccess = true
         }
+    }
+
+    private func clearMutationQueue() async {
+        let clearedCount = await eventStore.clearPendingMutations()
+        if clearedCount > 0 {
+            clearMutationsResult = "Cleared \(clearedCount) pending mutation(s). Circuit breaker has been reset."
+        } else {
+            clearMutationsResult = "No mutations to clear."
+        }
+        showingClearMutationsSuccess = true
     }
 
     private func testGeofenceFetch() async {

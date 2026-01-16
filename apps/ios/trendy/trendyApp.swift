@@ -10,6 +10,7 @@ import SwiftData
 import WidgetKit
 import FoundationModels
 import PostHog
+import FullDisclosureSDK
 
 /// App Group identifier for sharing data with widgets
 let appGroupIdentifier = "group.com.memento.trendy"
@@ -294,18 +295,19 @@ struct trendyApp: App {
                 host: posthog.host
             )
 
-            // Enable session replay (required for console log capture)
-            posthogConfig.sessionReplay = true
-            posthogConfig.sessionReplayConfig.screenshotMode = true  // Required for SwiftUI
-
-            // Enable console log capture (disabled by default for privacy)
-            posthogConfig.sessionReplayConfig.captureLogs = true
-            // Capture all log levels, not just errors (default is .error)
-            posthogConfig.sessionReplayConfig.captureLogsConfig.minLogLevel = .info
-
-            // Mask sensitive content in session replays
-            posthogConfig.sessionReplayConfig.maskAllTextInputs = true
-            posthogConfig.sessionReplayConfig.maskAllImages = false  // Keep images visible
+            // DISABLED: Session replay causes severe UI performance issues
+            // The screenshotMode=true (required for SwiftUI) captures full screenshots
+            // on every UI change, flooding the main thread and causing:
+            // - "System gesture gate timed out" errors
+            // - UI freezes during tab switching and scrolling
+            // - Memory pressure from rapid screenshot generation
+            // Re-enable only after PostHog provides a more performant SwiftUI solution.
+            posthogConfig.sessionReplay = false
+            // posthogConfig.sessionReplayConfig.screenshotMode = true  // Required for SwiftUI
+            // posthogConfig.sessionReplayConfig.captureLogs = true
+            // posthogConfig.sessionReplayConfig.captureLogsConfig.minLogLevel = .info
+            // posthogConfig.sessionReplayConfig.maskAllTextInputs = true
+            // posthogConfig.sessionReplayConfig.maskAllImages = false
 
             // Enable SDK debug logging in debug builds
             #if DEBUG
@@ -314,7 +316,7 @@ struct trendyApp: App {
 
             posthogConfig.captureApplicationLifecycleEvents = true
             PostHogSDK.shared.setup(posthogConfig)
-            print("📊 PostHog initialized with session replay and console log capture")
+            print("📊 PostHog initialized (session replay DISABLED for performance)")
 
             // Send app launch event to verify setup
             PostHogSDK.shared.capture("app_launched", properties: [
@@ -347,22 +349,50 @@ struct trendyApp: App {
         insights.configure(with: apiClient)
         _insightsViewModel = State(initialValue: insights)
 
-        // Identify user in PostHog if already authenticated (session restore)
-        if appConfiguration.posthogConfiguration != nil {
-            let supabase = supabaseService
-            Task {
-                await supabase.restoreSession()
-                // Get session directly from auth client to avoid race condition
-                if let session = try? await supabase.client.auth.session {
+        // Identify user in PostHog and FullDisclosure if already authenticated (session restore)
+        let supabase = supabaseService
+        let hasPostHog = appConfiguration.posthogConfiguration != nil
+        Task {
+            await supabase.restoreSession()
+            // Get session directly from auth client to avoid race condition
+            if let session = try? await supabase.client.auth.session {
+                let userId = session.user.id.uuidString
+                let email = session.user.email
+
+                // Identify user in PostHog (if configured)
+                if hasPostHog {
                     var userProperties: [String: Any] = [:]
-                    if let email = session.user.email {
+                    if let email = email {
                         userProperties["email"] = email
                     }
-                    print("📊 PostHog identify (session restore): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
-                    PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
+                    print("📊 PostHog identify (session restore): user_id=\(userId), email=\(email ?? "nil")")
+                    PostHogSDK.shared.identify(userId, userProperties: userProperties)
+                }
+
+                // Identify user in FullDisclosure for feedback submissions
+                do {
+                    try await FullDisclosure.shared.identify(
+                        userId: userId,
+                        email: email
+                    )
+                    print("📝 FullDisclosure identify (session restore): user_id=\(userId), email=\(email ?? "nil")")
+                } catch {
+                    print("⚠️ FullDisclosure identify failed: \(error)")
                 }
             }
         }
+        
+        
+        // Initialize FullDisclosure feedback SDK
+        let fdConfig = FullDisclosureSDK.Configuration.default
+            .with(baseURL: URL(string: "http://localhost:8080")!)  // Your local API
+            .with(showContactFields: false)  // Hide email/name fields - use identified user instead
+            .with(debugLogging: true)  // Enable logging to see requests
+
+        FullDisclosure.shared.initialize(
+            token: "sdk_565562e99899d6a5ede9f5e45d8a4d453630d401cb9a0d8a39e08073e4c73f7b",
+            configuration: fdConfig
+        )
 
         // Register background tasks for AI insight generation
         AIBackgroundTaskScheduler.shared.registerTasks()

@@ -69,7 +69,11 @@ struct AnalyticsView: View {
             }
             .navigationTitle("Analytics")
             .task {
-                await eventStore.fetchData()
+                // Only fetch if data hasn't been loaded yet
+                // MainTabView handles initial load; this is a fallback for edge cases
+                if !eventStore.hasLoadedOnce {
+                    await eventStore.fetchData()
+                }
 
                 // Restore saved state
                 if !savedEventTypeId.isEmpty,

@@ -38,6 +38,26 @@ actor SyncEngine {
     private var isSyncing = false
     private var forceBootstrapOnNextSync = false
 
+    // MARK: - Circuit Breaker State
+
+    /// Number of consecutive rate limit errors encountered
+    private var consecutiveRateLimitErrors = 0
+
+    /// Threshold for triggering circuit breaker (stop processing after this many 429s in a row)
+    private let rateLimitCircuitBreakerThreshold = 3
+
+    /// Timestamp when rate limit backoff expires
+    private var rateLimitBackoffUntil: Date?
+
+    /// Base backoff duration after rate limit circuit breaker trips (30 seconds)
+    private let rateLimitBaseBackoff: TimeInterval = 30.0
+
+    /// Maximum backoff duration (5 minutes)
+    private let rateLimitMaxBackoff: TimeInterval = 300.0
+
+    /// Current backoff multiplier (increases with each circuit breaker trip)
+    private var rateLimitBackoffMultiplier = 1.0
+
     // MARK: - Observable State (MainActor)
 
     @MainActor public private(set) var state: SyncState = .idle
@@ -315,9 +335,84 @@ actor SyncEngine {
         return (try? context.fetchCount(descriptor)) ?? 0
     }
 
+    /// Clear all pending mutations from the queue.
+    /// Use this to recover from a retry storm where mutations are continuously failing.
+    /// WARNING: This will abandon any unsynced local changes - they will NOT be synced to the backend.
+    /// - Parameter markEntitiesFailed: If true, mark the corresponding entities as failed. Default is true.
+    /// - Returns: The number of mutations cleared
+    @discardableResult
+    func clearPendingMutations(markEntitiesFailed: Bool = true) async -> Int {
+        let context = ModelContext(modelContainer)
+
+        do {
+            let descriptor = FetchDescriptor<PendingMutation>()
+            let mutations = try context.fetch(descriptor)
+            let count = mutations.count
+
+            guard count > 0 else {
+                Log.sync.info("No pending mutations to clear")
+                return 0
+            }
+
+            Log.sync.warning("Clearing all pending mutations", context: .with { ctx in
+                ctx.add("count", count)
+                ctx.add("mark_entities_failed", markEntitiesFailed)
+            })
+
+            for mutation in mutations {
+                if markEntitiesFailed {
+                    try? markEntityFailed(mutation, context: context)
+                }
+                context.delete(mutation)
+            }
+
+            try context.save()
+            await updatePendingCount()
+
+            // Reset circuit breaker state
+            consecutiveRateLimitErrors = 0
+            rateLimitBackoffUntil = nil
+            rateLimitBackoffMultiplier = 1.0
+
+            Log.sync.info("Cleared pending mutations and reset circuit breaker", context: .with { ctx in
+                ctx.add("cleared_count", count)
+            })
+
+            return count
+        } catch {
+            Log.sync.error("Failed to clear pending mutations", error: error)
+            return 0
+        }
+    }
+
+    /// Check if the circuit breaker is currently tripped (in backoff state)
+    var isCircuitBreakerTripped: Bool {
+        if let backoffUntil = rateLimitBackoffUntil {
+            return Date() < backoffUntil
+        }
+        return false
+    }
+
+    /// Get remaining backoff time in seconds (0 if not in backoff)
+    var circuitBreakerBackoffRemaining: TimeInterval {
+        if let backoffUntil = rateLimitBackoffUntil {
+            return max(0, backoffUntil.timeIntervalSinceNow)
+        }
+        return 0
+    }
+
     // MARK: - Private: Flush Pending Mutations
 
     private func flushPendingMutations() async throws {
+        // Check circuit breaker - if we're in backoff, skip flushing
+        if let backoffUntil = rateLimitBackoffUntil, Date() < backoffUntil {
+            let remaining = backoffUntil.timeIntervalSinceNow
+            Log.sync.warning("Circuit breaker tripped - skipping mutation flush", context: .with { ctx in
+                ctx.add("backoff_remaining_seconds", Int(remaining))
+            })
+            return
+        }
+
         let context = ModelContext(modelContainer)
         let localStore = LocalStore(modelContext: context)
 
@@ -329,9 +424,20 @@ actor SyncEngine {
 
         Log.sync.info("Flushing pending mutations", context: .with { ctx in
             ctx.add("count", mutations.count)
+            ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
         })
 
         for mutation in mutations {
+            // Check circuit breaker before each mutation
+            if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
+                tripCircuitBreaker()
+                Log.sync.warning("Circuit breaker tripped during flush - aborting remaining mutations", context: .with { ctx in
+                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                    ctx.add("backoff_seconds", Int(circuitBreakerBackoffRemaining))
+                })
+                break
+            }
+
             Log.sync.debug("Processing mutation", context: .with { ctx in
                 ctx.add("entity_type", mutation.entityType.rawValue)
                 ctx.add("operation", mutation.operation.rawValue)
@@ -346,6 +452,10 @@ actor SyncEngine {
                     ctx.add("entity_id", mutation.entityId)
                 })
                 context.delete(mutation)
+
+                // Reset consecutive rate limit counter on success
+                consecutiveRateLimitErrors = 0
+
             } catch let error as APIError where error.isDuplicateError {
                 // Duplicate error - the entity already exists on the server
                 // This can happen due to race conditions (e.g., HealthKit observer fires twice)
@@ -359,14 +469,34 @@ actor SyncEngine {
                 // Delete the local duplicate entity - the "real" one already exists and synced
                 try deleteLocalDuplicate(mutation, localStore: localStore)
                 context.delete(mutation)
+
+                // Reset rate limit counter - duplicates are not rate limit errors
+                consecutiveRateLimitErrors = 0
+
+            } catch let error as APIError where error.isRateLimitError {
+                // Rate limit error - increment counter but DON'T count against mutation retry limit
+                consecutiveRateLimitErrors += 1
+                Log.sync.warning("Rate limit error during mutation flush", context: .with { ctx in
+                    ctx.add("entity_type", mutation.entityType.rawValue)
+                    ctx.add("entity_id", mutation.entityId)
+                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                })
+
+                // Don't increment mutation.attempts for rate limits - it's a global issue, not a mutation issue
+                // The mutation will be retried on the next sync cycle after backoff
+
             } catch let error as APIError {
-                // Other API error (not duplicate)
+                // Other API error (not duplicate, not rate limit)
                 Log.sync.error("API error during mutation flush", error: error, context: .with { ctx in
                     ctx.add("entity_type", mutation.entityType.rawValue)
                     ctx.add("entity_id", mutation.entityId)
                     ctx.add("is_duplicate", error.isDuplicateError)
+                    ctx.add("is_rate_limit", error.isRateLimitError)
                 })
                 mutation.recordFailure(error: error.localizedDescription ?? "Unknown API error")
+
+                // Reset rate limit counter - this is a different kind of error
+                consecutiveRateLimitErrors = 0
 
                 if mutation.hasExceededRetryLimit {
                     Log.sync.error("Mutation exceeded retry limit (API error)", context: .with { ctx in
@@ -389,6 +519,9 @@ actor SyncEngine {
                 })
                 mutation.recordFailure(error: error.localizedDescription)
 
+                // Reset rate limit counter - this is a different kind of error
+                consecutiveRateLimitErrors = 0
+
                 if mutation.hasExceededRetryLimit {
                     Log.sync.error("Mutation exceeded retry limit (non-API error)", context: .with { ctx in
                         ctx.add("entity_type", mutation.entityType.rawValue)
@@ -408,6 +541,21 @@ actor SyncEngine {
 
         try context.save()
         await updatePendingCount()
+    }
+
+    /// Trip the circuit breaker - enter backoff state
+    private func tripCircuitBreaker() {
+        let backoffDuration = min(rateLimitBaseBackoff * rateLimitBackoffMultiplier, rateLimitMaxBackoff)
+        rateLimitBackoffUntil = Date().addingTimeInterval(backoffDuration)
+
+        // Increase multiplier for next time (exponential backoff)
+        rateLimitBackoffMultiplier = min(rateLimitBackoffMultiplier * 2.0, 10.0)
+
+        Log.sync.warning("Circuit breaker tripped", context: .with { ctx in
+            ctx.add("backoff_duration_seconds", Int(backoffDuration))
+            ctx.add("backoff_multiplier", rateLimitBackoffMultiplier)
+            ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+        })
     }
 
     private func flushMutation(_ mutation: PendingMutation, localStore: LocalStore) async throws {

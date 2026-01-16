@@ -107,20 +107,33 @@ class SupabaseService {
 
     /// Sign in existing user with email and password
     func signIn(email: String, password: String) async throws -> Session {
-        let session = try await client.auth.signIn(
-            email: email,
-            password: password
-        )
-
-        await MainActor.run {
-            self.currentSession = session
-            self.isAuthenticated = true
-        }
-
         #if DEBUG
-        print("✅ User signed in: \(email)")
+        print("🔐 SupabaseService.signIn: Starting sign-in for \(email)")
         #endif
-        return session
+
+        do {
+            let session = try await client.auth.signIn(
+                email: email,
+                password: password
+            )
+
+            await MainActor.run {
+                self.currentSession = session
+                self.isAuthenticated = true
+            }
+
+            #if DEBUG
+            print("✅ User signed in: \(email)")
+            #endif
+            return session
+        } catch {
+            #if DEBUG
+            print("❌ SupabaseService.signIn failed: \(error)")
+            print("❌ Error type: \(type(of: error))")
+            print("❌ Localized description: \(error.localizedDescription)")
+            #endif
+            throw error
+        }
     }
 
     /// Sign in with ID token from external OAuth provider (Google, Apple)

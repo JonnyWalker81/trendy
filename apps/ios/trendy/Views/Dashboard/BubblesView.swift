@@ -105,7 +105,11 @@ struct BubblesView: View {
                 InsightDetailSheet(insight: insight, viewModel: insightsViewModel)
             }
             .task {
-                await eventStore.fetchData()
+                // Only fetch if data hasn't been loaded yet
+                // MainTabView handles initial load; this is a fallback for edge cases
+                if !eventStore.hasLoadedOnce {
+                    await eventStore.fetchData()
+                }
 
                 #if DEBUG
                 // In screenshot mode, inject mock insights instead of fetching from API

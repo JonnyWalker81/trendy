@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FullDisclosureSDK
 
 struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
@@ -91,6 +92,17 @@ struct EventTypeSettingsView: View {
                 }
                 .accessibilityIdentifier("actionsSection")
 
+                Section {
+                    Button {
+                        FullDisclosure.shared.showFeedbackDialog()
+                    } label: {
+                        Label("Send Feedback", systemImage: "bubble.left.and.exclamationmark.bubble.right.fill")
+                    }
+                    .accessibilityIdentifier("sendFeedbackButton")
+                } header: {
+                    Text("Feedback & Support")
+                }
+
                 // TODO: Re-add #if DEBUG after cleanup
                 Section {
                     NavigationLink {
@@ -125,7 +137,11 @@ struct EventTypeSettingsView: View {
                 CalendarImportView()
             }
             .task {
-                await eventStore.fetchData()
+                // Only fetch if data hasn't been loaded yet
+                // MainTabView handles initial load; this is a fallback for edge cases
+                if !eventStore.hasLoadedOnce {
+                    await eventStore.fetchData()
+                }
             }
         }
         .accessibilityIdentifier("settingsView")

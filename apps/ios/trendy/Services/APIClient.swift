@@ -609,4 +609,16 @@ enum APIError: LocalizedError {
             return false
         }
     }
+
+    /// Check if this error indicates rate limiting (429 Too Many Requests)
+    var isRateLimitError: Bool {
+        switch self {
+        case .httpError(let code):
+            return code == 429
+        case .serverError(_, let code):
+            return code == 429
+        default:
+            return false
+        }
+    }
 }

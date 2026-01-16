@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import PostHog
+import FullDisclosureSDK
 
 @Observable
 class AuthViewModel {
@@ -86,6 +87,17 @@ class AuthViewModel {
             print("📊 PostHog identify (signUp): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
+            // Identify user in FullDisclosure for feedback submissions
+            do {
+                try await FullDisclosure.shared.identify(
+                    userId: session.user.id.uuidString,
+                    email: session.user.email
+                )
+                print("📝 FullDisclosure identify (signUp): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            } catch {
+                print("⚠️ FullDisclosure identify failed: \(error)")
+            }
+
             await MainActor.run {
                 self.isAuthenticated = true
                 self.currentUserEmail = session.user.email
@@ -133,6 +145,17 @@ class AuthViewModel {
             print("📊 PostHog identify (signIn): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
+            // Identify user in FullDisclosure for feedback submissions
+            do {
+                try await FullDisclosure.shared.identify(
+                    userId: session.user.id.uuidString,
+                    email: session.user.email
+                )
+                print("📝 FullDisclosure identify (signIn): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            } catch {
+                print("⚠️ FullDisclosure identify failed: \(error)")
+            }
+
             await MainActor.run {
                 self.isAuthenticated = true
                 self.currentUserEmail = session.user.email
@@ -157,6 +180,9 @@ class AuthViewModel {
 
         // Reset PostHog identification before signing out
         PostHogSDK.shared.reset()
+
+        // Clear FullDisclosure user identity
+        await FullDisclosure.shared.clearIdentity()
 
         do {
             try await supabaseService.signOut()
