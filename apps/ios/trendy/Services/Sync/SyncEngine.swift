@@ -104,6 +104,13 @@ actor SyncEngine {
             return
         }
 
+        // Verify actual connectivity before starting sync
+        // This catches captive portal situations where NWPathMonitor reports "satisfied"
+        guard await performHealthCheck() else {
+            Log.sync.info("Skipping sync - health check failed (likely captive portal)")
+            return
+        }
+
         isSyncing = true
         await updateState(.syncing)
 
@@ -402,6 +409,32 @@ actor SyncEngine {
             return max(0, backoffUntil.timeIntervalSinceNow)
         }
         return 0
+    }
+
+    // MARK: - Private: Health Check
+
+    /// Performs a lightweight health check to verify actual internet connectivity.
+    /// NWPathMonitor can report "satisfied" behind captive portals, so we verify
+    /// with an actual HTTP request before attempting sync operations.
+    ///
+    /// Uses getEventTypes() because:
+    /// - It always returns data (user always has at least default types)
+    /// - Empty response would indicate a problem, not a valid state
+    /// - Lightweight payload compared to full event list
+    private func performHealthCheck() async -> Bool {
+        do {
+            let types = try await apiClient.getEventTypes()
+            // If we get a response (even empty), connectivity is working
+            Log.sync.debug("Health check passed", context: .with { ctx in
+                ctx.add("event_types_count", types.count)
+            })
+            return true
+        } catch {
+            Log.sync.warning("Health check failed - likely captive portal or no connectivity", context: .with { ctx in
+                ctx.add("error", error.localizedDescription)
+            })
+            return false
+        }
     }
 
     // MARK: - Private: Flush Pending Mutations
