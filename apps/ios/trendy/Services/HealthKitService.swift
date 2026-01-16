@@ -557,6 +557,11 @@ class HealthKitService: NSObject {
         for sample in samples {
             await processSample(sample, category: category)
         }
+
+        // Record update time for freshness display
+        if !samples.isEmpty {
+            recordCategoryUpdate(for: category)
+        }
     }
 
     /// Process a single sample based on its category
@@ -1671,6 +1676,42 @@ class HealthKitService: NSObject {
         })
     }
 
+    // MARK: - Update Time Tracking
+
+    /// Record that a category received new data
+    private func recordCategoryUpdate(for category: HealthDataCategory) {
+        let now = Date()
+        lastUpdateTimes[category] = now
+        Self.sharedDefaults.set(now.timeIntervalSince1970, forKey: "\(lastUpdateTimeKeyPrefix)\(category.rawValue)")
+        Log.healthKit.debug("Recorded update", context: .with { ctx in
+            ctx.add("category", category.displayName)
+        })
+    }
+
+    /// Load all persisted update times into memory
+    private func loadAllUpdateTimes() {
+        for category in HealthDataCategory.allCases {
+            let timestamp = Self.sharedDefaults.double(forKey: "\(lastUpdateTimeKeyPrefix)\(category.rawValue)")
+            if timestamp > 0 {
+                lastUpdateTimes[category] = Date(timeIntervalSince1970: timestamp)
+            }
+        }
+        Log.healthKit.debug("Loaded update times", context: .with { ctx in
+            ctx.add("count", lastUpdateTimes.count)
+        })
+    }
+
+    /// Get last update time for a specific category
+    func lastUpdateTime(for category: HealthDataCategory) -> Date? {
+        lastUpdateTimes[category]
+    }
+
+    /// Clear update time for a category
+    func clearUpdateTime(for category: HealthDataCategory) {
+        lastUpdateTimes.removeValue(forKey: category)
+        Self.sharedDefaults.removeObject(forKey: "\(lastUpdateTimeKeyPrefix)\(category.rawValue)")
+    }
+
     // MARK: - Debug Properties (Available in all builds)
 
     /// Debug: Last sleep date for diagnostics
@@ -1685,6 +1726,11 @@ class HealthKitService: NSObject {
     /// Debug: Active observer categories
     var activeObserverCategories: [HealthDataCategory] {
         Array(observerQueries.keys)
+    }
+
+    /// Categories with persisted anchors (for debug view)
+    var categoriesWithAnchors: [HealthDataCategory] {
+        Array(queryAnchors.keys).sorted { $0.rawValue < $1.rawValue }
     }
 
     /// Debug: Count of processed sample IDs
