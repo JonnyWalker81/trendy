@@ -78,32 +78,69 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
+                // TIMING DEBUG: Log with timestamp for investigating 60-second freeze
+                let startTime = Date()
+                Log.sync.info("=== TIMING [T+0.000s] Scene became active - START ===")
+
                 Log.geofence.debug("Scene became active, ensuring regions registered")
 
                 // Ensure geofences are re-registered when app becomes active
                 // This handles iOS potentially dropping regions under memory pressure
+                Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before ensureRegionsRegistered")
                 geofenceManager?.ensureRegionsRegistered()
+                Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After ensureRegionsRegistered")
 
                 // Sync data and reconcile geofences when app becomes active
                 if let store = eventStore {
                     Task {
+                        Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Inside Task - start")
+
                         // Refresh HealthKit daily aggregates first to ensure fresh data
                         if let hkService = healthKitService, hkService.hasHealthKitAuthorization {
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before refreshDailyAggregates")
                             await hkService.refreshDailyAggregates()
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After refreshDailyAggregates")
+                        } else {
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Skipped refreshDailyAggregates (no auth)")
                         }
 
-                        // Sync with backend (now always includes geofence sync)
-                        await store.fetchData()
+                        // Check network status SYNCHRONOUSLY before making any network calls.
+                        // This is critical because when returning from background:
+                        // 1. The cached `isOnline` value may be stale (still `true` from before going offline)
+                        // 2. NWPathMonitor callbacks run on a background queue and may not have fired yet
+                        // 3. If we proceed with stale `true`, the Supabase SDK will try to refresh tokens
+                        // 4. Supabase SDK has 60-second default timeout, causing UI freeze
+                        //
+                        // By checking `monitor.currentPath` synchronously, we get the actual current state.
+                        Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before checkNetworkPathSynchronously")
+                        let isCurrentlyOnline = store.checkNetworkPathSynchronously()
+                        Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After checkNetworkPathSynchronously - result: \(isCurrentlyOnline)")
+
+                        if isCurrentlyOnline {
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before fetchData")
+                            await store.fetchData()
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After fetchData")
+                        } else {
+                            Log.sync.debug("Scene active but offline (sync check) - skipping fetchData")
+                            // Still refresh sync state UI to show accurate pending count
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before refreshSyncStateForUI (offline path)")
+                            await store.refreshSyncStateForUI()
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After refreshSyncStateForUI (offline path)")
+                        }
 
                         // Reconcile geofences with device after sync to pick up server-side changes
                         // (ensureRegionsRegistered already ran above for immediate re-registration)
                         if let geoManager = geofenceManager, geoManager.hasGeofencingAuthorization {
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Before geofence reconciliation")
                             let definitions = store.getLocalGeofenceDefinitions()
                             geoManager.reconcileRegions(desired: definitions)
+                            Log.sync.info("TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] After geofence reconciliation")
                             #if DEBUG
                             print("📍 App became active - reconciled \(definitions.count) geofences with device")
                             #endif
                         }
+
+                        Log.sync.info("=== TIMING [T+\(String(format: "%.3f", Date().timeIntervalSince(startTime)))s] Scene active handler COMPLETE ===")
                     }
                 }
             }

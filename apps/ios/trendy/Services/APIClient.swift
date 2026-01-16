@@ -36,11 +36,19 @@ class APIClient {
     ///   - supabaseService: Supabase service for authentication
     init(configuration: APIConfiguration, supabaseService: SupabaseService) {
         self.baseURL = configuration.baseURL
-        self.session = URLSession.shared
         self.supabaseService = supabaseService
+
+        // Configure URLSession with shorter timeouts to avoid blocking when offline
+        // Default is 60 seconds which causes UI freezes when network is unavailable
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15  // 15 seconds per request
+        config.timeoutIntervalForResource = 30 // 30 seconds total for resource
+        self.session = URLSession(configuration: config)
 
         Log.api.info("APIClient initialized", context: .with { ctx in
             ctx.add("base_url", configuration.baseURL)
+            ctx.add("request_timeout", 15)
+            ctx.add("resource_timeout", 30)
         })
     }
 
@@ -56,7 +64,10 @@ class APIClient {
 
     /// Get auth headers with Bearer token
     private func authHeaders() async throws -> [String: String] {
+        let authHeadersStart = Date()
+        Log.api.info("TIMING authHeaders [T+0.000s] START - calling supabaseService.getAccessToken()")
         let token = try await supabaseService.getAccessToken()
+        Log.api.info("TIMING authHeaders [T+\(String(format: "%.3f", Date().timeIntervalSince(authHeadersStart)))s] COMPLETE - token acquired")
         return [
             "Content-Type": "application/json",
             "Authorization": "Bearer \(token)"

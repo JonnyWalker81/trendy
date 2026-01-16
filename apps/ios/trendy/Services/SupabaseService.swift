@@ -59,7 +59,10 @@ class SupabaseService {
 
     /// Get current access token for API requests
     func getAccessToken() async throws -> String {
+        let tokenStart = Date()
+        Log.auth.info("TIMING getAccessToken [T+0.000s] START - calling client.auth.session")
         let session = try await client.auth.session
+        Log.auth.info("TIMING getAccessToken [T+\(String(format: "%.3f", Date().timeIntervalSince(tokenStart)))s] COMPLETE - session acquired")
         return session.accessToken
     }
 

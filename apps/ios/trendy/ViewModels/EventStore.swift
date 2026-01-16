@@ -80,13 +80,26 @@ class EventStore {
 
     private func setupNetworkMonitor() {
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                let wasOffline = !(self?.isOnline ?? false)
-                self?.isOnline = (path.status == .satisfied)
+            // Update state on MainActor without blocking
+            // Use Task.detached to avoid inheriting actor context from callback queue
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
 
-                // Auto-sync when coming back online
-                if wasOffline && (self?.isOnline ?? false) {
-                    await self?.handleNetworkRestored()
+                let wasOffline = !self.isOnline
+                let nowOnline = (path.status == .satisfied)
+                self.isOnline = nowOnline
+
+                Log.sync.debug("Network state changed", context: .with { ctx in
+                    ctx.add("was_offline", wasOffline)
+                    ctx.add("now_online", nowOnline)
+                })
+
+                // Auto-sync when coming back online (fire-and-forget to avoid blocking)
+                if wasOffline && nowOnline {
+                    // Spawn a separate task for sync to avoid blocking the monitor callback
+                    Task { @MainActor [weak self] in
+                        await self?.handleNetworkRestored()
+                    }
                 }
             }
         }
@@ -98,7 +111,33 @@ class EventStore {
         monitor.cancel()
     }
 
+    /// Synchronously check the current network path status.
+    /// This is more reliable than the cached `isOnline` value when the app returns from background,
+    /// because NWPathMonitor callbacks may not have fired yet.
+    /// - Returns: true if network is currently available, false otherwise
+    func checkNetworkPathSynchronously() -> Bool {
+        let path = monitor.currentPath
+        let isConnected = path.status == .satisfied
+
+        // Update cached value to match current state
+        if isOnline != isConnected {
+            Log.sync.debug("Network state updated from synchronous check", context: .with { ctx in
+                ctx.add("cached_was", isOnline)
+                ctx.add("actual_is", isConnected)
+            })
+            isOnline = isConnected
+        }
+
+        return isConnected
+    }
+
     private func handleNetworkRestored() async {
+        // Guard against rapid repeated calls
+        guard !isLoading else {
+            Log.sync.debug("Network restored but already loading, skipping sync")
+            return
+        }
+
         Log.sync.info("Network restored - starting sync")
         await performSync()
         await refreshSyncStateForUI()
@@ -276,6 +315,14 @@ class EventStore {
     /// Trigger a sync with the backend
     func performSync() async {
         guard let syncEngine = syncEngine else { return }
+
+        // Skip sync entirely if offline - avoids waiting for network timeouts
+        guard isOnline else {
+            Log.sync.debug("Skipping sync - device is offline")
+            await refreshSyncStateForUI()
+            return
+        }
+
         // Queue mutations for any widget-created events that may have been missed
         await queueMutationsForUnsyncedEvents()
         await syncEngine.performSync()
@@ -383,11 +430,18 @@ class EventStore {
     /// Fetch data - performs sync if online, otherwise loads from local cache
     /// - Parameter force: If true, bypasses debouncing and forces a fresh fetch
     func fetchData(force: Bool = false) async {
-        guard modelContext != nil else { return }
+        let fetchStartTime = Date()
+        Log.sync.info("TIMING fetchData [T+0.000s] START")
+
+        guard modelContext != nil else {
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] EXIT - no modelContext")
+            return
+        }
 
         // Debounce: skip if recently fetched (unless forced)
         if !force, let lastFetch = lastFetchTime,
            Date().timeIntervalSince(lastFetch) < fetchDebounceInterval {
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] EXIT - debounced")
             return
         }
 
@@ -396,19 +450,27 @@ class EventStore {
 
         do {
             // Sync with backend if we have a SyncEngine and are online
-            Log.sync.info("fetchData: checking sync conditions", context: .with { ctx in
+            // Use synchronous network check to avoid stale isOnline value when returning from background
+            // This prevents 60-second Supabase SDK timeout when network state changed while app was backgrounded
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before checkNetworkPathSynchronously")
+            let actuallyOnline = checkNetworkPathSynchronously()
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After checkNetworkPathSynchronously - result: \(actuallyOnline)", context: .with { ctx in
                 ctx.add("has_sync_engine", syncEngine != nil)
-                ctx.add("is_online", isOnline)
+                ctx.add("cached_is_online", isOnline)
+                ctx.add("sync_check_online", actuallyOnline)
             })
-            if let syncEngine = syncEngine, isOnline {
-                Log.sync.info("fetchData: calling performSync")
+            if let syncEngine = syncEngine, actuallyOnline {
+                Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before syncEngine.performSync")
                 await syncEngine.performSync()
+                Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After syncEngine.performSync")
             } else {
-                Log.sync.warning("fetchData: skipping sync - syncEngine=\(syncEngine != nil), isOnline=\(isOnline)")
+                Log.sync.debug("fetchData: skipping sync - syncEngine=\(syncEngine != nil), actuallyOnline=\(actuallyOnline)")
             }
 
             // Always load from local cache after sync
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before fetchFromLocal")
             try await fetchFromLocal()
+            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After fetchFromLocal")
             await refreshSyncStateForUI()
 
         } catch {
@@ -421,6 +483,7 @@ class EventStore {
 
         lastFetchTime = Date()
         isLoading = false
+        Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] COMPLETE")
     }
 
     private func fetchFromLocal() async throws {
@@ -495,13 +558,28 @@ class EventStore {
         newEvent.calendarEventId = calendarEventId
         modelContext.insert(newEvent)
 
+        // Step 1: Save event locally
         do {
             try modelContext.save()
             reloadWidgets()
 
-            // Queue mutation for sync if we have a sync engine
-            // With UUIDv7, we can sync immediately - the ID is already known
-            if let syncEngine = syncEngine {
+            // Optimistic update: immediately add event to UI array
+            // This ensures the event appears instantly, before any sync operations
+            events.insert(newEvent, at: 0)
+
+            Log.sync.info("Event saved locally", context: .with { ctx in
+                ctx.add("event_id", newEvent.id)
+                ctx.add("is_online", isOnline)
+            })
+        } catch {
+            Log.data.error("Failed to save event locally", error: error)
+            errorMessage = EventError.saveFailed.localizedDescription
+            return  // Can't continue if save failed
+        }
+
+        // Step 2: Queue mutation for sync (separate try block so fetch still runs on error)
+        if let syncEngine = syncEngine {
+            do {
                 let request = CreateEventRequest(
                     id: newEvent.id,  // Send client-generated UUIDv7
                     eventTypeId: type.id,
@@ -528,15 +606,30 @@ class EventStore {
                     payload: payload
                 )
 
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+                Log.sync.info("Mutation queued for event", context: .with { ctx in
+                    ctx.add("event_id", newEvent.id)
+                })
+            } catch {
+                // Log error but don't block - event is already saved locally
+                Log.sync.error("Failed to queue mutation for event", error: error, context: .with { ctx in
+                    ctx.add("event_id", newEvent.id)
+                })
             }
 
-            await fetchData()
-        } catch {
-            errorMessage = EventError.saveFailed.localizedDescription
+            // Always refresh sync state after queueing (shows pending count)
+            await refreshSyncStateForUI()
+
+            // Trigger sync if online, then refresh data
+            if isOnline {
+                await syncEngine.performSync()
+                // Fetch fresh data after sync completes
+                await fetchData()
+            }
+            // When offline, skip fetchData() - optimistic update already added the event
+            // fetchData() would create a fresh context that might not see the just-saved event
+        } else {
+            // No sync engine (pre-auth) - still refresh sync state
+            await refreshSyncStateForUI()
         }
     }
 
@@ -562,12 +655,24 @@ class EventStore {
             }
         }
 
+        // Step 1: Save update locally
         do {
             try modelContext.save()
             reloadWidgets()
 
-            // Queue mutation for sync - with UUIDv7, the ID is always the server ID
-            if let syncEngine = syncEngine {
+            Log.sync.info("Event updated locally", context: .with { ctx in
+                ctx.add("event_id", event.id)
+                ctx.add("is_online", isOnline)
+            })
+        } catch {
+            Log.data.error("Failed to save event update locally", error: error)
+            errorMessage = EventError.saveFailed.localizedDescription
+            return
+        }
+
+        // Step 2: Queue mutation for sync (separate try block)
+        if let syncEngine = syncEngine {
+            do {
                 let request = UpdateEventRequest(
                     eventTypeId: event.eventType?.id,
                     timestamp: event.timestamp,
@@ -593,15 +698,26 @@ class EventStore {
                     payload: payload
                 )
 
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+                Log.sync.info("Update mutation queued", context: .with { ctx in
+                    ctx.add("event_id", event.id)
+                })
+            } catch {
+                Log.sync.error("Failed to queue update mutation", error: error, context: .with { ctx in
+                    ctx.add("event_id", event.id)
+                })
             }
 
-            await fetchData()
-        } catch {
-            errorMessage = EventError.saveFailed.localizedDescription
+            // Always refresh sync state after queueing
+            await refreshSyncStateForUI()
+
+            // Trigger sync if online, then refresh data
+            if isOnline {
+                await syncEngine.performSync()
+                await fetchData()
+            }
+            // When offline, skip fetchData() - update is already visible in UI
+        } else {
+            await refreshSyncStateForUI()
         }
     }
 
@@ -620,7 +736,9 @@ class EventStore {
             }
         }
 
-        // Queue deletion mutation before deleting locally
+        let eventId = event.id
+
+        // Step 1: Queue deletion mutation before deleting locally
         // With UUIDv7, we always have the ID we need
         if let syncEngine = syncEngine {
             do {
@@ -628,30 +746,47 @@ class EventStore {
                 try await syncEngine.queueMutation(
                     entityType: .event,
                     operation: .delete,
-                    entityId: event.id,
+                    entityId: eventId,
                     payload: payload
                 )
+
+                Log.sync.info("Delete mutation queued", context: .with { ctx in
+                    ctx.add("event_id", eventId)
+                })
             } catch {
-                Log.sync.error("Failed to queue delete mutation", error: error)
+                Log.sync.error("Failed to queue delete mutation", error: error, context: .with { ctx in
+                    ctx.add("event_id", eventId)
+                })
             }
+
+            // Refresh sync state after queueing
+            await refreshSyncStateForUI()
         }
 
-        // Delete locally
+        // Step 2: Delete locally and optimistically remove from UI
         modelContext.delete(event)
+        events.removeAll { $0.id == eventId }
 
         do {
             try modelContext.save()
             reloadWidgets()
 
-            // Trigger sync if online
-            if let syncEngine = syncEngine, isOnline {
-                await syncEngine.performSync()
-            }
-
-            await fetchData()
+            Log.sync.info("Event deleted locally", context: .with { ctx in
+                ctx.add("event_id", eventId)
+                ctx.add("is_online", isOnline)
+            })
         } catch {
+            Log.data.error("Failed to delete event locally", error: error)
             errorMessage = EventError.deleteFailed.localizedDescription
+            return
         }
+
+        // Step 3: Trigger sync if online, then refresh data
+        if let syncEngine = syncEngine, isOnline {
+            await syncEngine.performSync()
+            await fetchData()
+        }
+        // When offline, skip fetchData() - optimistic delete already removed the event
     }
 
     // MARK: - EventType CRUD

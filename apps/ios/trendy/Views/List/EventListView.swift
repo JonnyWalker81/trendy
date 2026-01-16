@@ -118,6 +118,12 @@ struct EventListView: View {
                 // Initial cache population
                 updateCachedData()
             }
+            .onAppear {
+                // Rebuild cache when view appears (e.g., switching tabs)
+                // This handles events added while on another tab, where .onChange didn't fire
+                // because this view wasn't in the active view hierarchy
+                updateCachedData()
+            }
             .onChange(of: eventStore.events.count) { _, _ in
                 updateCachedData()
             }
