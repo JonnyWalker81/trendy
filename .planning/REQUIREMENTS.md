@@ -19,10 +19,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Geofence (iOS)
 
-- [ ] **GEO-01**: Geofence monitoring persists across app lifecycle (days/weeks without dropping)
-- [ ] **GEO-02**: Geofences are re-registered on app launch, device restart, and iOS eviction
-- [ ] **GEO-03**: Geofence enter/exit events are logged reliably every time (even if notification delivery fails)
-- [ ] **GEO-04**: User can see which geofences are actually registered with iOS vs saved in app (health monitoring)
+- [x] **GEO-01**: Geofence monitoring persists across app lifecycle (days/weeks without dropping)
+- [x] **GEO-02**: Geofences are re-registered on app launch, device restart, and iOS eviction
+- [x] **GEO-03**: Geofence enter/exit events are logged reliably every time (even if notification delivery fails)
+- [x] **GEO-04**: User can see which geofences are actually registered with iOS vs saved in app (health monitoring)
 
 ### Sync Engine (iOS + Server)
 
@@ -104,10 +104,10 @@ Which phases cover which requirements. Updated by create-roadmap.
 | HLTH-03 | Phase 2 | Complete |
 | HLTH-04 | Phase 2 | Complete |
 | HLTH-05 | Phase 2 | Complete |
-| GEO-01 | Phase 3 | Pending |
-| GEO-02 | Phase 3 | Pending |
-| GEO-03 | Phase 3 | Pending |
-| GEO-04 | Phase 3 | Pending |
+| GEO-01 | Phase 3 | Complete |
+| GEO-02 | Phase 3 | Complete |
+| GEO-03 | Phase 3 | Complete |
+| GEO-04 | Phase 3 | Complete |
 | SYNC-01 | Phase 5 | Pending |
 | SYNC-02 | Phase 5 | Pending |
 | SYNC-03 | Phase 5 | Pending |
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-15 after Phase 2 completion (HLTH-01 through HLTH-05 complete)*
+*Last updated: 2026-01-16 after Phase 3 completion (GEO-01 through GEO-04 complete)*

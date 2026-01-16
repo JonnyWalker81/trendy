@@ -12,7 +12,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 
 - [x] **Phase 1: Foundation** - Structured logging, entitlement verification, error handling foundation
 - [x] **Phase 2: HealthKit Reliability** - Background delivery, observer queries, server deduplication
-- [ ] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
+- [x] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
 - [ ] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
 - [ ] **Phase 5: Sync Engine** - Offline-first CRUD, automatic sync, mutation persistence
 - [ ] **Phase 6: Server API** - UUIDv7 support, deduplication, sync status endpoint
@@ -67,7 +67,9 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: TBD
+- [x] 03-01: AppDelegate background launch handler
+- [x] 03-02: Lifecycle re-registration at launch, activation, and auth changes
+- [x] 03-03: Health monitoring dashboard UI
 
 ### Phase 4: Code Quality
 **Goal**: Clean separation of concerns in HealthKit and Geofence code
@@ -139,7 +141,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/4 | Complete | 2026-01-15 |
 | 2. HealthKit Reliability | 2/2 | Complete | 2026-01-15 |
-| 3. Geofence Reliability | 0/? | Not started | - |
+| 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
 | 4. Code Quality | 0/? | Not started | - |
 | 5. Sync Engine | 0/? | Not started | - |
 | 6. Server API | 0/? | Not started | - |
