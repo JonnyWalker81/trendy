@@ -752,8 +752,10 @@ class EventStore {
 
         let eventId = event.id
 
-        // Step 1: Queue deletion mutation before deleting locally
-        // With UUIDv7, we always have the ID we need
+        // Step 1: Queue deletion mutation BEFORE deleting locally
+        // This ordering is intentional for deletes: we need the entity to still exist when queueing
+        // the mutation (to capture any needed data). The mutation is queued first to ensure it
+        // persists even if a force quit occurs after queueMutation but before the entity is deleted.
         if let syncEngine = syncEngine {
             do {
                 let payload = Data() // No payload needed for delete
@@ -813,12 +815,11 @@ class EventStore {
         newType.syncStatus = .pending
         modelContext.insert(newType)
 
-        do {
-            try modelContext.save()
-            reloadWidgets()
-
-            // Queue mutation for sync
-            if let syncEngine = syncEngine {
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
+        if let syncEngine = syncEngine {
+            do {
                 let request = CreateEventTypeRequest(
                     id: newType.id,  // Send client-generated UUIDv7
                     name: name,
@@ -832,17 +833,29 @@ class EventStore {
                     entityId: newType.id,
                     payload: payload
                 )
-
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+            } catch {
+                // Log error but don't block - we still want to save the event type locally
+                Log.sync.error("Failed to queue create mutation for event type", error: error, context: .with { ctx in
+                    ctx.add("event_type_id", newType.id)
+                })
             }
+        }
 
-            await fetchData()
+        // Step 2: Save event type locally (after mutation is queued)
+        do {
+            try modelContext.save()
+            reloadWidgets()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
+            return
         }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine, isOnline {
+            await syncEngine.performSync()
+        }
+
+        await fetchData()
     }
 
     func updateEventType(_ eventType: EventType, name: String, colorHex: String, iconName: String) async {
@@ -852,12 +865,11 @@ class EventStore {
         eventType.colorHex = colorHex
         eventType.iconName = iconName
 
-        do {
-            try modelContext.save()
-            reloadWidgets()
-
-            // Queue mutation for sync - ID is always the canonical ID
-            if let syncEngine = syncEngine {
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
+        if let syncEngine = syncEngine {
+            do {
                 let request = UpdateEventTypeRequest(name: name, color: colorHex, icon: iconName)
                 let payload = try JSONEncoder().encode(request)
                 try await syncEngine.queueMutation(
@@ -866,23 +878,38 @@ class EventStore {
                     entityId: eventType.id,
                     payload: payload
                 )
-
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+            } catch {
+                // Log error but don't block - we still want to save the event type locally
+                Log.sync.error("Failed to queue update mutation for event type", error: error, context: .with { ctx in
+                    ctx.add("event_type_id", eventType.id)
+                })
             }
+        }
 
-            await fetchData()
+        // Step 2: Save event type locally (after mutation is queued)
+        do {
+            try modelContext.save()
+            reloadWidgets()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
+            return
         }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine, isOnline {
+            await syncEngine.performSync()
+        }
+
+        await fetchData()
     }
 
     func deleteEventType(_ eventType: EventType) async {
         guard let modelContext else { return }
 
-        // Queue deletion mutation before deleting locally
+        // Step 1: Queue deletion mutation BEFORE deleting locally
+        // This ordering is intentional for deletes: we need the entity to still exist when queueing
+        // the mutation (to capture any needed data). The mutation is queued first to ensure it
+        // persists even if a force quit occurs after queueMutation but before the entity is deleted.
         if let syncEngine = syncEngine {
             do {
                 let payload = Data()
@@ -953,11 +980,11 @@ class EventStore {
         geofence.syncStatus = .pending
         modelContext.insert(geofence)
 
-        do {
-            try modelContext.save()
-
-            // Queue mutation for sync
-            if let syncEngine = syncEngine {
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
+        if let syncEngine = syncEngine {
+            do {
                 let request = CreateGeofenceRequest(
                     id: geofence.id,  // Send client-generated UUIDv7
                     name: geofence.name,
@@ -977,28 +1004,38 @@ class EventStore {
                     entityId: geofence.id,
                     payload: payload
                 )
-
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+            } catch {
+                // Log error but don't block - we still want to save the geofence locally
+                Log.sync.error("Failed to queue create mutation for geofence", error: error, context: .with { ctx in
+                    ctx.add("geofence_id", geofence.id)
+                })
             }
+        }
 
-            return true
+        // Step 2: Save geofence locally (after mutation is queued)
+        do {
+            try modelContext.save()
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
             return false
         }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine, isOnline {
+            await syncEngine.performSync()
+        }
+
+        return true
     }
 
     func updateGeofence(_ geofence: Geofence) async {
         guard let modelContext else { return }
 
-        do {
-            try modelContext.save()
-
-            // Queue mutation for sync
-            if let syncEngine = syncEngine {
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
+        if let syncEngine = syncEngine {
+            do {
                 let request = UpdateGeofenceRequest(
                     name: geofence.name,
                     latitude: geofence.latitude,
@@ -1018,21 +1055,35 @@ class EventStore {
                     entityId: geofence.id,
                     payload: payload
                 )
-
-                // Trigger sync if online
-                if isOnline {
-                    await syncEngine.performSync()
-                }
+            } catch {
+                // Log error but don't block - we still want to save the geofence locally
+                Log.sync.error("Failed to queue update mutation for geofence", error: error, context: .with { ctx in
+                    ctx.add("geofence_id", geofence.id)
+                })
             }
+        }
+
+        // Step 2: Save geofence locally (after mutation is queued)
+        do {
+            try modelContext.save()
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
+            return
+        }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine, isOnline {
+            await syncEngine.performSync()
         }
     }
 
     func deleteGeofence(_ geofence: Geofence) async {
         guard let modelContext else { return }
 
-        // Queue deletion mutation before deleting locally
+        // Step 1: Queue deletion mutation BEFORE deleting locally
+        // This ordering is intentional for deletes: we need the entity to still exist when queueing
+        // the mutation (to capture any needed data). The mutation is queued first to ensure it
+        // persists even if a force quit occurs after queueMutation but before the entity is deleted.
         if let syncEngine = syncEngine {
             do {
                 let payload = Data()
