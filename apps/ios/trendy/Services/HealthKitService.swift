@@ -124,6 +124,9 @@ class HealthKitService: NSObject {
     /// Anchors for incremental fetching
     private var queryAnchors: [HealthDataCategory: HKQueryAnchor] = [:]
 
+    /// Last update time per category (for UI display)
+    private(set) var lastUpdateTimes: [HealthDataCategory: Date] = [:]
+
     // MARK: - Constants
 
     private let processedSampleIdsKey = "healthKitProcessedSampleIds"
@@ -133,6 +136,7 @@ class HealthKitService: NSObject {
     private let maxProcessedSampleIds = 1000
     private static let migrationCompletedKey = "healthKitMigrationToAppGroupCompleted"
     private let queryAnchorKeyPrefix = "healthKitQueryAnchor_"
+    private let lastUpdateTimeKeyPrefix = "healthKitLastUpdate_"
 
     /// Date formatter for consistent date-only sampleIds (no timezone issues)
     private static let dateOnlyFormatter: DateFormatter = {
@@ -168,6 +172,7 @@ class HealthKitService: NSObject {
         loadLastSleepDate()
         loadLastActiveEnergyDate()
         loadAllAnchors()
+        loadAllUpdateTimes()
 
         // Debug: Log current state
         #if DEBUG
@@ -505,36 +510,50 @@ class HealthKitService: NSObject {
 
     // MARK: - Sample Processing
 
-    /// Handle new samples for a category
+    /// Handle new samples for a category using anchored query
     @MainActor
     private func handleNewSamples(for category: HealthDataCategory) async {
         guard let sampleType = category.hkSampleType else { return }
 
-        // Create predicate for recent samples (last 24 hours to catch any missed)
-        let startDate = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+        // Get current anchor (may be nil for first query)
+        let currentAnchor = queryAnchors[category]
 
-        // Execute query
-        let samples = await withCheckedContinuation { (continuation: CheckedContinuation<[HKSample], Never>) in
-            let query = HKSampleQuery(
-                sampleType: sampleType,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
-            ) { _, samples, error in
+        // Execute anchored query
+        let (samples, newAnchor) = await withCheckedContinuation { (continuation: CheckedContinuation<([HKSample], HKQueryAnchor?), Never>) in
+            let query = HKAnchoredObjectQuery(
+                type: sampleType,
+                predicate: nil,
+                anchor: currentAnchor,
+                limit: HKObjectQueryNoLimit
+            ) { _, addedSamples, _, newAnchor, error in
                 if let error = error {
-                    Log.healthKit.error("Sample query error", error: error, context: .with { ctx in
+                    Log.healthKit.error("Anchored query error", error: error, context: .with { ctx in
                         ctx.add("category", category.displayName)
                     })
-                    continuation.resume(returning: [])
+                    continuation.resume(returning: ([], nil))
                     return
                 }
-                continuation.resume(returning: samples ?? [])
+                continuation.resume(returning: (addedSamples ?? [], newAnchor))
             }
             healthStore.execute(query)
         }
 
-        // Process samples based on category
+        // Update and persist anchor if we got new samples or a new anchor
+        if let newAnchor = newAnchor {
+            queryAnchors[category] = newAnchor
+            saveAnchor(newAnchor, for: category)
+        }
+
+        // Log sample counts
+        if !samples.isEmpty {
+            Log.healthKit.info("Processing new samples", context: .with { ctx in
+                ctx.add("category", category.displayName)
+                ctx.add("count", samples.count)
+                ctx.add("hadPreviousAnchor", currentAnchor != nil)
+            })
+        }
+
+        // Process only truly new samples
         for sample in samples {
             await processSample(sample, category: category)
         }
