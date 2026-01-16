@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-15)
 ## Current Position
 
 Phase: 5 of 7 (Sync Engine)
-Plan: 2 of 4 in phase (05-01 and 05-02 complete)
+Plan: 4 of 4 in phase (05-01, 05-02, 05-04 complete)
 Status: In progress
-Last activity: 2026-01-16 — Completed 05-01-PLAN.md
+Last activity: 2026-01-16 — Completed 05-04-PLAN.md
 
-Progress: █████████░ 56% (14/25 plans complete)
+Progress: █████████░ 60% (15/25 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 6.7 min
-- Total execution time: ~94 minutes
+- Total plans completed: 15
+- Average duration: 6.5 min
+- Total execution time: ~98 minutes
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: █████████░ 56% (14/25 plans complete)
 | 2. HealthKit Reliability | 2/2 | 23 min | 11.5 min |
 | 3. Geofence Reliability | 4/4 | 23 min | 5.75 min |
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
-| 5. Sync Engine | 2/4 | 17 min | 8.5 min |
+| 5. Sync Engine | 3/4 | 21 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-04 (3m), 04-01 (17m), 04-02 (10m), 05-02 (5m), 05-01 (12m)
-- Trend: Sync engine plans are moderate complexity
+- Last 5 plans: 04-01 (17m), 04-02 (10m), 05-02 (5m), 05-01 (12m), 05-04 (4m)
+- Trend: Gap closure plans are quick to execute
 
 ## Accumulated Context
 
@@ -83,6 +83,9 @@ Recent decisions affecting current work:
 | 05-02 | Use getEventTypes() for health check | Always returns data if connected; lightweight; reliable signal |
 | 05-02 | Health check before isSyncing guard | No point setting syncing state if we can't connect |
 | 05-02 | Keep QueuedOperationV1 in SchemaV1 | Required for V1->V2 migration support |
+| 05-04 | Queue mutation BEFORE save for creates/updates | Ensures PendingMutation persists even if force quit interrupts save |
+| 05-04 | Delete operations queue BEFORE delete | Entity must exist when queueing to capture any needed data |
+| 05-04 | Error handling: mutation queue failure should not block local save | User's data shouldn't be lost just because queue failed |
 
 ### Pending Todos
 
@@ -92,10 +95,11 @@ None.
 
 - Build verification passes for simulator destination
 - Provisioning profile issues only affect device builds (not blocking)
+- **BLOCKING:** App freeze when returning from background after going offline (see debug session)
 
 ## Session Continuity
 
 Last session: 2026-01-16
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-04-PLAN.md (mutation atomicity)
 Resume file: None
-Next: Continue with 05-03-PLAN.md or 05-04-PLAN.md
+Next: Complete 05-03 verification tests or proceed to next phase
