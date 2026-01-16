@@ -550,18 +550,22 @@ class HealthKitService: NSObject {
             saveAnchor(newAnchor, for: category)
         }
 
+        // Bulk import if no previous anchor (first-time fetch of historical data)
+        let isBulkImport = currentAnchor == nil && samples.count > 5
+
         // Log sample counts
         if !samples.isEmpty {
             Log.healthKit.info("Processing new samples", context: .with { ctx in
                 ctx.add("category", category.displayName)
                 ctx.add("count", samples.count)
                 ctx.add("hadPreviousAnchor", currentAnchor != nil)
+                ctx.add("isBulkImport", isBulkImport)
             })
         }
 
         // Process only truly new samples
         for sample in samples {
-            await processSample(sample, category: category)
+            await processSample(sample, category: category, isBulkImport: isBulkImport)
         }
 
         // Record update time for freshness display
@@ -571,8 +575,9 @@ class HealthKitService: NSObject {
     }
 
     /// Process a single sample based on its category
+    /// - Parameter isBulkImport: If true, skips notifications and sync (for historical data)
     @MainActor
-    private func processSample(_ sample: HKSample, category: HealthDataCategory) async {
+    private func processSample(_ sample: HKSample, category: HealthDataCategory, isBulkImport: Bool = false) async {
         // Check for duplicates using individual sample UUID
         let sampleId = sample.uuid.uuidString
         guard !processedSampleIds.contains(sampleId) else {
@@ -582,30 +587,30 @@ class HealthKitService: NSObject {
         switch category {
         case .workout:
             if let workout = sample as? HKWorkout {
-                await processWorkoutSample(workout)
+                await processWorkoutSample(workout, isBulkImport: isBulkImport)
             }
         case .sleep:
             if let categorySample = sample as? HKCategorySample {
-                await processSleepSample(categorySample)
+                await processSleepSample(categorySample, isBulkImport: isBulkImport)
             }
         case .steps:
             // Steps are handled via daily aggregation
             // Mark this individual sample as processed first to avoid redundant calls
             markSampleAsProcessed(sampleId)
-            await aggregateDailySteps()
+            await aggregateDailySteps(isBulkImport: isBulkImport)
         case .activeEnergy:
             if let quantitySample = sample as? HKQuantitySample {
                 // Mark this individual sample as processed first to avoid redundant calls
                 markSampleAsProcessed(sampleId)
-                await processActiveEnergySample(quantitySample)
+                await processActiveEnergySample(quantitySample, isBulkImport: isBulkImport)
             }
         case .mindfulness:
             if let categorySample = sample as? HKCategorySample {
-                await processMindfulnessSample(categorySample)
+                await processMindfulnessSample(categorySample, isBulkImport: isBulkImport)
             }
         case .water:
             if let quantitySample = sample as? HKQuantitySample {
-                await processWaterSample(quantitySample)
+                await processWaterSample(quantitySample, isBulkImport: isBulkImport)
             }
         }
     }
@@ -614,7 +619,7 @@ class HealthKitService: NSObject {
 
     /// Process a workout sample
     @MainActor
-    private func processWorkoutSample(_ workout: HKWorkout) async {
+    private func processWorkoutSample(_ workout: HKWorkout, isBulkImport: Bool = false) async {
         let sampleId = workout.uuid.uuidString
 
         // In-memory duplicate check (fast path)
@@ -697,7 +702,8 @@ class HealthKitService: NSObject {
                 endDate: workout.endDate,
                 notes: "Auto-logged: \(workout.workoutActivityType.name)",
                 properties: properties,
-                healthKitSampleId: sampleId
+                healthKitSampleId: sampleId,
+                isBulkImport: isBulkImport
             )
             // Mark as processed only on success
             markSampleAsProcessed(sampleId)
@@ -747,16 +753,16 @@ class HealthKitService: NSObject {
 
     /// Process a sleep sample - redirects to daily aggregation
     @MainActor
-    private func processSleepSample(_ sample: HKCategorySample) async {
+    private func processSleepSample(_ sample: HKCategorySample, isBulkImport: Bool = false) async {
         // Sleep is handled via daily aggregation, similar to steps
-        await aggregateDailySleep()
+        await aggregateDailySleep(isBulkImport: isBulkImport)
     }
 
     /// Aggregate daily sleep and create a single event per night
     /// Sleep sessions are attributed to the day they end (wake-up day)
     /// Improved to handle third-party apps (EightSleep, Whoop) that may sync data with delays
     @MainActor
-    private func aggregateDailySleep() async {
+    private func aggregateDailySleep(isBulkImport: Bool = false) async {
         let calendar = Calendar.current
         let now = Date()
 
@@ -964,7 +970,8 @@ class HealthKitService: NSObject {
                     notes: "Auto-logged: \(durationText) of sleep",
                     properties: properties,
                     healthKitSampleId: sampleId,
-                    isAllDay: true
+                    isAllDay: true,
+                    isBulkImport: isBulkImport
                 )
 
                 markSampleAsProcessed(sampleId)
@@ -981,7 +988,7 @@ class HealthKitService: NSObject {
 
     /// Aggregate daily steps and create a single event per day
     @MainActor
-    private func aggregateDailySteps() async {
+    private func aggregateDailySteps(isBulkImport: Bool = false) async {
         let today = Calendar.current.startOfDay(for: Date())
 
         // Use consistent date-only format for sampleId (no timezone issues)
@@ -1081,7 +1088,8 @@ class HealthKitService: NSObject {
                 notes: "Auto-logged: \(Int(steps)) steps",
                 properties: properties,
                 healthKitSampleId: sampleId,
-                isAllDay: true
+                isAllDay: true,
+                isBulkImport: isBulkImport
             )
 
             // Don't mark as processed - daily aggregates can be updated throughout the day
@@ -1097,15 +1105,15 @@ class HealthKitService: NSObject {
 
     /// Process an active energy sample
     @MainActor
-    private func processActiveEnergySample(_ sample: HKQuantitySample) async {
+    private func processActiveEnergySample(_ sample: HKQuantitySample, isBulkImport: Bool = false) async {
         // For active energy, we aggregate daily similar to steps
         // Skip individual samples and do daily aggregation
-        await aggregateDailyActiveEnergy()
+        await aggregateDailyActiveEnergy(isBulkImport: isBulkImport)
     }
 
     /// Aggregate daily active energy
     @MainActor
-    private func aggregateDailyActiveEnergy() async {
+    private func aggregateDailyActiveEnergy(isBulkImport: Bool = false) async {
         guard let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
 
         let today = Calendar.current.startOfDay(for: Date())
@@ -1205,7 +1213,8 @@ class HealthKitService: NSObject {
                 notes: "Auto-logged: \(Int(calories)) kcal burned",
                 properties: properties,
                 healthKitSampleId: sampleId,
-                isAllDay: true
+                isAllDay: true,
+                isBulkImport: isBulkImport
             )
 
             // Don't mark as processed - daily aggregates can be updated throughout the day
@@ -1221,7 +1230,7 @@ class HealthKitService: NSObject {
 
     /// Process a mindfulness sample
     @MainActor
-    private func processMindfulnessSample(_ sample: HKCategorySample) async {
+    private func processMindfulnessSample(_ sample: HKCategorySample, isBulkImport: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
         // In-memory duplicate check (fast path)
@@ -1255,7 +1264,8 @@ class HealthKitService: NSObject {
                 endDate: sample.endDate,
                 notes: "Auto-logged: Mindfulness session",
                 properties: properties,
-                healthKitSampleId: sampleId
+                healthKitSampleId: sampleId,
+                isBulkImport: isBulkImport
             )
             markSampleAsProcessed(sampleId)
         } catch {
@@ -1268,7 +1278,7 @@ class HealthKitService: NSObject {
 
     /// Process a water intake sample
     @MainActor
-    private func processWaterSample(_ sample: HKQuantitySample) async {
+    private func processWaterSample(_ sample: HKQuantitySample, isBulkImport: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
         // In-memory duplicate check (fast path)
@@ -1304,7 +1314,8 @@ class HealthKitService: NSObject {
                 endDate: nil,
                 notes: "Auto-logged: \(Int(milliliters)) ml water",
                 properties: properties,
-                healthKitSampleId: sampleId
+                healthKitSampleId: sampleId,
+                isBulkImport: isBulkImport
             )
             markSampleAsProcessed(sampleId)
         } catch {
@@ -1316,6 +1327,8 @@ class HealthKitService: NSObject {
     // MARK: - Event Creation
 
     /// Create an event for a HealthKit sample
+    /// - Parameters:
+    ///   - isBulkImport: If true, skips notifications and immediate sync (for historical data import)
     /// - Throws: HealthKitError.eventSaveFailed if saving to SwiftData fails
     @MainActor
     private func createEvent(
@@ -1326,7 +1339,8 @@ class HealthKitService: NSObject {
         notes: String,
         properties: [String: PropertyValue],
         healthKitSampleId: String,
-        isAllDay: Bool = false
+        isAllDay: Bool = false,
+        isBulkImport: Bool = false
     ) async throws {
         let event = Event(
             timestamp: timestamp,
@@ -1346,7 +1360,11 @@ class HealthKitService: NSObject {
             try modelContext.save()
             Log.healthKit.info("Created event", context: .with { ctx in
                 ctx.add("category", category.displayName)
+                ctx.add("isBulkImport", isBulkImport)
             })
+
+            // Skip notifications and sync during bulk import to avoid flooding
+            guard !isBulkImport else { return }
 
             // Send notification if configured
             await sendNotificationIfEnabled(for: category, eventTypeName: eventType.name, details: notes)
@@ -2044,6 +2062,8 @@ class HealthKitService: NSObject {
 
     /// Debug: Force refresh all enabled HealthKit categories
     /// This actively queries HealthKit for each category instead of waiting for observer callbacks
+    /// For daily aggregate categories (steps, sleep, activeEnergy), bypasses anchored queries
+    /// and directly runs aggregation to get current totals from HealthKit.
     @MainActor
     func forceRefreshAllCategories() async {
         Log.healthKit.debug("Force refreshing all categories")
@@ -2056,7 +2076,26 @@ class HealthKitService: NSObject {
             Log.healthKit.debug("Refreshing category", context: .with { ctx in
                 ctx.add("category", category.displayName)
             })
-            await handleNewSamples(for: category)
+
+            // Daily aggregate categories need special handling:
+            // They aggregate data from multiple samples, so we need to re-run
+            // the aggregation directly rather than using anchored queries.
+            switch category {
+            case .steps:
+                await forceStepsCheck()
+            case .sleep:
+                await forceSleepCheck()
+            case .activeEnergy:
+                await forceActiveEnergyCheck()
+            case .workout, .mindfulness, .water:
+                // Non-aggregate categories: use anchored query to process new samples
+                await handleNewSamples(for: category)
+            }
+
+            // Always record update time for this category
+            // (even if no new data, user triggered refresh)
+            recordCategoryUpdate(for: category)
+
             refreshingCategories.remove(category)
         }
 
