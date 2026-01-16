@@ -40,9 +40,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Code Quality (iOS)
 
-- [ ] **CODE-01**: HealthKitService (1,972 lines) is split into focused modules (query management, processors per data type, event factory)
+- [x] **CODE-01**: HealthKitService (1,972 lines) is split into focused modules (query management, processors per data type, event factory)
 - [ ] **CODE-02**: All print() statements replaced with structured logging (Log.category.level)
-- [ ] **CODE-03**: GeofenceManager has clean separation of concerns (auth, registration, event handling)
+- [x] **CODE-03**: GeofenceManager has clean separation of concerns (auth, registration, event handling)
 - [ ] **CODE-04**: Proper error handling and recovery throughout HealthKit and Geofence code paths
 
 ### UX Indicators (iOS)
@@ -116,9 +116,9 @@ Which phases cover which requirements. Updated by create-roadmap.
 | API-02 | Phase 6 | Pending |
 | API-03 | Phase 6 | Pending |
 | API-04 | Phase 6 | Pending |
-| CODE-01 | Phase 4 | Pending |
+| CODE-01 | Phase 4 | Complete |
 | CODE-02 | Phase 1 | Complete |
-| CODE-03 | Phase 4 | Pending |
+| CODE-03 | Phase 4 | Complete |
 | CODE-04 | Phase 1 | Complete |
 | UX-01 | Phase 7 | Pending |
 | UX-02 | Phase 7 | Pending |
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-16 after Phase 3 completion (GEO-01 through GEO-04 complete)*
+*Last updated: 2026-01-16 after Phase 4 completion (CODE-01, CODE-03 complete)*

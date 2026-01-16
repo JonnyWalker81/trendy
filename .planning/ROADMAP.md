@@ -13,7 +13,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 - [x] **Phase 1: Foundation** - Structured logging, entitlement verification, error handling foundation
 - [x] **Phase 2: HealthKit Reliability** - Background delivery, observer queries, server deduplication
 - [x] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
-- [ ] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
+- [x] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
 - [ ] **Phase 5: Sync Engine** - Offline-first CRUD, automatic sync, mutation persistence
 - [ ] **Phase 6: Server API** - UUIDv7 support, deduplication, sync status endpoint
 - [ ] **Phase 7: UX Indicators** - Sync status, timestamps, error surfacing, progress counts
@@ -83,7 +83,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: TBD
+- [x] 04-01: HealthKitService decomposition (12 focused extension files)
+- [x] 04-02: GeofenceManager decomposition (7 focused extension files)
 
 ### Phase 5: Sync Engine
 **Goal**: Reliable offline-first sync that never loses data
@@ -142,7 +143,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 1. Foundation | 4/4 | Complete | 2026-01-15 |
 | 2. HealthKit Reliability | 2/2 | Complete | 2026-01-15 |
 | 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
-| 4. Code Quality | 0/? | Not started | - |
+| 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 0/? | Not started | - |
 | 6. Server API | 0/? | Not started | - |
 | 7. UX Indicators | 0/? | Not started | - |
