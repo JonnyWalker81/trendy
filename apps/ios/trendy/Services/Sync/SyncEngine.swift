@@ -73,9 +73,18 @@ actor SyncEngine {
     private var cursorKey: String {
         "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
     }
+
+    /// UserDefaults key for pending delete IDs (environment-specific)
+    private var pendingDeleteIdsKey: String {
+        "sync_engine_pending_delete_ids_\(AppEnvironment.current.rawValue)"
+    }
+
     private let changeFeedLimit = 100
 
     // MARK: - Initialization
+
+    /// Flag to track if initial state has been loaded
+    private var initialStateLoaded = false
 
     init(apiClient: APIClient, modelContainer: ModelContainer) {
         self.apiClient = apiClient
@@ -91,6 +100,44 @@ actor SyncEngine {
             ctx.add("environment", AppEnvironment.current.rawValue)
             ctx.add("last_sync_time", "nil (fresh init)")
         })
+    }
+
+    /// Load initial state from persistent storage (SwiftData and UserDefaults).
+    /// Call this after SyncEngine is created to populate pendingCount and pendingDeleteIds.
+    /// This ensures the UI shows correct pending count immediately after app launch.
+    func loadInitialState() async {
+        guard !initialStateLoaded else {
+            Log.sync.debug("Initial state already loaded, skipping")
+            return
+        }
+        initialStateLoaded = true
+
+        // Load pending count from SwiftData
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<PendingMutation>()
+        let count = (try? context.fetchCount(descriptor)) ?? 0
+
+        await MainActor.run {
+            pendingCount = count
+        }
+
+        // Load pending delete IDs from UserDefaults
+        if let savedIds = UserDefaults.standard.array(forKey: pendingDeleteIdsKey) as? [String] {
+            pendingDeleteIds = Set(savedIds)
+            Log.sync.info("Loaded pendingDeleteIds from UserDefaults", context: .with { ctx in
+                ctx.add("count", savedIds.count)
+            })
+        }
+
+        Log.sync.info("Loaded initial state", context: .with { ctx in
+            ctx.add("pending_count", count)
+            ctx.add("pending_delete_ids_count", pendingDeleteIds.count)
+        })
+    }
+
+    /// Persist pendingDeleteIds to UserDefaults for resurrection prevention across restarts
+    private func savePendingDeleteIds() {
+        UserDefaults.standard.set(Array(pendingDeleteIds), forKey: pendingDeleteIdsKey)
     }
 
     // MARK: - Public API
@@ -139,6 +186,7 @@ actor SyncEngine {
                 .filter { $0.operation == .delete }
                 .map { $0.entityId }
             pendingDeleteIds = Set(pendingDeletes)
+            savePendingDeleteIds()  // Persist for resurrection prevention across restarts
             if !pendingDeleteIds.isEmpty {
                 Log.sync.debug("Captured pending delete IDs to prevent resurrection", context: .with { ctx in
                     ctx.add("count", pendingDeletes.count)
@@ -230,10 +278,12 @@ actor SyncEngine {
                 ctx.add("new_cursor", Int(lastSyncCursor))
             })
             pendingDeleteIds.removeAll()  // Clear tracking after successful sync
+            savePendingDeleteIds()
         } catch {
             Log.sync.error("Sync failed", error: error)
             await updateState(.error(error.localizedDescription))
             pendingDeleteIds.removeAll()  // Clear tracking even on failure
+            savePendingDeleteIds()
         }
     }
 
@@ -836,8 +886,19 @@ actor SyncEngine {
     private func applyUpsert(_ change: ChangeEntry, localStore: LocalStore) throws {
         // Skip resurrection if this entity has a pending DELETE mutation
         // This prevents the race condition where pullChanges recreates a deleted entity
+        // Check both in-memory set AND SwiftData for belt-and-suspenders approach
         if pendingDeleteIds.contains(change.entityId) {
-            Log.sync.debug("Skipping resurrection of pending-delete entity", context: .with { ctx in
+            Log.sync.debug("Skipping resurrection of pending-delete entity (from memory)", context: .with { ctx in
+                ctx.add("entity_id", change.entityId)
+                ctx.add("entity_type", change.entityType)
+            })
+            return
+        }
+
+        // Fallback check: query PendingMutation table directly for pending deletes
+        // This handles the case where pendingDeleteIds wasn't populated (e.g., crash before persist)
+        if hasPendingDeleteInSwiftData(entityId: change.entityId, localStore: localStore) {
+            Log.sync.debug("Skipping resurrection of pending-delete entity (from SwiftData)", context: .with { ctx in
                 ctx.add("entity_id", change.entityId)
                 ctx.add("entity_type", change.entityType)
             })
@@ -982,6 +1043,22 @@ actor SyncEngine {
             Log.sync.warning("Unknown entity type", context: .with { ctx in
                 ctx.add("entity_type", change.entityType)
             })
+        }
+    }
+
+    /// Check if there's a pending DELETE mutation for this entity in SwiftData.
+    /// This is a fallback check for resurrection prevention when pendingDeleteIds
+    /// may not have been populated (e.g., after app crash or restart).
+    private func hasPendingDeleteInSwiftData(entityId: String, localStore: LocalStore) -> Bool {
+        do {
+            let mutations = try localStore.fetchPendingMutations()
+            return mutations.contains { $0.entityId == entityId && $0.operation == .delete }
+        } catch {
+            Log.sync.warning("Failed to check pending delete in SwiftData", context: .with { ctx in
+                ctx.add("entity_id", entityId)
+                ctx.add("error", error.localizedDescription)
+            })
+            return false
         }
     }
 

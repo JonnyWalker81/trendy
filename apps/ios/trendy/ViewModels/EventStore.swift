@@ -298,9 +298,12 @@ class EventStore {
             self.syncEngine = SyncEngine(apiClient: apiClient, modelContainer: context.container)
         }
 
-        // Refresh cached sync state after syncEngine is set up
-        if syncEngine != nil {
+        // Load initial state (pending count, pending delete IDs) and refresh cached sync state
+        if let syncEngine = syncEngine {
             Task {
+                // Load initial state from SwiftData/UserDefaults BEFORE refreshSyncStateForUI
+                // This ensures pendingCount reflects actual PendingMutation count on app launch
+                await syncEngine.loadInitialState()
                 await refreshSyncStateForUI()
             }
         }
@@ -558,26 +561,9 @@ class EventStore {
         newEvent.calendarEventId = calendarEventId
         modelContext.insert(newEvent)
 
-        // Step 1: Save event locally
-        do {
-            try modelContext.save()
-            reloadWidgets()
-
-            // Optimistic update: immediately add event to UI array
-            // This ensures the event appears instantly, before any sync operations
-            events.insert(newEvent, at: 0)
-
-            Log.sync.info("Event saved locally", context: .with { ctx in
-                ctx.add("event_id", newEvent.id)
-                ctx.add("is_online", isOnline)
-            })
-        } catch {
-            Log.data.error("Failed to save event locally", error: error)
-            errorMessage = EventError.saveFailed.localizedDescription
-            return  // Can't continue if save failed
-        }
-
-        // Step 2: Queue mutation for sync (separate try block so fetch still runs on error)
+        // Step 1: Queue mutation BEFORE save to ensure atomicity
+        // If app force quits after save but before queueMutation, the mutation would be lost.
+        // By queueing first, PendingMutation is persisted even if subsequent save is interrupted.
         if let syncEngine = syncEngine {
             do {
                 let request = CreateEventRequest(
@@ -610,12 +596,34 @@ class EventStore {
                     ctx.add("event_id", newEvent.id)
                 })
             } catch {
-                // Log error but don't block - event is already saved locally
+                // Log error but don't block - we still want to save the event locally
                 Log.sync.error("Failed to queue mutation for event", error: error, context: .with { ctx in
                     ctx.add("event_id", newEvent.id)
                 })
             }
+        }
 
+        // Step 2: Save event locally (after mutation is queued)
+        do {
+            try modelContext.save()
+            reloadWidgets()
+
+            // Optimistic update: immediately add event to UI array
+            // This ensures the event appears instantly, before any sync operations
+            events.insert(newEvent, at: 0)
+
+            Log.sync.info("Event saved locally", context: .with { ctx in
+                ctx.add("event_id", newEvent.id)
+                ctx.add("is_online", isOnline)
+            })
+        } catch {
+            Log.data.error("Failed to save event locally", error: error)
+            errorMessage = EventError.saveFailed.localizedDescription
+            return  // Can't continue if save failed
+        }
+
+        // Step 3: Trigger sync if online
+        if let syncEngine = syncEngine {
             // Always refresh sync state after queueing (shows pending count)
             await refreshSyncStateForUI()
 
