@@ -157,10 +157,31 @@ struct HealthKitDebugView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+
+                HStack {
+                    Text("Anchors Stored")
+                    Spacer()
+                    Text("\(healthKitService?.categoriesWithAnchors.count ?? 0)")
+                        .foregroundStyle(.secondary)
+                }
+
+                if let categories = healthKitService?.categoriesWithAnchors, !categories.isEmpty {
+                    ForEach(categories, id: \.rawValue) { category in
+                        HStack {
+                            Image(systemName: "bookmark.fill")
+                                .foregroundStyle(.blue)
+                                .font(.caption)
+                            Text(category.displayName)
+                                .font(.caption)
+                            Spacer()
+                        }
+                        .padding(.leading, 8)
+                    }
+                }
             } header: {
                 Text("Cache Status")
             } footer: {
-                Text("'Last Sleep Date' prevents re-processing. If stuck, clear the sleep cache.")
+                Text("'Last Sleep Date' prevents re-processing. Anchors enable incremental HealthKit queries.")
             }
 
             // Raw Sleep Data Section
@@ -511,6 +532,16 @@ struct HealthKitDebugView: View {
                 .foregroundStyle(.orange)
 
                 Button {
+                    clearAllAnchors()
+                } label: {
+                    HStack {
+                        Image(systemName: "bookmark.slash")
+                        Text("Clear All Anchors")
+                    }
+                }
+                .foregroundStyle(.red)
+
+                Button {
                     refreshObservers()
                 } label: {
                     HStack {
@@ -747,6 +778,10 @@ struct HealthKitDebugView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isClearingActiveEnergy = false
         }
+    }
+
+    private func clearAllAnchors() {
+        healthKitService?.clearAllAnchors()
     }
 
     private func refreshObservers() {
