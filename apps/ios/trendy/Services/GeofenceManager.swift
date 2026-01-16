@@ -149,7 +149,7 @@ class GeofenceManager: NSObject {
     /// Start monitoring all active geofences
     func startMonitoringAllGeofences() {
         guard hasGeofencingAuthorization else {
-            print("⚠️ Cannot start monitoring: insufficient authorization")
+            Log.geofence.warning("Cannot start monitoring: insufficient authorization")
             return
         }
 
@@ -159,7 +159,7 @@ class GeofenceManager: NSObject {
         )
 
         guard let geofences = try? modelContext.fetch(descriptor) else {
-            print("❌ Failed to fetch geofences")
+            Log.geofence.error("Failed to fetch geofences from SwiftData")
             return
         }
 
@@ -167,39 +167,52 @@ class GeofenceManager: NSObject {
         let geofencesToMonitor = Array(geofences.prefix(20))
 
         if geofences.count > 20 {
-            print("⚠️ More than 20 active geofences. Only monitoring first 20.")
+            Log.geofence.warning("More than 20 active geofences", context: .with { ctx in
+                ctx.add("total", geofences.count)
+                ctx.add("monitoring", 20)
+            })
         }
 
         for geofence in geofencesToMonitor {
             startMonitoring(geofence: geofence)
         }
 
-        print("✅ Started monitoring \(geofencesToMonitor.count) geofences")
+        Log.geofence.info("Started monitoring geofences", context: .with { ctx in
+            ctx.add("count", geofencesToMonitor.count)
+        })
     }
 
     /// Start monitoring a specific geofence
     /// - Parameter geofence: The geofence to monitor
     func startMonitoring(geofence: Geofence) {
         guard hasGeofencingAuthorization else {
-            print("⚠️ Cannot start monitoring geofence '\(geofence.name)': insufficient authorization (current: \(authorizationStatus.description))")
+            Log.geofence.warning("Cannot start monitoring geofence: insufficient authorization", context: .with { ctx in
+                ctx.add("name", geofence.name)
+                ctx.add("status", authorizationStatus.description)
+            })
             return
         }
 
         // iOS limit: 20 regions
         if locationManager.monitoredRegions.count >= 20 {
-            print("⚠️ Already monitoring 20 regions. Cannot add more.")
+            Log.geofence.warning("Already monitoring 20 regions, cannot add more")
             return
         }
 
         let region = geofence.circularRegion
         locationManager.startMonitoring(for: region)
-        
+
         // Request state for this region to check if we're already inside
         locationManager.requestState(for: region)
 
-        print("✅ Started monitoring geofence: \(geofence.name) (ID: \(geofence.id), radius: \(geofence.radius)m)")
-        print("   📍 Location: \(geofence.latitude), \(geofence.longitude)")
-        print("   📊 Total monitored regions: \(locationManager.monitoredRegions.count)")
+        Log.geofence.debug("Started monitoring geofence", context: .with { ctx in
+            ctx.add("name", geofence.name)
+            ctx.add("id", geofence.id)
+            ctx.add("radius", Int(geofence.radius))
+            ctx.add("latitude", geofence.latitude)
+            ctx.add("longitude", geofence.longitude)
+            ctx.add("totalRegions", locationManager.monitoredRegions.count)
+        })
     }
 
     /// Stop monitoring a specific geofence
@@ -210,16 +223,22 @@ class GeofenceManager: NSObject {
 
         if let region = locationManager.monitoredRegions.first(where: { $0.identifier == identifier }) {
             locationManager.stopMonitoring(for: region)
-            print("✅ Stopped monitoring geofence: \(geofence.name)")
+            Log.geofence.debug("Stopped monitoring geofence", context: .with { ctx in
+                ctx.add("name", geofence.name)
+                ctx.add("id", identifier)
+            })
         }
     }
 
     /// Stop monitoring all geofences
     func stopMonitoringAllGeofences() {
+        let count = locationManager.monitoredRegions.count
         for region in locationManager.monitoredRegions {
             locationManager.stopMonitoring(for: region)
         }
-        print("✅ Stopped monitoring all geofences")
+        Log.geofence.info("Stopped monitoring all geofences", context: .with { ctx in
+            ctx.add("count", count)
+        })
     }
 
     /// Refresh monitored geofences (call after adding/updating/deleting geofences)
@@ -303,14 +322,18 @@ class GeofenceManager: NSObject {
     /// Simulate a geofence entry for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate entry for
     func simulateEntry(geofenceId: String) {
-        print("🧪 DEBUG: Simulating geofence entry for ID: \(geofenceId)")
+        Log.geofence.debug("DEBUG: Simulating geofence entry", context: .with { ctx in
+            ctx.add("geofenceId", geofenceId)
+        })
         handleGeofenceEntry(geofenceId: geofenceId)
     }
 
     /// Simulate a geofence exit for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate exit for
     func simulateExit(geofenceId: String) {
-        print("🧪 DEBUG: Simulating geofence exit for ID: \(geofenceId)")
+        Log.geofence.debug("DEBUG: Simulating geofence exit", context: .with { ctx in
+            ctx.add("geofenceId", geofenceId)
+        })
         handleGeofenceExit(geofenceId: geofenceId)
     }
     #endif
@@ -360,50 +383,66 @@ class GeofenceManager: NSObject {
 
     /// Handle geofence entry - create a new event
     private func handleGeofenceEntry(geofenceId: String) {
-        print("🔍 handleGeofenceEntry called for geofenceId: \(geofenceId)")
-        
+        Log.geofence.debug("handleGeofenceEntry called", context: .with { ctx in
+            ctx.add("geofenceId", geofenceId)
+        })
+
         // Fetch the geofence
         let descriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }
         )
 
         guard let geofence = try? modelContext.fetch(descriptor).first else {
-            print("❌ Geofence not found in database for ID: \(geofenceId)")
+            Log.geofence.error("Geofence not found in database", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+            })
             return
         }
-        
-        print("✅ Found geofence: \(geofence.name)")
+
+        Log.geofence.debug("Found geofence", context: .with { ctx in
+            ctx.add("name", geofence.name)
+        })
 
         // Check if already has an active event
-        if activeGeofenceEvents[geofenceId] != nil {
-            print("⚠️ Geofence \(geofence.name) already has an active event (ID: \(activeGeofenceEvents[geofenceId]!))")
+        if let existingEventId = activeGeofenceEvents[geofenceId] {
+            Log.geofence.warning("Geofence already has an active event", context: .with { ctx in
+                ctx.add("name", geofence.name)
+                ctx.add("existingEventId", existingEventId)
+            })
             return
         }
 
         // Get the entry event type by ID
         guard let eventTypeEntryID = geofence.eventTypeEntryID else {
-            print("❌ Geofence '\(geofence.name)' has NO eventTypeEntryID set!")
-            print("   This geofence needs to be edited to select an Event Type.")
+            Log.geofence.error("Geofence has no eventTypeEntryID set", context: .with { ctx in
+                ctx.add("name", geofence.name)
+            })
             return
         }
-        
-        print("🔍 Looking for EventType with ID: \(eventTypeEntryID)")
-        
+
+        Log.geofence.debug("Looking for EventType", context: .with { ctx in
+            ctx.add("eventTypeId", eventTypeEntryID)
+        })
+
         // Fetch the EventType by ID
         let eventTypeDescriptor = FetchDescriptor<EventType>(
             predicate: #Predicate { eventType in eventType.id == eventTypeEntryID }
         )
-        
+
         guard let eventType = try? modelContext.fetch(eventTypeDescriptor).first else {
-            print("❌ EventType not found for ID: \(eventTypeEntryID)")
-            print("   The Event Type may have been deleted. Edit the geofence to select a new one.")
+            Log.geofence.error("EventType not found", context: .with { ctx in
+                ctx.add("eventTypeId", eventTypeEntryID)
+                ctx.add("geofenceName", geofence.name)
+            })
             return
         }
-        
-        print("✅ Found EventType: \(eventType.name)")
+
+        Log.geofence.debug("Found EventType", context: .with { ctx in
+            ctx.add("name", eventType.name)
+        })
 
         // Create the event with entry timestamp property
-        print("📝 Creating new Event...")
+        Log.geofence.debug("Creating new Event for geofence entry")
         let entryTime = Date()
         let entryProperties: [String: PropertyValue] = [
             "Entered At": PropertyValue(type: .date, value: entryTime)
@@ -431,10 +470,11 @@ class GeofenceManager: NSObject {
             activeGeofenceEvents[geofenceId] = event.id
             saveActiveGeofenceEvents()
 
-            print("✅✅✅ SUCCESS! Created geofence entry event for: \(geofence.name)")
-            print("   Event ID: \(event.id)")
-            print("   Event Type: \(eventType.name)")
-            print("   Timestamp: \(event.timestamp)")
+            Log.geofence.info("Created geofence entry event", context: .with { ctx in
+                ctx.add("geofenceName", geofence.name)
+                ctx.add("eventId", event.id)
+                ctx.add("eventType", eventType.name)
+            })
 
             // Track for debugging
             lastEventTimestamp = Date()
@@ -456,7 +496,7 @@ class GeofenceManager: NSObject {
             }
 
         } catch {
-            print("❌ Failed to save geofence entry event: \(error)")
+            Log.geofence.error("Failed to save geofence entry event", error: error)
         }
     }
 
@@ -468,13 +508,17 @@ class GeofenceManager: NSObject {
         )
 
         guard let geofence = try? modelContext.fetch(geofenceDescriptor).first else {
-            print("❌ Geofence not found: \(geofenceId)")
+            Log.geofence.error("Geofence not found for exit", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+            })
             return
         }
 
         // Get the active event for this geofence
         guard let eventId = activeGeofenceEvents[geofenceId] else {
-            print("⚠️ No active event found for geofence: \(geofence.name)")
+            Log.geofence.warning("No active event found for geofence exit", context: .with { ctx in
+                ctx.add("name", geofence.name)
+            })
             return
         }
 
@@ -484,7 +528,9 @@ class GeofenceManager: NSObject {
         )
 
         guard let event = try? modelContext.fetch(eventDescriptor).first else {
-            print("❌ Event not found: \(eventId)")
+            Log.geofence.error("Event not found for geofence exit", context: .with { ctx in
+                ctx.add("eventId", eventId)
+            })
             // Clean up orphaned active event
             activeGeofenceEvents.removeValue(forKey: geofenceId)
             saveActiveGeofenceEvents()
@@ -514,7 +560,11 @@ class GeofenceManager: NSObject {
             activeGeofenceEvents.removeValue(forKey: geofenceId)
             saveActiveGeofenceEvents()
 
-            print("✅ Updated geofence exit event: \(geofence.name)")
+            Log.geofence.info("Updated geofence exit event", context: .with { ctx in
+                ctx.add("geofenceName", geofence.name)
+                ctx.add("eventId", event.id)
+                ctx.add("durationSeconds", Int(duration))
+            })
 
             // Track for debugging
             lastEventTimestamp = Date()
@@ -537,7 +587,7 @@ class GeofenceManager: NSObject {
             }
 
         } catch {
-            print("❌ Failed to save geofence exit event: \(error)")
+            Log.geofence.error("Failed to save geofence exit event", error: error)
         }
     }
 }
@@ -586,13 +636,16 @@ extension GeofenceManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         let identifier = region.identifier
 
-        print("📍🟢 ENTERED geofence: \(identifier)")
-        print("   ⏰ Time: \(Date())")
+        Log.geofence.info("ENTERED geofence region", context: .with { ctx in
+            ctx.add("identifier", identifier)
+        })
 
         // Dispatch to main actor since EventStore is MainActor-isolated
         Task { @MainActor in
             guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
-                print("⚠️ Unknown region identifier on entry: \(identifier)")
+                Log.geofence.warning("Unknown region identifier on entry", context: .with { ctx in
+                    ctx.add("identifier", identifier)
+                })
                 return
             }
             handleGeofenceEntry(geofenceId: localId)
@@ -602,13 +655,16 @@ extension GeofenceManager: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         let identifier = region.identifier
 
-        print("📍🔴 EXITED geofence: \(identifier)")
-        print("   ⏰ Time: \(Date())")
+        Log.geofence.info("EXITED geofence region", context: .with { ctx in
+            ctx.add("identifier", identifier)
+        })
 
         // Dispatch to main actor since EventStore is MainActor-isolated
         Task { @MainActor in
             guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
-                print("⚠️ Unknown region identifier on exit: \(identifier)")
+                Log.geofence.warning("Unknown region identifier on exit", context: .with { ctx in
+                    ctx.add("identifier", identifier)
+                })
                 return
             }
             handleGeofenceExit(geofenceId: localId)
@@ -626,7 +682,10 @@ extension GeofenceManager: CLLocationManagerDelegate {
             stateDescription = "UNKNOWN"
         }
 
-        print("📍 Region state determined for \(region.identifier): \(stateDescription)")
+        Log.geofence.debug("Region state determined", context: .with { ctx in
+            ctx.add("identifier", region.identifier)
+            ctx.add("state", stateDescription)
+        })
 
         // If we're already inside when we start monitoring, trigger entry
         if state == .inside {
@@ -637,7 +696,9 @@ extension GeofenceManager: CLLocationManagerDelegate {
                 }
 
                 if activeGeofenceEvents[localId] == nil {
-                    print("📍 Already inside geofence, triggering entry event...")
+                    Log.geofence.debug("Already inside geofence, triggering entry event", context: .with { ctx in
+                        ctx.add("identifier", region.identifier)
+                    })
                     handleGeofenceEntry(geofenceId: localId)
                 }
             }
@@ -646,14 +707,19 @@ extension GeofenceManager: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
         if let region = region {
-            print("❌ Monitoring failed for region \(region.identifier): \(error.localizedDescription)")
+            Log.geofence.error("Monitoring failed for region", context: .with { ctx in
+                ctx.add("identifier", region.identifier)
+                ctx.add(error: error)
+            })
         } else {
-            print("❌ Monitoring failed: \(error.localizedDescription)")
+            Log.geofence.error("Monitoring failed", error: error)
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
-        print("✅ Started monitoring region: \(region.identifier)")
+        Log.geofence.debug("Started monitoring region", context: .with { ctx in
+            ctx.add("identifier", region.identifier)
+        })
     }
 }
 
