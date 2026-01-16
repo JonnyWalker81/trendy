@@ -351,15 +351,21 @@ class HealthKitService: NSObject {
             // Only request authorization if HealthKit says we need to
             // This prevents showing prompts for already-authorized categories
             if await shouldRequestAuthorization(for: sampleType) {
-                await requestAuthorizationForCategory(category)
+                do {
+                    try await requestAuthorizationForCategory(category)
+                } catch {
+                    // Error already logged in requestAuthorizationForCategory
+                    // Continue to try observer query - it may still work
+                }
             }
             await startObserverQuery(for: category, sampleType: sampleType)
         }
     }
 
     /// Request authorization for a specific HealthKit category
+    /// - Throws: HealthKitError.authorizationFailed if authorization request fails
     @MainActor
-    private func requestAuthorizationForCategory(_ category: HealthDataCategory) async {
+    private func requestAuthorizationForCategory(_ category: HealthDataCategory) async throws {
         guard isHealthKitAvailable else { return }
 
         var typesToRead: Set<HKSampleType> = []
@@ -380,9 +386,10 @@ class HealthKitService: NSObject {
                 ctx.add("category", category.displayName)
             })
         } catch {
-            Log.healthKit.warning("Failed to request authorization", error: error, context: .with { ctx in
+            Log.healthKit.error("Failed to request authorization", error: error, context: .with { ctx in
                 ctx.add("category", category.displayName)
             })
+            throw HealthKitError.authorizationFailed(error)
         }
     }
 
@@ -433,7 +440,12 @@ class HealthKitService: NSObject {
         observerQueries[category] = query
 
         // Enable background delivery
-        await enableBackgroundDelivery(for: category)
+        do {
+            try await enableBackgroundDelivery(for: category)
+        } catch {
+            // Error already logged in enableBackgroundDelivery
+            // Observer query still works, just won't get background updates
+        }
 
         Log.healthKit.info("Started monitoring", context: .with { ctx in
             ctx.add("category", category.displayName)
@@ -472,7 +484,8 @@ class HealthKitService: NSObject {
     // MARK: - Background Delivery
 
     /// Enable background delivery for a specific category
-    private func enableBackgroundDelivery(for category: HealthDataCategory) async {
+    /// - Throws: HealthKitError.backgroundDeliveryFailed if enabling fails
+    private func enableBackgroundDelivery(for category: HealthDataCategory) async throws {
         guard let sampleType = category.hkSampleType else { return }
 
         do {
@@ -484,6 +497,7 @@ class HealthKitService: NSObject {
             Log.healthKit.error("Failed to enable background delivery", error: error, context: .with { ctx in
                 ctx.add("category", category.displayName)
             })
+            throw HealthKitError.backgroundDeliveryFailed(category.displayName, error)
         }
     }
 
@@ -643,18 +657,22 @@ class HealthKitService: NSObject {
         }
 
         // Create event
-        await createEvent(
-            eventType: eventType,
-            category: .workout,
-            timestamp: workout.startDate,
-            endDate: workout.endDate,
-            notes: "Auto-logged: \(workout.workoutActivityType.name)",
-            properties: properties,
-            healthKitSampleId: sampleId
-        )
-
-        // Mark as processed
-        markSampleAsProcessed(sampleId)
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .workout,
+                timestamp: workout.startDate,
+                endDate: workout.endDate,
+                notes: "Auto-logged: \(workout.workoutActivityType.name)",
+                properties: properties,
+                healthKitSampleId: sampleId
+            )
+            // Mark as processed only on success
+            markSampleAsProcessed(sampleId)
+        } catch {
+            // Error already logged in createEvent
+            // Don't mark as processed - will retry on next observer callback
+        }
     }
 
     /// Fetch heart rate statistics for a workout
@@ -875,16 +893,21 @@ class HealthKitService: NSObject {
                     ctx.add("newSleep", Int(totalSleepDuration / 60))
                 })
 
-                await updateHealthKitEvent(
-                    existingEvent,
-                    properties: properties,
-                    notes: "Auto-logged: \(durationText) of sleep",
-                    isAllDay: true
-                )
+                do {
+                    try await updateHealthKitEvent(
+                        existingEvent,
+                        properties: properties,
+                        notes: "Auto-logged: \(durationText) of sleep",
+                        isAllDay: true
+                    )
 
-                markSampleAsProcessed(sampleId)
-                lastSleepDate = sleepDate
-                saveLastSleepDate()
+                    markSampleAsProcessed(sampleId)
+                    lastSleepDate = sleepDate
+                    saveLastSleepDate()
+                } catch {
+                    // Error already logged in updateHealthKitEvent
+                    // Don't mark as processed - will retry on next aggregation
+                }
                 continue
             }
 
@@ -900,20 +923,25 @@ class HealthKitService: NSObject {
                 continue
             }
 
-            await createEvent(
-                eventType: eventType,
-                category: .sleep,
-                timestamp: sleepStart ?? sleepDate,
-                endDate: sleepEnd,
-                notes: "Auto-logged: \(durationText) of sleep",
-                properties: properties,
-                healthKitSampleId: sampleId,
-                isAllDay: true
-            )
+            do {
+                try await createEvent(
+                    eventType: eventType,
+                    category: .sleep,
+                    timestamp: sleepStart ?? sleepDate,
+                    endDate: sleepEnd,
+                    notes: "Auto-logged: \(durationText) of sleep",
+                    properties: properties,
+                    healthKitSampleId: sampleId,
+                    isAllDay: true
+                )
 
-            markSampleAsProcessed(sampleId)
-            lastSleepDate = sleepDate
-            saveLastSleepDate()
+                markSampleAsProcessed(sampleId)
+                lastSleepDate = sleepDate
+                saveLastSleepDate()
+            } catch {
+                // Error already logged in createEvent
+                // Don't mark as processed - will retry on next aggregation
+            }
         }
     }
 
@@ -980,15 +1008,20 @@ class HealthKitService: NSObject {
                 "Date": PropertyValue(type: .date, value: today)
             ]
 
-            await updateHealthKitEvent(
-                existingEvent,
-                properties: properties,
-                notes: "Auto-logged: \(Int(steps)) steps",
-                isAllDay: true
-            )
+            do {
+                try await updateHealthKitEvent(
+                    existingEvent,
+                    properties: properties,
+                    notes: "Auto-logged: \(Int(steps)) steps",
+                    isAllDay: true
+                )
 
-            lastStepDate = Date()
-            saveLastStepDate()
+                lastStepDate = Date()
+                saveLastStepDate()
+            } catch {
+                // Error already logged in updateHealthKitEvent
+                // Will retry on next aggregation
+            }
             return
         }
 
@@ -1007,20 +1040,25 @@ class HealthKitService: NSObject {
             "Date": PropertyValue(type: .date, value: today)
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .steps,
-            timestamp: today,
-            endDate: nil,
-            notes: "Auto-logged: \(Int(steps)) steps",
-            properties: properties,
-            healthKitSampleId: sampleId,
-            isAllDay: true
-        )
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .steps,
+                timestamp: today,
+                endDate: nil,
+                notes: "Auto-logged: \(Int(steps)) steps",
+                properties: properties,
+                healthKitSampleId: sampleId,
+                isAllDay: true
+            )
 
-        // Don't mark as processed - daily aggregates can be updated throughout the day
-        lastStepDate = Date()
-        saveLastStepDate()
+            // Don't mark as processed - daily aggregates can be updated throughout the day
+            lastStepDate = Date()
+            saveLastStepDate()
+        } catch {
+            // Error already logged in createEvent
+            // Will retry on next aggregation
+        }
     }
 
     // MARK: - Active Energy Processing
@@ -1094,15 +1132,20 @@ class HealthKitService: NSObject {
                 "Date": PropertyValue(type: .date, value: today)
             ]
 
-            await updateHealthKitEvent(
-                existingEvent,
-                properties: properties,
-                notes: "Auto-logged: \(Int(calories)) kcal burned",
-                isAllDay: true
-            )
+            do {
+                try await updateHealthKitEvent(
+                    existingEvent,
+                    properties: properties,
+                    notes: "Auto-logged: \(Int(calories)) kcal burned",
+                    isAllDay: true
+                )
 
-            lastActiveEnergyDate = Date()
-            saveLastActiveEnergyDate()
+                lastActiveEnergyDate = Date()
+                saveLastActiveEnergyDate()
+            } catch {
+                // Error already logged in updateHealthKitEvent
+                // Will retry on next aggregation
+            }
             return
         }
 
@@ -1121,20 +1164,25 @@ class HealthKitService: NSObject {
             "Date": PropertyValue(type: .date, value: today)
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .activeEnergy,
-            timestamp: today,
-            endDate: nil,
-            notes: "Auto-logged: \(Int(calories)) kcal burned",
-            properties: properties,
-            healthKitSampleId: sampleId,
-            isAllDay: true
-        )
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .activeEnergy,
+                timestamp: today,
+                endDate: nil,
+                notes: "Auto-logged: \(Int(calories)) kcal burned",
+                properties: properties,
+                healthKitSampleId: sampleId,
+                isAllDay: true
+            )
 
-        // Don't mark as processed - daily aggregates can be updated throughout the day
-        lastActiveEnergyDate = Date()
-        saveLastActiveEnergyDate()
+            // Don't mark as processed - daily aggregates can be updated throughout the day
+            lastActiveEnergyDate = Date()
+            saveLastActiveEnergyDate()
+        } catch {
+            // Error already logged in createEvent
+            // Will retry on next aggregation
+        }
     }
 
     // MARK: - Mindfulness Processing
@@ -1167,17 +1215,21 @@ class HealthKitService: NSObject {
             "Started At": PropertyValue(type: .date, value: sample.startDate)
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .mindfulness,
-            timestamp: sample.startDate,
-            endDate: sample.endDate,
-            notes: "Auto-logged: Mindfulness session",
-            properties: properties,
-            healthKitSampleId: sampleId
-        )
-
-        markSampleAsProcessed(sampleId)
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .mindfulness,
+                timestamp: sample.startDate,
+                endDate: sample.endDate,
+                notes: "Auto-logged: Mindfulness session",
+                properties: properties,
+                healthKitSampleId: sampleId
+            )
+            markSampleAsProcessed(sampleId)
+        } catch {
+            // Error already logged in createEvent
+            // Don't mark as processed - will retry on next observer callback
+        }
     }
 
     // MARK: - Water Processing
@@ -1212,22 +1264,27 @@ class HealthKitService: NSObject {
             "Time": PropertyValue(type: .date, value: sample.startDate)
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .water,
-            timestamp: sample.startDate,
-            endDate: nil,
-            notes: "Auto-logged: \(Int(milliliters)) ml water",
-            properties: properties,
-            healthKitSampleId: sampleId
-        )
-
-        markSampleAsProcessed(sampleId)
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .water,
+                timestamp: sample.startDate,
+                endDate: nil,
+                notes: "Auto-logged: \(Int(milliliters)) ml water",
+                properties: properties,
+                healthKitSampleId: sampleId
+            )
+            markSampleAsProcessed(sampleId)
+        } catch {
+            // Error already logged in createEvent
+            // Don't mark as processed - will retry on next observer callback
+        }
     }
 
     // MARK: - Event Creation
 
     /// Create an event for a HealthKit sample
+    /// - Throws: HealthKitError.eventSaveFailed if saving to SwiftData fails
     @MainActor
     private func createEvent(
         eventType: EventType,
@@ -1238,7 +1295,7 @@ class HealthKitService: NSObject {
         properties: [String: PropertyValue],
         healthKitSampleId: String,
         isAllDay: Bool = false
-    ) async {
+    ) async throws {
         let event = Event(
             timestamp: timestamp,
             eventType: eventType,
@@ -1269,6 +1326,7 @@ class HealthKitService: NSObject {
             Log.healthKit.error("Failed to save event", error: error, context: .with { ctx in
                 ctx.add("category", category.displayName)
             })
+            throw HealthKitError.eventSaveFailed(error)
         }
     }
 
@@ -1348,13 +1406,14 @@ class HealthKitService: NSObject {
 
     /// Update an existing HealthKit event with new values
     /// Used when daily aggregated metrics (steps, active energy, sleep) change throughout the day
+    /// - Throws: HealthKitError.eventUpdateFailed if saving the update fails
     @MainActor
     private func updateHealthKitEvent(
         _ event: Event,
         properties: [String: PropertyValue],
         notes: String,
         isAllDay: Bool? = nil
-    ) async {
+    ) async throws {
         event.properties = properties
         event.notes = notes
         if let isAllDay = isAllDay {
@@ -1377,6 +1436,7 @@ class HealthKitService: NSObject {
             Log.data.error("Failed to update HealthKit event", context: .with { ctx in
                 ctx.add(error: error)
             })
+            throw HealthKitError.eventUpdateFailed(error)
         }
     }
 
@@ -1903,15 +1963,19 @@ class HealthKitService: NSObject {
             "Ended At": PropertyValue(type: .date, value: Date())
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .workout,
-            timestamp: Date().addingTimeInterval(-1800),
-            endDate: Date(),
-            notes: "Simulated: Running workout",
-            properties: properties,
-            healthKitSampleId: "sim-\(UUID().uuidString)"
-        )
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .workout,
+                timestamp: Date().addingTimeInterval(-1800),
+                endDate: Date(),
+                notes: "Simulated: Running workout",
+                properties: properties,
+                healthKitSampleId: "sim-\(UUID().uuidString)"
+            )
+        } catch {
+            Log.healthKit.error("Failed to save simulated workout", error: error)
+        }
     }
 
     /// Simulate a sleep detection for testing purposes
@@ -1933,15 +1997,19 @@ class HealthKitService: NSObject {
             "Ended At": PropertyValue(type: .date, value: endDate)
         ]
 
-        await createEvent(
-            eventType: eventType,
-            category: .sleep,
-            timestamp: startDate,
-            endDate: endDate,
-            notes: "Simulated: Sleep",
-            properties: properties,
-            healthKitSampleId: "sim-\(UUID().uuidString)"
-        )
+        do {
+            try await createEvent(
+                eventType: eventType,
+                category: .sleep,
+                timestamp: startDate,
+                endDate: endDate,
+                notes: "Simulated: Sleep",
+                properties: properties,
+                healthKitSampleId: "sim-\(UUID().uuidString)"
+            )
+        } catch {
+            Log.healthKit.error("Failed to save simulated sleep", error: error)
+        }
     }
     #endif
 }
