@@ -346,6 +346,46 @@ class GeofenceManager: NSObject {
         })
     }
 
+    /// Ensures all active geofences are registered with iOS.
+    /// Safe to call at any lifecycle point - idempotent operation.
+    /// Call this on: app launch, scene activation, authorization restoration.
+    func ensureRegionsRegistered() {
+        guard hasGeofencingAuthorization else {
+            Log.geofence.debug("ensureRegionsRegistered: skipping, no authorization")
+            return
+        }
+
+        // Fetch active geofences from SwiftData
+        let descriptor = FetchDescriptor<Geofence>(
+            predicate: #Predicate { $0.isActive }
+        )
+
+        guard let geofences = try? modelContext.fetch(descriptor) else {
+            Log.geofence.error("ensureRegionsRegistered: failed to fetch geofences")
+            return
+        }
+
+        // Convert to GeofenceDefinition for reconciliation
+        let definitions = geofences.map { geofence in
+            GeofenceDefinition(
+                identifier: geofence.regionIdentifier,
+                name: geofence.name,
+                latitude: geofence.latitude,
+                longitude: geofence.longitude,
+                radius: geofence.radius,
+                notifyOnEntry: geofence.notifyOnEntry,
+                notifyOnExit: geofence.notifyOnExit
+            )
+        }
+
+        Log.geofence.info("ensureRegionsRegistered called", context: .with { ctx in
+            ctx.add("desired_count", definitions.count)
+            ctx.add("current_ios_count", locationManager.monitoredRegions.count)
+        })
+
+        reconcileRegions(desired: definitions)
+    }
+
     // MARK: - Debug/Testing Methods
     
     #if DEBUG
@@ -709,14 +749,11 @@ extension GeofenceManager: CLLocationManagerDelegate {
             pendingAlwaysAuthorizationRequest = false
         }
 
-        // Handle authorization gain: refresh monitored geofences
-        // We refresh ALL regions (not just when empty) to handle authorization regain scenarios
-        if hasGeofencingAuthorization {
-            let previouslyHadAuth = previousStatus == .authorizedAlways
-            if !previouslyHadAuth || monitoredRegions.isEmpty {
-                Log.geofence.info("Starting to monitor all geofences (auth granted or regained)")
-                refreshMonitoredGeofences()
-            }
+        // Handle authorization gain or restoration
+        // Use ensureRegionsRegistered for idempotent re-registration
+        if hasGeofencingAuthorization && previousStatus != .authorizedAlways {
+            Log.geofence.info("Authorization granted/restored, ensuring regions registered")
+            ensureRegionsRegistered()
         }
     }
 
