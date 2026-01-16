@@ -147,12 +147,15 @@ struct GeofenceDebugView: View {
 
             // Registered Regions Section
             Section {
-                if let identifiers = geofenceManager?.monitoredRegionIdentifiers, !identifiers.isEmpty {
-                    ForEach(identifiers, id: \.self) { identifier in
+                if let regions = geofenceManager?.monitoredRegions, !regions.isEmpty {
+                    let sortedRegions = regions.sorted { $0.identifier < $1.identifier }
+                    ForEach(sortedRegions, id: \.identifier) { region in
+                        let identifier = region.identifier
                         let geofence = allGeofences.first { $0.regionIdentifier == identifier }
                         let isOrphaned = healthStatus?.orphanedIniOS.contains(identifier) ?? false
+                        let circularRegion = region as? CLCircularRegion
                         HStack {
-                            VStack(alignment: .leading) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 if let geofence = geofence {
                                     Text(geofence.name)
                                         .font(.subheadline)
@@ -168,6 +171,14 @@ struct GeofenceDebugView: View {
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
+                                }
+                                if let circular = circularRegion {
+                                    Text("\(String(format: "%.4f", circular.center.latitude)), \(String(format: "%.4f", circular.center.longitude))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text("Radius: \(Int(circular.radius))m")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                             Spacer()
