@@ -14,6 +14,14 @@ import Observation
 @Observable
 class GeofenceManager: NSObject {
 
+    // MARK: - Notification Names
+
+    /// Notification posted by AppDelegate when a geofence entry event is received during background launch
+    static let backgroundEntryNotification = Notification.Name("GeofenceManager.backgroundEntry")
+
+    /// Notification posted by AppDelegate when a geofence exit event is received during background launch
+    static let backgroundExitNotification = Notification.Name("GeofenceManager.backgroundExit")
+
     // MARK: - Properties
 
     private let locationManager: CLLocationManager
@@ -70,6 +78,23 @@ class GeofenceManager: NSObject {
 
         // Load active geofence events from storage
         loadActiveGeofenceEvents()
+
+        // Register for background event notifications from AppDelegate
+        // This allows us to receive geofence events that occurred during background launch
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleBackgroundEntry(_:)),
+            name: Self.backgroundEntryNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleBackgroundExit(_:)),
+            name: Self.backgroundExitNotification,
+            object: nil
+        )
+
+        Log.geofence.debug("GeofenceManager initialized with background event observers")
     }
 
     // MARK: - Authorization
@@ -146,6 +171,7 @@ class GeofenceManager: NSObject {
 
     deinit {
         locationManager.delegate = nil
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Geofence Management
@@ -381,6 +407,56 @@ class GeofenceManager: NSObject {
     /// For debugging: list of active geofence IDs
     var activeGeofenceIds: [String] {
         Array(activeGeofenceEvents.keys)
+    }
+
+    // MARK: - Background Event Handlers
+
+    /// Handle background entry notification from AppDelegate
+    /// Called when app is relaunched due to a geofence entry event
+    @objc private func handleBackgroundEntry(_ notification: Notification) {
+        guard let identifier = notification.userInfo?["identifier"] as? String else {
+            Log.geofence.warning("Background entry notification missing identifier")
+            return
+        }
+
+        Log.geofence.info("Processing background entry event", context: .with { ctx in
+            ctx.add("identifier", identifier)
+        })
+
+        // Forward to existing entry handling flow using same dispatch pattern as delegate
+        Task { @MainActor in
+            guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
+                Log.geofence.warning("Unknown region identifier on background entry", context: .with { ctx in
+                    ctx.add("identifier", identifier)
+                })
+                return
+            }
+            self.handleGeofenceEntry(geofenceId: localId)
+        }
+    }
+
+    /// Handle background exit notification from AppDelegate
+    /// Called when app is relaunched due to a geofence exit event
+    @objc private func handleBackgroundExit(_ notification: Notification) {
+        guard let identifier = notification.userInfo?["identifier"] as? String else {
+            Log.geofence.warning("Background exit notification missing identifier")
+            return
+        }
+
+        Log.geofence.info("Processing background exit event", context: .with { ctx in
+            ctx.add("identifier", identifier)
+        })
+
+        // Forward to existing exit handling flow using same dispatch pattern as delegate
+        Task { @MainActor in
+            guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
+                Log.geofence.warning("Unknown region identifier on background exit", context: .with { ctx in
+                    ctx.add("identifier", identifier)
+                })
+                return
+            }
+            self.handleGeofenceExit(geofenceId: localId)
+        }
     }
 
     // MARK: - Event Creation/Update
