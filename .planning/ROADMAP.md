@@ -46,12 +46,12 @@ Plans:
   2. Observer queries are running for each enabled data type (visible in debug view)
   3. HealthKit samples sync to server with deduplication by external_id
   4. User can see when HealthKit data was last updated (freshness indicator)
-**Research**: Likely (HKAnchoredObjectQuery patterns, observer query setup)
+**Research**: Completed (patterns identified during planning)
 **Research topics**: HKAnchoredObjectQuery with persistent anchors, HKObserverQuery completion handler patterns, background delivery frequency configuration
-**Plans**: TBD
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01: Anchor persistence and background reliability (HKAnchoredObjectQuery with persistent anchors)
+- [ ] 02-02: Freshness indicators (per-category last update timestamps in UI)
 
 ### Phase 3: Geofence Reliability
 **Goal**: Persistent geofence monitoring that survives iOS lifecycle events
@@ -138,7 +138,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/4 | Complete | 2026-01-15 |
-| 2. HealthKit Reliability | 0/? | Not started | - |
+| 2. HealthKit Reliability | 0/2 | Planned | - |
 | 3. Geofence Reliability | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |
 | 5. Sync Engine | 0/? | Not started | - |
