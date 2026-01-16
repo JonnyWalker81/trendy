@@ -117,9 +117,9 @@ Which phases cover which requirements. Updated by create-roadmap.
 | API-03 | Phase 6 | Pending |
 | API-04 | Phase 6 | Pending |
 | CODE-01 | Phase 4 | Pending |
-| CODE-02 | Phase 1 | Pending |
+| CODE-02 | Phase 1 | Complete |
 | CODE-03 | Phase 4 | Pending |
-| CODE-04 | Phase 1 | Pending |
+| CODE-04 | Phase 1 | Complete |
 | UX-01 | Phase 7 | Pending |
 | UX-02 | Phase 7 | Pending |
 | UX-03 | Phase 7 | Pending |

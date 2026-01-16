@@ -10,7 +10,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Foundation** - Structured logging, entitlement verification, error handling foundation
+- [x] **Phase 1: Foundation** - Structured logging, entitlement verification, error handling foundation
 - [ ] **Phase 2: HealthKit Reliability** - Background delivery, observer queries, server deduplication
 - [ ] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
 - [ ] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
@@ -32,8 +32,10 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: HealthKitService structured logging migration
+- [x] 01-01: HealthKitService structured logging migration
 - [x] 01-02: GeofenceManager structured logging and entitlements verification
+- [x] 01-03: HealthKit error handling (gap closure)
+- [x] 01-04: Geofence error handling (gap closure)
 
 ### Phase 2: HealthKit Reliability
 **Goal**: Reliable background delivery for all enabled HealthKit data types
@@ -135,7 +137,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 1/2 | In progress | - |
+| 1. Foundation | 4/4 | Complete | 2026-01-15 |
 | 2. HealthKit Reliability | 0/? | Not started | - |
 | 3. Geofence Reliability | 0/? | Not started | - |
 | 4. Code Quality | 0/? | Not started | - |
