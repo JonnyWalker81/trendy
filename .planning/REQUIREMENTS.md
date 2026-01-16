@@ -99,37 +99,37 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HLTH-01 | — | Pending |
-| HLTH-02 | — | Pending |
-| HLTH-03 | — | Pending |
-| HLTH-04 | — | Pending |
-| HLTH-05 | — | Pending |
-| GEO-01 | — | Pending |
-| GEO-02 | — | Pending |
-| GEO-03 | — | Pending |
-| GEO-04 | — | Pending |
-| SYNC-01 | — | Pending |
-| SYNC-02 | — | Pending |
-| SYNC-03 | — | Pending |
-| SYNC-04 | — | Pending |
-| API-01 | — | Pending |
-| API-02 | — | Pending |
-| API-03 | — | Pending |
-| API-04 | — | Pending |
-| CODE-01 | — | Pending |
-| CODE-02 | — | Pending |
-| CODE-03 | — | Pending |
-| CODE-04 | — | Pending |
-| UX-01 | — | Pending |
-| UX-02 | — | Pending |
-| UX-03 | — | Pending |
-| UX-04 | — | Pending |
+| HLTH-01 | Phase 2 | Pending |
+| HLTH-02 | Phase 2 | Pending |
+| HLTH-03 | Phase 2 | Pending |
+| HLTH-04 | Phase 2 | Pending |
+| HLTH-05 | Phase 2 | Pending |
+| GEO-01 | Phase 3 | Pending |
+| GEO-02 | Phase 3 | Pending |
+| GEO-03 | Phase 3 | Pending |
+| GEO-04 | Phase 3 | Pending |
+| SYNC-01 | Phase 5 | Pending |
+| SYNC-02 | Phase 5 | Pending |
+| SYNC-03 | Phase 5 | Pending |
+| SYNC-04 | Phase 5 | Pending |
+| API-01 | Phase 6 | Pending |
+| API-02 | Phase 6 | Pending |
+| API-03 | Phase 6 | Pending |
+| API-04 | Phase 6 | Pending |
+| CODE-01 | Phase 4 | Pending |
+| CODE-02 | Phase 1 | Pending |
+| CODE-03 | Phase 4 | Pending |
+| CODE-04 | Phase 1 | Pending |
+| UX-01 | Phase 7 | Pending |
+| UX-02 | Phase 7 | Pending |
+| UX-03 | Phase 7 | Pending |
+| UX-04 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25 ⚠️
+- Mapped to phases: 25
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-15 after adding server-side requirements (thin client architecture)*
+*Last updated: 2026-01-15 after roadmap creation (all requirements mapped to phases)*
