@@ -293,10 +293,18 @@ struct HealthKitCategoryRow: View {
     let category: HealthDataCategory
     private let settings = HealthKitSettings.shared
     @Query private var eventTypes: [EventType]
+    @Environment(HealthKitService.self) private var healthKitService: HealthKitService?
 
     private var linkedEventType: EventType? {
         guard let eventTypeId = settings.eventTypeId(for: category) else { return nil }
         return eventTypes.first { $0.id == eventTypeId }
+    }
+
+    private func formatRelativeTime(_ date: Date?) -> String {
+        guard let date = date else { return "Never" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     var body: some View {
@@ -323,6 +331,17 @@ struct HealthKitCategoryRow: View {
                     Text("Auto-creates event type")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                // Freshness indicator
+                if let lastUpdate = healthKitService?.lastUpdateTime(for: category) {
+                    Text("Updated \(formatRelativeTime(lastUpdate))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Not yet updated")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 
