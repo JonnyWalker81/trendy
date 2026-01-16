@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 2 — HealthKit Reliability (COMPLETE)
+**Current focus:** Phase 3 — Geofence Reliability (IN PROGRESS)
 
 ## Current Position
 
-Phase: 2 of 7 (HealthKit Reliability) — COMPLETE
-Plan: 2 of 2 in phase
-Status: Phase complete, ready for Phase 3
-Last activity: 2026-01-16 — Completed 02-02-PLAN.md (Timestamp Visibility)
+Phase: 3 of 7 (Geofence Reliability)
+Plan: 1 of 4 in phase
+Status: In progress
+Last activity: 2026-01-16 — Completed 03-01-PLAN.md (AppDelegate Background Launch)
 
-Progress: ████░░░░░░ 25% (6/24 plans complete)
+Progress: █████░░░░░ 29% (7/24 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 7.5 min
-- Total execution time: ~45 minutes
+- Total plans completed: 7
+- Average duration: 7.6 min
+- Total execution time: ~53 minutes
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: ████░░░░░░ 25% (6/24 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation | 4/4 | 21 min | 5 min |
 | 2. HealthKit Reliability | 2/2 | 23 min | 11.5 min |
+| 3. Geofence Reliability | 1/4 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-04 (3m), 01-03 (8m), 02-01 (8m), 02-02 (15m)
-- Trend: Slightly increasing (more complex plans)
+- Last 5 plans: 01-03 (8m), 02-01 (8m), 02-02 (15m), 03-01 (8m)
+- Trend: Consistent with complex plans
 
 ## Accumulated Context
 
@@ -57,6 +58,9 @@ Recent decisions affecting current work:
 | 02-02 | RelativeDateTimeFormatter for relative time | Native iOS API, auto-localizes, handles edge cases |
 | 02-02 | Oldest category update in Dashboard | Quick at-a-glance view of HealthKit sync status |
 | 02-02 | Set<HealthDataCategory> for refresh tracking | Allows concurrent refreshes with accurate isRefreshing state |
+| 03-01 | AppDelegate's CLLocationManager is separate | Exists only to receive background launch events |
+| 03-01 | Events forwarded via NotificationCenter | Decouples from GeofenceManager initialization timing |
+| 03-01 | CLAuthorizationStatus.description kept in GeofenceManager | Avoid duplicate extension definition |
 
 ### Pending Todos
 
@@ -64,12 +68,12 @@ None.
 
 ### Blockers/Concerns
 
-- Xcode build verification blocked by unrelated SupabaseService.swift error (supabaseURL access level)
-- Swift syntax verification passed; full compilation verification deferred
+- Build verification now passes for simulator destination
+- Provisioning profile issues only affect device builds (not blocking)
 
 ## Session Continuity
 
 Last session: 2026-01-16
-Stopped at: Completed 02-02-PLAN.md
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
-Next: Begin Phase 3 (Geofence Reliability) with 03-01-PLAN.md
+Next: Continue Phase 3 with 03-02-PLAN.md (Lifecycle Re-registration)
