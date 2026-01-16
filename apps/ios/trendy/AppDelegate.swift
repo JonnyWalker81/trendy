@@ -19,6 +19,13 @@ import CoreLocation
 /// received when the app is terminated are properly handled.
 class AppDelegate: NSObject, UIApplicationDelegate, CLLocationManagerDelegate {
 
+    // MARK: - Notification Names
+
+    /// Notification posted on every app launch to trigger geofence re-registration.
+    /// GeofenceManager observes this to ensure regions are registered after:
+    /// device restart, iOS eviction, app updates, or normal user launch.
+    static let normalLaunchNotification = Notification.Name("GeofenceManager.normalLaunch")
+
     // MARK: - Properties
 
     /// Location manager for receiving pending region events during background launch.
@@ -46,6 +53,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, CLLocationManagerDelegate {
                 ctx.add("monitoredRegions", locationManager?.monitoredRegions.count ?? 0)
             })
         }
+
+        // For all launches (background or normal), notify GeofenceManager to ensure regions
+        // This handles device restart, iOS eviction, app updates, and normal app launch scenarios
+        NotificationCenter.default.post(name: Self.normalLaunchNotification, object: nil)
+        Log.geofence.info("Posted normal launch notification for region re-registration")
 
         return true
     }

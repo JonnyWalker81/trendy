@@ -94,7 +94,16 @@ class GeofenceManager: NSObject {
             object: nil
         )
 
-        Log.geofence.debug("GeofenceManager initialized with background event observers")
+        // Register for normal launch notifications from AppDelegate
+        // This ensures regions are re-registered after device restart, iOS eviction, etc.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNormalLaunch(_:)),
+            name: AppDelegate.normalLaunchNotification,
+            object: nil
+        )
+
+        Log.geofence.debug("GeofenceManager initialized with background and launch event observers")
     }
 
     // MARK: - Authorization
@@ -449,7 +458,14 @@ class GeofenceManager: NSObject {
         Array(activeGeofenceEvents.keys)
     }
 
-    // MARK: - Background Event Handlers
+    // MARK: - Launch and Background Event Handlers
+
+    /// Handle normal launch notification from AppDelegate
+    /// Called on every app launch to ensure regions are registered
+    @objc private func handleNormalLaunch(_ notification: Notification) {
+        Log.geofence.info("Handling normal launch notification")
+        ensureRegionsRegistered()
+    }
 
     /// Handle background entry notification from AppDelegate
     /// Called when app is relaunched due to a geofence entry event
