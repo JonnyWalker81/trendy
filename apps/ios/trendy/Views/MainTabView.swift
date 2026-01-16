@@ -78,6 +78,12 @@ struct MainTabView: View {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
+                Log.geofence.debug("Scene became active, ensuring regions registered")
+
+                // Ensure geofences are re-registered when app becomes active
+                // This handles iOS potentially dropping regions under memory pressure
+                geofenceManager?.ensureRegionsRegistered()
+
                 // Sync data and reconcile geofences when app becomes active
                 if let store = eventStore {
                     Task {
@@ -89,8 +95,8 @@ struct MainTabView: View {
                         // Sync with backend (now always includes geofence sync)
                         await store.fetchData()
 
-                        // ALWAYS reconcile geofences with device after sync
-                        // This ensures server-side changes (create/update/delete) are reflected on device
+                        // Reconcile geofences with device after sync to pick up server-side changes
+                        // (ensureRegionsRegistered already ran above for immediate re-registration)
                         if let geoManager = geofenceManager, geoManager.hasGeofencingAuthorization {
                             let definitions = store.getLocalGeofenceDefinitions()
                             geoManager.reconcileRegions(desired: definitions)
