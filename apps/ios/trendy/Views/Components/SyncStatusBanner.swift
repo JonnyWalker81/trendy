@@ -11,7 +11,22 @@ import SwiftUI
 struct SyncStatusBanner: View {
     let syncState: SyncState
     let pendingCount: Int
+    let lastSyncTime: Date?
     var onRetry: (() async -> Void)?
+
+    init(syncState: SyncState, pendingCount: Int, lastSyncTime: Date? = nil, onRetry: (() async -> Void)? = nil) {
+        self.syncState = syncState
+        self.pendingCount = pendingCount
+        self.lastSyncTime = lastSyncTime
+        self.onRetry = onRetry
+    }
+
+    private var lastSyncText: String? {
+        guard let lastSyncTime = lastSyncTime else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: lastSyncTime, relativeTo: Date())
+    }
 
     var body: some View {
         Group {
@@ -19,6 +34,8 @@ struct SyncStatusBanner: View {
             case .idle:
                 if pendingCount > 0 {
                     pendingBanner()
+                } else if let lastSync = lastSyncText {
+                    syncedBanner(lastSync: lastSync)
                 } else {
                     EmptyView()
                 }
@@ -67,6 +84,23 @@ struct SyncStatusBanner: View {
                 .tint(.secondary)
 
             Text("Syncing...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private func syncedBanner(lastSync: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+
+            Text("Synced \(lastSync)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -148,6 +182,17 @@ struct SyncStatusBanner: View {
         SyncStatusBanner(
             syncState: .idle,
             pendingCount: 0
+        )
+        Spacer()
+    }
+}
+
+#Preview("Synced") {
+    VStack(spacing: 0) {
+        SyncStatusBanner(
+            syncState: .idle,
+            pendingCount: 0,
+            lastSyncTime: Date().addingTimeInterval(-300)
         )
         Spacer()
     }
