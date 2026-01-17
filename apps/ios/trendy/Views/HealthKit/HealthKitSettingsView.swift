@@ -22,6 +22,9 @@ struct HealthKitSettingsView: View {
     @State private var isRequestingPermission = false
     @State private var refreshTrigger = false
     @State private var isManuallyRefreshing = false
+    @State private var isImportingHistorical = false
+    @State private var importProgress: (current: Int, total: Int) = (0, 0)
+    @State private var showingImportOptions = false
 
     private let settings = HealthKitSettings.shared
 
@@ -84,6 +87,17 @@ struct HealthKitSettingsView: View {
                 if let category = categoryToDelete {
                     Text("Stop tracking \(category.displayName)? This won't delete any existing events.")
                 }
+            }
+            .confirmationDialog("Import Historical Data", isPresented: $showingImportOptions, titleVisibility: .visible) {
+                Button("Import All Workouts") {
+                    Task { await importHistorical(category: .workout) }
+                }
+                Button("Import All Categories") {
+                    Task { await importAllHistorical() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will import all historical health data. Large datasets may take several minutes. Heart rate data is skipped during bulk import for performance.")
             }
             .onAppear {
                 refreshTrigger.toggle()
@@ -239,6 +253,35 @@ struct HealthKitSettingsView: View {
             }
 
             Section {
+                Button {
+                    showingImportOptions = true
+                } label: {
+                    if isImportingHistorical {
+                        HStack {
+                            ProgressView()
+                                .controlSize(.small)
+                            VStack(alignment: .leading) {
+                                Text("Importing Historical Data...")
+                                    .foregroundStyle(.secondary)
+                                if importProgress.total > 0 {
+                                    Text("\(importProgress.current) of \(importProgress.total)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } else {
+                        Label("Import Historical Data", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+                .disabled(isImportingHistorical)
+            } header: {
+                Text("Historical Data")
+            } footer: {
+                Text("Import older health data beyond the default 30-day window. This may take several minutes for large datasets.")
+            }
+
+            Section {
                 NavigationLink {
                     HealthKitDebugView()
                 } label: {
@@ -309,6 +352,32 @@ struct HealthKitSettingsView: View {
         isManuallyRefreshing = true
         await healthKitService?.forceRefreshAllCategories()
         isManuallyRefreshing = false
+        refreshTrigger.toggle()
+    }
+
+    private func importHistorical(category: HealthDataCategory) async {
+        isImportingHistorical = true
+        importProgress = (0, 0)
+
+        await healthKitService?.importAllHistoricalData(for: category) { current, total in
+            importProgress = (current, total)
+        }
+
+        isImportingHistorical = false
+        refreshTrigger.toggle()
+    }
+
+    private func importAllHistorical() async {
+        isImportingHistorical = true
+        importProgress = (0, 0)
+
+        for category in enabledCategories {
+            await healthKitService?.importAllHistoricalData(for: category) { current, total in
+                importProgress = (current, total)
+            }
+        }
+
+        isImportingHistorical = false
         refreshTrigger.toggle()
     }
 }

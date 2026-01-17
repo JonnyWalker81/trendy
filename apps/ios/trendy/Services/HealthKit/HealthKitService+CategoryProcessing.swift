@@ -96,6 +96,68 @@ extension HealthKitService {
         }
     }
 
+    /// Import all historical data for a category (no date limit)
+    /// Used for user-triggered "Import Historical Data" action
+    /// - Parameter progressHandler: Called with (processed, total) counts during import
+    @MainActor
+    func importAllHistoricalData(for category: HealthDataCategory, progressHandler: @escaping (Int, Int) -> Void) async {
+        guard let sampleType = category.hkSampleType else { return }
+
+        Log.healthKit.info("Starting full historical import", context: .with { ctx in
+            ctx.add("category", category.displayName)
+        })
+
+        // Query ALL data (no predicate, no anchor)
+        let (samples, newAnchor) = await withCheckedContinuation { (continuation: CheckedContinuation<([HKSample], HKQueryAnchor?), Never>) in
+            let query = HKAnchoredObjectQuery(
+                type: sampleType,
+                predicate: nil,  // No date limit for historical import
+                anchor: nil,     // Start from beginning
+                limit: HKObjectQueryNoLimit
+            ) { _, addedSamples, _, newAnchor, error in
+                if let error = error {
+                    Log.healthKit.error("Historical import query error", error: error, context: .with { ctx in
+                        ctx.add("category", category.displayName)
+                    })
+                    continuation.resume(returning: ([], nil))
+                    return
+                }
+                continuation.resume(returning: (addedSamples ?? [], newAnchor))
+            }
+            healthStore.execute(query)
+        }
+
+        // Update anchor
+        if let newAnchor = newAnchor {
+            queryAnchors[category] = newAnchor
+            saveAnchor(newAnchor, for: category)
+        }
+
+        let totalCount = samples.count
+        Log.healthKit.info("Historical import: \(totalCount) samples to process", context: .with { ctx in
+            ctx.add("category", category.displayName)
+        })
+
+        // Process with progress updates
+        for (index, sample) in samples.enumerated() {
+            // Report progress every 10 samples or at start/end
+            if index % 10 == 0 || index == totalCount - 1 {
+                progressHandler(index + 1, totalCount)
+            }
+            await processSample(sample, category: category, isBulkImport: true)
+        }
+
+        // Record update time for freshness display
+        if !samples.isEmpty {
+            recordCategoryUpdate(for: category)
+        }
+
+        Log.healthKit.info("Historical import complete", context: .with { ctx in
+            ctx.add("category", category.displayName)
+            ctx.add("processed", totalCount)
+        })
+    }
+
     /// Process a single sample based on its category
     /// - Parameter isBulkImport: If true, skips notifications and sync (for historical data)
     @MainActor
