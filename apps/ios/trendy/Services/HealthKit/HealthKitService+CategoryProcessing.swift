@@ -61,7 +61,17 @@ extension HealthKitService {
         }
 
         // Process only truly new samples
-        for sample in samples {
+        let totalCount = samples.count
+        for (index, sample) in samples.enumerated() {
+            // Log progress for bulk imports (every 50 samples or at the end)
+            if isBulkImport && (index % 50 == 0 || index == totalCount - 1) {
+                Log.healthKit.info("Bulk import progress", context: .with { ctx in
+                    ctx.add("category", category.displayName)
+                    ctx.add("processed", index + 1)
+                    ctx.add("total", totalCount)
+                    ctx.add("percent", Int(Double(index + 1) / Double(totalCount) * 100))
+                })
+            }
             await processSample(sample, category: category, isBulkImport: isBulkImport)
         }
 

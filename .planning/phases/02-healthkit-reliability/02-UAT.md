@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 02-healthkit-reliability
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md]
 started: 2026-01-15T10:00:00Z
@@ -61,12 +61,24 @@ skipped: 1
 
 ## Gaps
 
-- truth: "Manual refresh completes for all categories including Workouts"
+- truth: "Manual refresh completes for all categories including Workouts in reasonable time"
   status: failed
   reason: "User reported: pressing the button starts the loading indicator, all the categories are updated except the Workout category and the spinner is not going away, either its stuck or its taking a very very very long time to update the Workout health info"
   severity: major
   test: 7
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Initial sync attempts to import ALL historical HealthKit data (500+ workouts). Each workout triggers heart rate query (~100-500ms). No time-bound predicate limits scope."
+  artifacts:
+    - path: "apps/ios/trendy/Services/HealthKit/HealthKitService+CategoryProcessing.swift"
+      issue: "HKAnchoredObjectQuery has no date predicate - fetches entire history"
+    - path: "apps/ios/trendy/Services/HealthKit/HealthKitService+WorkoutProcessing.swift"
+      issue: "Heart rate enrichment runs for every workout including bulk imports"
+  missing:
+    - "Default date predicate: last 30 days for initial sync"
+    - "User setting to control historical import depth"
+    - "UI to trigger extended historical import on demand"
+  debug_session: ".planning/debug/resolved/healthkit-workout-refresh-hang.md"
+  fix_approach: |
+    1. Add 30-day date predicate to anchored queries for initial sync (no anchor exists)
+    2. Add "Import Historical Data" option in HealthKit Settings
+    3. Historical import shows progress and estimated time
+    4. Skip heart rate enrichment for bulk historical imports

@@ -56,8 +56,16 @@ extension HealthKitService {
             return
         }
 
-        // Fetch heart rate stats for this workout
-        let (avgHR, maxHR) = await fetchHeartRateStats(for: workout)
+        // Fetch heart rate stats for this workout (skip during bulk import for performance)
+        // Each heart rate query takes 100-500ms, which adds up significantly for hundreds of workouts
+        let (avgHR, maxHR): (Double?, Double?)
+        if isBulkImport {
+            // Skip heart rate enrichment during bulk import to avoid 500+ sequential HealthKit queries
+            avgHR = nil
+            maxHR = nil
+        } else {
+            (avgHR, maxHR) = await fetchHeartRateStats(for: workout)
+        }
 
         // Build properties
         var properties: [String: PropertyValue] = [
