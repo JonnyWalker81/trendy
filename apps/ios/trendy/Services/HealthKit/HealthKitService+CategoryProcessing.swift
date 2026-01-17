@@ -139,10 +139,15 @@ extension HealthKitService {
         })
 
         // Process with progress updates
+        // Report initial progress immediately
+        progressHandler(0, totalCount)
+
         for (index, sample) in samples.enumerated() {
             // Report progress every 10 samples or at start/end
             if index % 10 == 0 || index == totalCount - 1 {
                 progressHandler(index + 1, totalCount)
+                // Yield to allow UI to update - without this the UI freezes
+                await Task.yield()
             }
             await processSample(sample, category: category, isBulkImport: true)
         }
