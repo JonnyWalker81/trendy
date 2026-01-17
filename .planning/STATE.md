@@ -5,16 +5,26 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 5 Sync Engine - Non-blocking async sync architecture complete
+**Current focus:** Phase 5 Sync Engine - Blocked on sync progress UI bug
 
 ## Current Position
 
-Phase: 5 of 6 (Sync Engine)
-Plan: 6 of 6 complete
-Status: Phase 5 complete
-Last activity: 2026-01-17 — Completed 05-06-PLAN.md (non-blocking async sync)
+Phase: 5 of 7 (Sync Engine)
+Plan: 05-06 complete, 05-03 checkpoint blocked
+Status: Bug fix required before verification
+Last activity: 2026-01-17 — 05-03 checkpoint revealed sync progress UI bug
 
 Progress: ██████████ 68% (17/25 plans complete)
+
+## Active Blocker
+
+**Bug:** Sync progress UI not updating during batch operations
+**Debug file:** `.planning/debug/sync-progress-ui-stale.md`
+**Impact:** Cannot complete 05-03 verification checkpoint (Test 1 fails)
+
+**Root cause:** SyncEngine only updates progress after successful batch completion. When batches timeout, progress stays at "0 of N".
+
+**Fix location:** `apps/ios/trendy/Services/Sync/SyncEngine.swift` lines 558-611
 
 ## UAT Status
 
@@ -22,13 +32,15 @@ Progress: ██████████ 68% (17/25 plans complete)
 |-------|--------|--------|--------|-------|
 | 02-healthkit-reliability | complete | 9/9 | 0 | Gap closure fixed initial sync performance |
 | 03-geofence-reliability | complete | 5/6 | 1 minor | Coordinates not shown in debug view |
-| 05-sync-engine | complete | 3/4 | 0 | 1 skipped (captive portal) |
+| 05-sync-engine | blocked | 0/6 | 1 | Progress UI bug blocks verification |
 
 ## Next Action
 
-**Run:** `/gsd:plan-phase 6`
+**Fix bug, then resume verification:**
 
-Phase 6: Polish — Final refinements and production readiness
+1. Read `.planning/debug/sync-progress-ui-stale.md`
+2. Implement fix (Option A: update progress before each batch attempt)
+3. Re-run `/gsd:execute-phase 5` to complete 05-03 checkpoint
 
 ## Performance Metrics
 
@@ -45,7 +57,7 @@ Phase 6: Polish — Final refinements and production readiness
 | 2. HealthKit Reliability | 3/3 | 29 min | 9.7 min |
 | 3. Geofence Reliability | 4/4 | 23 min | 5.75 min |
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
-| 5. Sync Engine | 4/4 | 29 min | 7.25 min |
+| 5. Sync Engine | 5/6 | 37 min | 7.4 min |
 
 ## Accumulated Context
 
@@ -66,16 +78,18 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
+- **ACTIVE:** Fix sync progress UI bug (see debug file)
 - Phase 3 minor gap: coordinates not shown in geofence debug view
 
 ### Blockers/Concerns
 
+- Sync progress UI bug blocks phase 5 verification
 - Build verification passes for simulator destination
 - Provisioning profile issues only affect device builds (not blocking)
 
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: Completed 05-06-PLAN.md
-Resume file: None
-Next: `/gsd:plan-phase 6`
+Stopped at: 05-03 checkpoint - Test 1 failed (progress UI not updating)
+Resume file: `.planning/debug/sync-progress-ui-stale.md`
+Next: Fix bug, then `/gsd:execute-phase 5`
