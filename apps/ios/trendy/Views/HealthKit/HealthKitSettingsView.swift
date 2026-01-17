@@ -264,7 +264,8 @@ struct HealthKitSettingsView: View {
                                 Text("Importing Historical Data...")
                                     .foregroundStyle(.secondary)
                                 if importProgress.total > 0 {
-                                    Text("\(importProgress.current) of \(importProgress.total)")
+                                    let percent = Int(Double(importProgress.current) / Double(importProgress.total) * 100)
+                                    Text("\(importProgress.current) of \(importProgress.total) (\(percent)%)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
