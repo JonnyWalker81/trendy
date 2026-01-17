@@ -96,12 +96,17 @@ Plans:
   2. Offline changes automatically sync when network returns
   3. Pending mutations persist across app restarts
   4. User can see sync state (pending count, last sync time)
-**Research**: Likely (SwiftData concurrency with @ModelActor, conflict resolution strategy)
+**Research**: Completed (SwiftData actor patterns, mutation queue design)
 **Research topics**: @ModelActor patterns, PersistentIdentifier passing, mutation queue design, LWW vs explicit conflict handling
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 05-01: TBD
+- [x] 05-01: Sync state visibility (lastSyncTime, SyncStatusBanner wiring)
+- [x] 05-02: Code cleanup and captive portal detection (QueuedOperation removal, health check)
+- [x] 05-03: Manual verification checkpoint (SYNC-01 through SYNC-04)
+- [x] 05-04: Mutation atomicity (queue before save, gap closure)
+- [x] 05-05: State persistence (pendingCount on launch, pendingDeleteIds in UserDefaults)
+- [ ] 05-06: Non-blocking async sync architecture (instant UI, background sync)
 
 ### Phase 6: Server API
 **Goal**: Server-side support for idempotent creates and deduplication
@@ -136,7 +141,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 
 | Phase | Plans Complete | Status | Completed |
@@ -145,7 +150,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 2. HealthKit Reliability | 3/3 | Complete | 2026-01-16 |
 | 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
-| 5. Sync Engine | 0/? | Not started | - |
+| 5. Sync Engine | 5/6 | In Progress | - |
 | 6. Server API | 0/? | Not started | - |
 | 7. UX Indicators | 0/? | Not started | - |
 
