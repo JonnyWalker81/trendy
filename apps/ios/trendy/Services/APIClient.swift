@@ -64,10 +64,7 @@ class APIClient {
 
     /// Get auth headers with Bearer token
     private func authHeaders() async throws -> [String: String] {
-        let authHeadersStart = Date()
-        Log.api.info("TIMING authHeaders [T+0.000s] START - calling supabaseService.getAccessToken()")
         let token = try await supabaseService.getAccessToken()
-        Log.api.info("TIMING authHeaders [T+\(String(format: "%.3f", Date().timeIntervalSince(authHeadersStart)))s] COMPLETE - token acquired")
         return [
             "Content-Type": "application/json",
             "Authorization": "Bearer \(token)"

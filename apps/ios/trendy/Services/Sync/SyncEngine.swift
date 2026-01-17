@@ -146,24 +146,17 @@ actor SyncEngine {
     /// This is idempotent and safe to call multiple times - only one sync
     /// will run at a time (single-flight pattern).
     func performSync() async {
-        let syncStartTime = Date()
-        Log.sync.info("TIMING performSync [T+0.000s] START")
-
         guard !isSyncing else {
             Log.sync.debug("Sync already in progress, skipping")
-            Log.sync.info("TIMING performSync [T+\(String(format: "%.3f", Date().timeIntervalSince(syncStartTime)))s] EXIT - already syncing")
             return
         }
 
         // Verify actual connectivity before starting sync
         // This catches captive portal situations where NWPathMonitor reports "satisfied"
-        Log.sync.info("TIMING performSync [T+\(String(format: "%.3f", Date().timeIntervalSince(syncStartTime)))s] Before performHealthCheck")
         guard await performHealthCheck() else {
             Log.sync.info("Skipping sync - health check failed (likely captive portal)")
-            Log.sync.info("TIMING performSync [T+\(String(format: "%.3f", Date().timeIntervalSince(syncStartTime)))s] EXIT - health check failed")
             return
         }
-        Log.sync.info("TIMING performSync [T+\(String(format: "%.3f", Date().timeIntervalSince(syncStartTime)))s] After performHealthCheck - PASSED")
 
         isSyncing = true
         await updateState(.syncing)
@@ -479,21 +472,17 @@ actor SyncEngine {
     /// - Empty response would indicate a problem, not a valid state
     /// - Lightweight payload compared to full event list
     private func performHealthCheck() async -> Bool {
-        let healthCheckStart = Date()
-        Log.sync.info("TIMING performHealthCheck [T+0.000s] START - calling apiClient.getEventTypes()")
         do {
             let types = try await apiClient.getEventTypes()
             // If we get a response (even empty), connectivity is working
             Log.sync.debug("Health check passed", context: .with { ctx in
                 ctx.add("event_types_count", types.count)
             })
-            Log.sync.info("TIMING performHealthCheck [T+\(String(format: "%.3f", Date().timeIntervalSince(healthCheckStart)))s] SUCCESS")
             return true
         } catch {
             Log.sync.warning("Health check failed - likely captive portal or no connectivity", context: .with { ctx in
                 ctx.add("error", error.localizedDescription)
             })
-            Log.sync.info("TIMING performHealthCheck [T+\(String(format: "%.3f", Date().timeIntervalSince(healthCheckStart)))s] FAILED - \(error.localizedDescription)")
             return false
         }
     }

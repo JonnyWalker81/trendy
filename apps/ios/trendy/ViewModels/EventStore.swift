@@ -433,18 +433,11 @@ class EventStore {
     /// Fetch data - performs sync if online, otherwise loads from local cache
     /// - Parameter force: If true, bypasses debouncing and forces a fresh fetch
     func fetchData(force: Bool = false) async {
-        let fetchStartTime = Date()
-        Log.sync.info("TIMING fetchData [T+0.000s] START")
-
-        guard modelContext != nil else {
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] EXIT - no modelContext")
-            return
-        }
+        guard modelContext != nil else { return }
 
         // Debounce: skip if recently fetched (unless forced)
         if !force, let lastFetch = lastFetchTime,
            Date().timeIntervalSince(lastFetch) < fetchDebounceInterval {
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] EXIT - debounced")
             return
         }
 
@@ -455,25 +448,15 @@ class EventStore {
             // Sync with backend if we have a SyncEngine and are online
             // Use synchronous network check to avoid stale isOnline value when returning from background
             // This prevents 60-second Supabase SDK timeout when network state changed while app was backgrounded
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before checkNetworkPathSynchronously")
             let actuallyOnline = checkNetworkPathSynchronously()
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After checkNetworkPathSynchronously - result: \(actuallyOnline)", context: .with { ctx in
-                ctx.add("has_sync_engine", syncEngine != nil)
-                ctx.add("cached_is_online", isOnline)
-                ctx.add("sync_check_online", actuallyOnline)
-            })
             if let syncEngine = syncEngine, actuallyOnline {
-                Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before syncEngine.performSync")
                 await syncEngine.performSync()
-                Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After syncEngine.performSync")
             } else {
                 Log.sync.debug("fetchData: skipping sync - syncEngine=\(syncEngine != nil), actuallyOnline=\(actuallyOnline)")
             }
 
             // Always load from local cache after sync
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] Before fetchFromLocal")
             try await fetchFromLocal()
-            Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] After fetchFromLocal")
             await refreshSyncStateForUI()
 
         } catch {
@@ -486,7 +469,6 @@ class EventStore {
 
         lastFetchTime = Date()
         isLoading = false
-        Log.sync.info("TIMING fetchData [T+\(String(format: "%.3f", Date().timeIntervalSince(fetchStartTime)))s] COMPLETE")
     }
 
     private func fetchFromLocal() async throws {
