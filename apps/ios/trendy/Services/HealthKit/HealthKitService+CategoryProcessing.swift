@@ -21,11 +21,26 @@ extension HealthKitService {
         // Get current anchor (may be nil for first query)
         let currentAnchor = queryAnchors[category]
 
+        // Build predicate: limit to last N days for initial sync (no anchor)
+        let predicate: NSPredicate?
+        if currentAnchor == nil {
+            let daysToImport = HealthKitSettings.shared.historicalImportDays
+            let startDate = Calendar.current.date(byAdding: .day, value: -daysToImport, to: Date()) ?? Date()
+            predicate = HKQuery.predicateForSamples(withStart: startDate, end: nil, options: .strictStartDate)
+            Log.healthKit.info("Initial sync: limiting to last \(daysToImport) days", context: .with { ctx in
+                ctx.add("category", category.displayName)
+                ctx.add("startDate", startDate.ISO8601Format())
+            })
+        } else {
+            // Subsequent fetches: get all new data since anchor (no date limit)
+            predicate = nil
+        }
+
         // Execute anchored query
         let (samples, newAnchor) = await withCheckedContinuation { (continuation: CheckedContinuation<([HKSample], HKQueryAnchor?), Never>) in
             let query = HKAnchoredObjectQuery(
                 type: sampleType,
-                predicate: nil,
+                predicate: predicate,
                 anchor: currentAnchor,
                 limit: HKObjectQueryNoLimit
             ) { _, addedSamples, _, newAnchor, error in

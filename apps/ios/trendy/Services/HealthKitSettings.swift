@@ -154,6 +154,23 @@ final class HealthKitSettings {
         enabledCategories.map { config(for: $0) }
     }
 
+    // MARK: - Historical Import Settings
+
+    private let historicalImportDaysKey = "healthKit.historicalImportDays"
+    private let defaultImportDays = 30
+
+    /// Number of days to import on initial sync (when no anchor exists)
+    /// Default is 30 days. User can trigger full historical import separately.
+    var historicalImportDays: Int {
+        get {
+            let days = defaults.integer(forKey: historicalImportDaysKey)
+            return days > 0 ? days : defaultImportDays
+        }
+        set {
+            defaults.set(newValue, forKey: historicalImportDaysKey)
+        }
+    }
+
     // MARK: - Debug
 
     func logCurrentState() {
