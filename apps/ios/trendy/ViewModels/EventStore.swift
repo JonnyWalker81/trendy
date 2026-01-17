@@ -224,22 +224,46 @@ class EventStore {
                 return
             }
 
-            Log.sync.info("Found widget-created events needing mutation queue", context: .with { ctx in
+            Log.sync.info("Found pending events needing mutation queue", context: .with { ctx in
                 ctx.add("count", eventsNeedingMutation.count)
             })
 
             // Queue mutations for each unsynced event
             for event in eventsNeedingMutation {
-                guard let eventType = event.eventType else {
+                // Try to get eventTypeId from multiple sources (handles HealthKit events with broken relationships)
+                var eventTypeId: String?
+
+                if let existingEventType = event.eventType {
+                    eventTypeId = existingEventType.id
+                } else if let storedEventTypeId = event.eventTypeId {
+                    // Backup field for when SwiftData relationship is broken
+                    eventTypeId = storedEventTypeId
+                } else if let categoryRaw = event.healthKitCategory,
+                          let category = HealthDataCategory(rawValue: categoryRaw) {
+                    // Look up EventType by HealthKit category default name
+                    let defaultName = category.defaultEventTypeName
+                    let eventTypeDescriptor = FetchDescriptor<EventType>(
+                        predicate: #Predicate { et in et.name == defaultName }
+                    )
+                    if let foundEventType = try? modelContext.fetch(eventTypeDescriptor).first {
+                        eventTypeId = foundEventType.id
+                        // Restore the relationship and backup field for future use
+                        event.eventType = foundEventType
+                        event.eventTypeId = foundEventType.id
+                    }
+                }
+
+                guard let finalEventTypeId = eventTypeId else {
                     Log.sync.warning("queueMutationsForUnsyncedEvents: event has no eventType", context: .with { ctx in
                         ctx.add("event_id", event.id)
+                        ctx.add("healthKitCategory", event.healthKitCategory ?? "nil")
                     })
                     continue
                 }
 
                 let request = CreateEventRequest(
                     id: event.id,
-                    eventTypeId: eventType.id,
+                    eventTypeId: finalEventTypeId,
                     timestamp: event.timestamp,
                     notes: event.notes,
                     isAllDay: event.isAllDay,
@@ -264,9 +288,10 @@ class EventStore {
                         entityId: event.id,
                         payload: payload
                     )
-                    Log.sync.info("Queued mutation for widget-created event", context: .with { ctx in
+                    Log.sync.info("Queued mutation for pending event", context: .with { ctx in
                         ctx.add("event_id", event.id)
-                        ctx.add("event_type", eventType.name)
+                        ctx.add("event_type_id", finalEventTypeId)
+                        ctx.add("source", event.sourceType.rawValue)
                     })
                 } catch {
                     Log.sync.error("Failed to queue mutation for widget event", error: error, context: .with { ctx in
@@ -304,6 +329,12 @@ class EventStore {
                 // Load initial state from SwiftData/UserDefaults BEFORE refreshSyncStateForUI
                 // This ensures pendingCount reflects actual PendingMutation count on app launch
                 await syncEngine.loadInitialState()
+
+                // Queue mutations for any pending events (e.g., HealthKit bulk imports that were
+                // stored locally but never synced). This runs on every app launch to catch any
+                // orphaned events and ensures they eventually sync to the backend.
+                await queueMutationsForUnsyncedEvents()
+
                 await refreshSyncStateForUI()
             }
         }
@@ -328,7 +359,21 @@ class EventStore {
 
         // Queue mutations for any widget-created events that may have been missed
         await queueMutationsForUnsyncedEvents()
+
+        // Start a background task to poll sync state and update UI in real-time
+        // This ensures LoadingView shows progress during sync, not just "Loading..."
+        let pollingTask = Task { @MainActor in
+            while !Task.isCancelled {
+                await refreshSyncStateForUI()
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms polling interval
+            }
+        }
+
         await syncEngine.performSync()
+
+        // Stop polling now that sync is complete
+        pollingTask.cancel()
+
         // Refresh local data after sync
         try? await fetchFromLocal()
         await refreshSyncStateForUI()
@@ -343,7 +388,20 @@ class EventStore {
         }
         isLoading = true
         Log.sync.info("Starting force full resync")
+
+        // Start a background task to poll sync state and update UI in real-time
+        let pollingTask = Task { @MainActor in
+            while !Task.isCancelled {
+                await refreshSyncStateForUI()
+                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms polling interval
+            }
+        }
+
         await syncEngine.forceFullResync()
+
+        // Stop polling now that sync is complete
+        pollingTask.cancel()
+
         try? await fetchFromLocal()
         isLoading = false
         Log.sync.info("Force full resync completed")
@@ -391,6 +449,17 @@ class EventStore {
         get async {
             await syncEngine?.circuitBreakerBackoffRemaining ?? 0
         }
+    }
+
+    /// Reset the circuit breaker and retry sync immediately.
+    /// Use this when the user explicitly wants to bypass the rate limit backoff.
+    func resetCircuitBreakerAndSync() async {
+        guard let syncEngine = syncEngine else {
+            Log.sync.warning("resetCircuitBreakerAndSync: no syncEngine available")
+            return
+        }
+        await syncEngine.resetCircuitBreaker()
+        await performSync()
     }
 
     /// Refresh cached sync state from SyncEngine for UI binding
@@ -450,7 +519,19 @@ class EventStore {
             // This prevents 60-second Supabase SDK timeout when network state changed while app was backgrounded
             let actuallyOnline = checkNetworkPathSynchronously()
             if let syncEngine = syncEngine, actuallyOnline {
+                // Start a background task to poll sync state and update UI in real-time
+                // This ensures LoadingView shows progress during sync, not just "Loading..."
+                let pollingTask = Task { @MainActor in
+                    while !Task.isCancelled {
+                        await refreshSyncStateForUI()
+                        try? await Task.sleep(nanoseconds: 250_000_000) // 250ms polling interval
+                    }
+                }
+
                 await syncEngine.performSync()
+
+                // Stop polling now that sync is complete
+                pollingTask.cancel()
             } else {
                 Log.sync.debug("fetchData: skipping sync - syncEngine=\(syncEngine != nil), actuallyOnline=\(actuallyOnline)")
             }
@@ -468,6 +549,25 @@ class EventStore {
         }
 
         lastFetchTime = Date()
+        isLoading = false
+    }
+
+    /// Loads data from local SwiftData cache only - does NOT trigger sync.
+    /// Use this for instant UI display during app launch, then call performSync() separately.
+    func fetchFromLocalOnly() async {
+        guard modelContext != nil else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await fetchFromLocal()
+            await refreshSyncStateForUI()
+        } catch {
+            Log.data.error("Local fetch error", error: error)
+            errorMessage = "Failed to load cached data."
+        }
+
         isLoading = false
     }
 
