@@ -112,6 +112,12 @@ class HealthKitService: NSObject {
     /// Categories currently being refreshed
     internal(set) var refreshingCategories: Set<HealthDataCategory> = []
 
+    /// Whether historical import should be cancelled
+    internal(set) var isHistoricalImportCancelled: Bool = false
+
+    /// Whether historical import is currently in progress
+    internal(set) var isHistoricalImportInProgress: Bool = false
+
     /// Active observer queries for background delivery
     var observerQueries: [HealthDataCategory: HKObserverQuery] = [:]
 

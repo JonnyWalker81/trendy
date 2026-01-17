@@ -96,12 +96,28 @@ extension HealthKitService {
         }
     }
 
+    /// Cancel the current historical import
+    @MainActor
+    func cancelHistoricalImport() {
+        guard isHistoricalImportInProgress else { return }
+        Log.healthKit.info("Historical import cancellation requested")
+        isHistoricalImportCancelled = true
+    }
+
     /// Import all historical data for a category (no date limit)
     /// Used for user-triggered "Import Historical Data" action
-    /// - Parameter progressHandler: Called with (processed, total) counts during import
+    /// - Parameters:
+    ///   - category: The health data category to import
+    ///   - progressHandler: Called with (processed, total) counts during import
+    /// - Returns: True if import completed, false if cancelled
     @MainActor
-    func importAllHistoricalData(for category: HealthDataCategory, progressHandler: @escaping (Int, Int) -> Void) async {
-        guard let sampleType = category.hkSampleType else { return }
+    @discardableResult
+    func importAllHistoricalData(for category: HealthDataCategory, progressHandler: @escaping (Int, Int) -> Void) async -> Bool {
+        guard let sampleType = category.hkSampleType else { return false }
+
+        // Reset cancellation flag at start
+        isHistoricalImportCancelled = false
+        isHistoricalImportInProgress = true
 
         Log.healthKit.info("Starting full historical import", context: .with { ctx in
             ctx.add("category", category.displayName)
@@ -127,6 +143,13 @@ extension HealthKitService {
             healthStore.execute(query)
         }
 
+        // Check if cancelled during query
+        if isHistoricalImportCancelled {
+            Log.healthKit.info("Historical import cancelled before processing")
+            isHistoricalImportInProgress = false
+            return false
+        }
+
         // Update anchor
         if let newAnchor = newAnchor {
             queryAnchors[category] = newAnchor
@@ -142,7 +165,20 @@ extension HealthKitService {
         // Report initial progress immediately
         progressHandler(0, totalCount)
 
+        var processedCount = 0
         for (index, sample) in samples.enumerated() {
+            // Check for cancellation
+            if isHistoricalImportCancelled {
+                Log.healthKit.info("Historical import cancelled", context: .with { ctx in
+                    ctx.add("category", category.displayName)
+                    ctx.add("processed", processedCount)
+                    ctx.add("total", totalCount)
+                    ctx.add("percent", Int(Double(processedCount) / Double(totalCount) * 100))
+                })
+                isHistoricalImportInProgress = false
+                return false
+            }
+
             // Report progress every 10 samples or at start/end
             if index % 10 == 0 || index == totalCount - 1 {
                 progressHandler(index + 1, totalCount)
@@ -150,6 +186,7 @@ extension HealthKitService {
                 await Task.yield()
             }
             await processSample(sample, category: category, isBulkImport: true)
+            processedCount += 1
         }
 
         // Record update time for freshness display
@@ -157,10 +194,14 @@ extension HealthKitService {
             recordCategoryUpdate(for: category)
         }
 
+        isHistoricalImportInProgress = false
+
         Log.healthKit.info("Historical import complete", context: .with { ctx in
             ctx.add("category", category.displayName)
             ctx.add("processed", totalCount)
         })
+
+        return true
     }
 
     /// Process a single sample based on its category

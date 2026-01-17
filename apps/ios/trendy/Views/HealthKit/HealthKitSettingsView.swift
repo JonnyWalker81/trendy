@@ -25,6 +25,8 @@ struct HealthKitSettingsView: View {
     @State private var isImportingHistorical = false
     @State private var importProgress: (current: Int, total: Int) = (0, 0)
     @State private var showingImportOptions = false
+    @State private var showingImportModal = false
+    @State private var importCategoryName = "All Categories"
 
     private let settings = HealthKitSettings.shared
 
@@ -98,6 +100,25 @@ struct HealthKitSettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This will import all historical health data. Large datasets may take several minutes. Heart rate data is skipped during bulk import for performance.")
+            }
+            .fullScreenCover(isPresented: $showingImportModal) {
+                HistoricalImportModalView(
+                    categoryName: importCategoryName,
+                    current: Binding(
+                        get: { importProgress.current },
+                        set: { importProgress.current = $0 }
+                    ),
+                    total: Binding(
+                        get: { importProgress.total },
+                        set: { importProgress.total = $0 }
+                    ),
+                    onCancel: {
+                        healthKitService?.cancelHistoricalImport()
+                        showingImportModal = false
+                        isImportingHistorical = false
+                    }
+                )
+                .interactiveDismissDisabled()
             }
             .onAppear {
                 refreshTrigger.toggle()
@@ -256,30 +277,13 @@ struct HealthKitSettingsView: View {
                 Button {
                     showingImportOptions = true
                 } label: {
-                    if isImportingHistorical {
-                        HStack {
-                            ProgressView()
-                                .controlSize(.small)
-                            VStack(alignment: .leading) {
-                                Text("Importing Historical Data...")
-                                    .foregroundStyle(.secondary)
-                                if importProgress.total > 0 {
-                                    let percent = Int(Double(importProgress.current) / Double(importProgress.total) * 100)
-                                    Text("\(importProgress.current) of \(importProgress.total) (\(percent)%)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    } else {
-                        Label("Import Historical Data", systemImage: "clock.arrow.circlepath")
-                    }
+                    Label("Import Historical Data", systemImage: "clock.arrow.circlepath")
                 }
                 .disabled(isImportingHistorical)
             } header: {
                 Text("Historical Data")
             } footer: {
-                Text("Import older health data beyond the default 30-day window. This may take several minutes for large datasets.")
+                Text("Import older health data beyond the default 30-day window. A progress screen will show import status.")
             }
 
             Section {
@@ -359,27 +363,56 @@ struct HealthKitSettingsView: View {
     private func importHistorical(category: HealthDataCategory) async {
         isImportingHistorical = true
         importProgress = (0, 0)
+        importCategoryName = category.displayName
+        showingImportModal = true
 
-        await healthKitService?.importAllHistoricalData(for: category) { current, total in
+        let completed = await healthKitService?.importAllHistoricalData(for: category) { current, total in
             importProgress = (current, total)
-        }
+        } ?? false
 
+        showingImportModal = false
         isImportingHistorical = false
         refreshTrigger.toggle()
+
+        if !completed {
+            Log.healthKit.info("Import cancelled by user", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
+        }
     }
 
     private func importAllHistorical() async {
         isImportingHistorical = true
         importProgress = (0, 0)
+        importCategoryName = "All Categories"
+        showingImportModal = true
 
+        var allCompleted = true
         for category in enabledCategories {
-            await healthKitService?.importAllHistoricalData(for: category) { current, total in
+            // Check if cancelled before starting next category
+            if healthKitService?.isHistoricalImportCancelled ?? false {
+                allCompleted = false
+                break
+            }
+
+            importCategoryName = category.displayName
+            let completed = await healthKitService?.importAllHistoricalData(for: category) { current, total in
                 importProgress = (current, total)
+            } ?? false
+
+            if !completed {
+                allCompleted = false
+                break
             }
         }
 
+        showingImportModal = false
         isImportingHistorical = false
         refreshTrigger.toggle()
+
+        if !allCompleted {
+            Log.healthKit.info("Import cancelled by user")
+        }
     }
 }
 
