@@ -47,16 +47,22 @@ struct MainTabView: View {
                 }
             } else {
                 if isLoading || eventStore == nil || geofenceManager == nil {
-                    LoadingView()
-                        .transition(.opacity.combined(with: .scale))
+                    LoadingView(
+                        syncState: eventStore?.currentSyncState,
+                        pendingCount: eventStore?.currentPendingCount
+                    )
+                    .transition(.opacity.combined(with: .scale))
                 } else {
                     mainTabContent
                 }
             }
             #else
             if isLoading || eventStore == nil || geofenceManager == nil {
-                LoadingView()
-                    .transition(.opacity.combined(with: .scale))
+                LoadingView(
+                    syncState: eventStore?.currentSyncState,
+                    pendingCount: eventStore?.currentPendingCount
+                )
+                .transition(.opacity.combined(with: .scale))
             } else {
                 mainTabContent
             }
@@ -249,22 +255,36 @@ struct MainTabView: View {
         // Set up widget notification observer to sync widget-created events
         store.setupWidgetNotificationObserver()
 
-        // Load and sync data (fetchData now always syncs geofences from server)
-        await store.fetchData()
+        // STEP 1: Load cached data for instant UI display (no sync, no network)
+        await store.fetchFromLocalOnly()
 
-        // Reconcile geofences with device after data is synced
-        // fetchData already synced from server, so just get local definitions
+        // STEP 2: Show UI immediately with cached data
+        withAnimation {
+            isLoading = false
+        }
+
+        // STEP 3: Reconcile geofences with cached definitions first (instant)
         if geoManager.hasGeofencingAuthorization {
             let definitions = store.getLocalGeofenceDefinitions()
             geoManager.reconcileRegions(desired: definitions)
-            #if DEBUG
-            print("📍 App launch - reconciled \(definitions.count) geofences with device")
-            #endif
+            Log.geofence.debug("App launch - reconciled geofences with cached definitions", context: .with { ctx in
+                ctx.add("count", definitions.count)
+            })
         }
 
-        // Hide loading screen
-        withAnimation {
-            isLoading = false
+        // STEP 4: Start background sync (fire-and-forget, does not block UI)
+        // User sees cached data immediately; new data appears as sync completes
+        Task {
+            await store.fetchData()
+
+            // Re-reconcile geofences after sync completes to pick up server changes
+            if geoManager.hasGeofencingAuthorization {
+                let updatedDefinitions = store.getLocalGeofenceDefinitions()
+                geoManager.reconcileRegions(desired: updatedDefinitions)
+                Log.geofence.debug("Post-sync - reconciled geofences with server data", context: .with { ctx in
+                    ctx.add("count", updatedDefinitions.count)
+                })
+            }
         }
     }
 
