@@ -52,6 +52,7 @@ Plans:
 Plans:
 - [x] 02-01: Anchor persistence and background reliability (HKAnchoredObjectQuery with persistent anchors)
 - [x] 02-02: Freshness indicators (per-category last update timestamps in UI)
+- [x] 02-03: Initial sync performance (30-day default, historical import UI) [gap closure]
 
 ### Phase 3: Geofence Reliability
 **Goal**: Persistent geofence monitoring that survives iOS lifecycle events
@@ -141,7 +142,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/4 | Complete | 2026-01-15 |
-| 2. HealthKit Reliability | 2/2 | Complete | 2026-01-15 |
+| 2. HealthKit Reliability | 3/3 | Complete | 2026-01-16 |
 | 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 0/? | Not started | - |

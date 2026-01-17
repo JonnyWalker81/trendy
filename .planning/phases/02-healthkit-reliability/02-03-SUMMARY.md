@@ -12,7 +12,7 @@
 **Historical import UI with progress:**
 - "Import Historical Data" section in HealthKit Settings
 - Confirmation dialog with "Import All Workouts" or "Import All Categories" options
-- Real-time progress indicator showing "X of Y" during import
+- Real-time progress indicator showing "X of Y (Z%)" during import
 - `Task.yield()` ensures UI remains responsive during long imports
 
 ## Commits
@@ -22,6 +22,7 @@
 | 1 | df9767a | Add 30-day date predicate for initial sync |
 | 2 | 2486ba4 | Add historical import UI with progress |
 | 3 | d469d04 | Fix UI freeze during historical import (yield to UI) |
+| - | 930210b | Add percentage to progress display (user request) |
 
 ## Files Modified
 
