@@ -29,8 +29,18 @@ struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Sync status banner - visible during background sync
+                    SyncStatusBanner(
+                        syncState: eventStore.currentSyncState,
+                        pendingCount: eventStore.currentPendingCount,
+                        lastSyncTime: eventStore.currentLastSyncTime,
+                        onRetry: {
+                            await eventStore.performSync()
+                        }
+                    )
+
                     viewModeSelector
-                    
+
                     switch viewMode {
                     case .month:
                         VStack(spacing: 20) {

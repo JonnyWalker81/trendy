@@ -28,6 +28,16 @@ struct AnalyticsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Sync status banner - visible during background sync
+                    SyncStatusBanner(
+                        syncState: eventStore.currentSyncState,
+                        pendingCount: eventStore.currentPendingCount,
+                        lastSyncTime: eventStore.currentLastSyncTime,
+                        onRetry: {
+                            await eventStore.performSync()
+                        }
+                    )
+
                     if eventStore.eventTypes.isEmpty {
                         if eventStore.isLoading && !eventStore.hasLoadedOnce {
                             // Initial loading - show loading indicator
