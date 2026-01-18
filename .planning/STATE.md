@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-15)
 ## Current Position
 
 Phase: 6 of 7 (Server API)
-Plan: 1 of 3 complete (06-01)
+Plan: 2 of 3 complete (06-02)
 Status: In progress
-Last activity: 2026-01-18 — Completed 06-01-PLAN.md (RFC 9457 error infrastructure)
+Last activity: 2026-01-18 — Completed 06-02-PLAN.md (Client-Generated IDs)
 
-Progress: ███████████░░░░ 76% (19/25 plans complete)
+Progress: ████████████░░░ 80% (20/25 plans complete)
 
 ## Recently Resolved
 
@@ -32,16 +32,16 @@ Progress: ███████████░░░░ 76% (19/25 plans complet
 
 ## Next Action
 
-**Execute 06-02-PLAN.md:**
+**Execute 06-03-PLAN.md:**
 
-Continue Phase 6 with UUIDv7 validation and idempotent event creation
+Continue Phase 6 with sync status endpoint for client verification
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 6.1 min
-- Total execution time: ~115 minutes
+- Total plans completed: 20
+- Average duration: 6.3 min
+- Total execution time: ~147 minutes
 
 **By Phase:**
 
@@ -52,7 +52,7 @@ Continue Phase 6 with UUIDv7 validation and idempotent event creation
 | 3. Geofence Reliability | 4/4 | 23 min | 5.75 min |
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
 | 5. Sync Engine | 6/6 | 37 min | 6.2 min |
-| 6. Server API | 1/3 | 3 min | 3 min |
+| 6. Server API | 2/3 | 35 min | 17.5 min |
 
 ## Accumulated Context
 
@@ -72,6 +72,9 @@ Recent decisions affecting current work:
 | 05-06 | Dual geofence reconciliation | Reconcile with cache immediately, then again after sync |
 | 06-01 | RFC 9457 Problem Details for all errors | Standardized error format with type URIs, request correlation, retry hints |
 | 06-01 | ProblemDetails implements error interface | Allows using problem details as standard Go errors |
+| 06-02 | 1-minute future tolerance for UUIDv7 | Handles clock skew while preventing abuse |
+| 06-02 | Pure idempotency: duplicates return existing | 200 OK with existing record, no update (differs from upsert) |
+| 06-02 | Batch imports skip UPDATE change_log | Importing client already has data, avoids log flooding |
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 06-01-PLAN.md
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
-Next: Execute 06-02-PLAN.md
+Next: Execute 06-03-PLAN.md
