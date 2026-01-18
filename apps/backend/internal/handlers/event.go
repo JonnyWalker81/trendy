@@ -33,10 +33,106 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	var req models.CreateEventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// Bind to RawCreateEventRequest for manual parsing and aggregated validation
+	var raw models.RawCreateEventRequest
+	if err := c.ShouldBindJSON(&raw); err != nil {
+		// JSON syntax error (not field-level)
 		requestID := apierror.GetRequestID(c)
-		apierror.WriteProblem(c, apierror.NewBadRequestError(requestID, err.Error(), "Invalid request format"))
+		apierror.WriteProblem(c, apierror.NewBadRequestError(requestID, err.Error(), "Invalid JSON format"))
+		return
+	}
+
+	var fieldErrors []apierror.FieldError
+	var req models.CreateEventRequest
+
+	// Validate required fields
+	if raw.EventTypeID == "" {
+		fieldErrors = append(fieldErrors, apierror.FieldError{
+			Field:   "event_type_id",
+			Message: "is required",
+			Code:    "required",
+		})
+	} else {
+		req.EventTypeID = raw.EventTypeID
+	}
+
+	// Parse and validate timestamp (required)
+	if raw.Timestamp == "" {
+		fieldErrors = append(fieldErrors, apierror.FieldError{
+			Field:   "timestamp",
+			Message: "is required",
+			Code:    "required",
+		})
+	} else {
+		ts, err := time.Parse(time.RFC3339, raw.Timestamp)
+		if err != nil {
+			fieldErrors = append(fieldErrors, apierror.FieldError{
+				Field:   "timestamp",
+				Message: "must be a valid RFC3339 timestamp",
+				Code:    "invalid_format",
+			})
+		} else {
+			req.Timestamp = ts
+		}
+	}
+
+	// Parse is_all_day (optional, defaults to false)
+	if raw.IsAllDay != nil {
+		switch v := raw.IsAllDay.(type) {
+		case bool:
+			req.IsAllDay = v
+		case string:
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				fieldErrors = append(fieldErrors, apierror.FieldError{
+					Field:   "is_all_day",
+					Message: "must be a boolean value",
+					Code:    "invalid_type",
+				})
+			} else {
+				req.IsAllDay = b
+			}
+		default:
+			fieldErrors = append(fieldErrors, apierror.FieldError{
+				Field:   "is_all_day",
+				Message: "must be a boolean value",
+				Code:    "invalid_type",
+			})
+		}
+	}
+
+	// Parse end_date (optional)
+	if raw.EndDate != nil && *raw.EndDate != "" {
+		ed, err := time.Parse(time.RFC3339, *raw.EndDate)
+		if err != nil {
+			fieldErrors = append(fieldErrors, apierror.FieldError{
+				Field:   "end_date",
+				Message: "must be a valid RFC3339 timestamp",
+				Code:    "invalid_format",
+			})
+		} else {
+			req.EndDate = &ed
+		}
+	}
+
+	// Copy remaining fields
+	req.ID = raw.ID
+	req.Notes = raw.Notes
+	req.SourceType = raw.SourceType
+	req.ExternalID = raw.ExternalID
+	req.OriginalTitle = raw.OriginalTitle
+	req.GeofenceID = raw.GeofenceID
+	req.LocationLatitude = raw.LocationLatitude
+	req.LocationLongitude = raw.LocationLongitude
+	req.LocationName = raw.LocationName
+	req.HealthKitSampleID = raw.HealthKitSampleID
+	req.HealthKitCategory = raw.HealthKitCategory
+	req.Properties = raw.Properties
+
+	// Return aggregated errors if any
+	if len(fieldErrors) > 0 {
+		requestID := apierror.GetRequestID(c)
+		apierror.WriteProblem(c, apierror.NewValidationError(requestID, fieldErrors))
 		return
 	}
 
