@@ -136,11 +136,14 @@ Plans:
   2. Last sync timestamp displayed ("Last synced: 5 min ago")
   3. Sync errors are tappable with explanation (not silent failures)
   4. Sync progress shows deterministic counts ("Syncing 3 of 5")
-**Research**: Unlikely (UI additions, patterns established)
-**Plans**: TBD
+**Research**: Completed (07-RESEARCH.md)
+**Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — Floating indicator components (SyncIndicatorView, display state machine, progress bar)
+- [ ] 07-02-PLAN.md — Settings integration (SyncHistoryStore, SyncSettingsView, RelativeTimestampView)
+- [ ] 07-03-PLAN.md — Error enhancement (persistence, tap-to-expand, escalation)
+- [ ] 07-04-PLAN.md — App integration (MainTabView wiring, environment injection)
 
 ## Progress
 
@@ -156,7 +159,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 6/6 | Complete | 2026-01-17 |
 | 6. Server API | 5/5 | Complete | 2026-01-17 |
-| 7. UX Indicators | 0/? | Not started | - |
+| 7. UX Indicators | 0/4 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-15*
