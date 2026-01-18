@@ -1,9 +1,15 @@
 ---
 phase: 03-geofence-reliability
-verified: 2026-01-16T22:30:00Z
+verified: 2026-01-16T19:00:00Z
 status: passed
-score: 4/4 must-haves verified
-re_verification: false
+score: 5/5 must-haves verified
+re_verification:
+  previous_status: passed
+  previous_score: 4/4
+  gaps_closed:
+    - "Registered Regions section displays latitude, longitude, and radius for each region"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 3: Geofence Reliability Verification Report
@@ -11,6 +17,7 @@ re_verification: false
 **Phase Goal:** Persistent geofence monitoring that survives iOS lifecycle events
 **Verified:** 2026-01-16
 **Status:** PASSED
+**Re-verification:** Yes - after UAT gap closure (03-04-PLAN)
 
 ## Goal Achievement
 
@@ -20,30 +27,32 @@ re_verification: false
 |---|-------|--------|----------|
 | 1 | Geofences remain active after app is closed for days/weeks | VERIFIED | AppDelegate handles .location launch key (line 43), creates CLLocationManager immediately to receive pending region events. Background entry/exit notifications forwarded to GeofenceManager. |
 | 2 | Geofences automatically re-register on app launch and device restart | VERIFIED | AppDelegate posts normalLaunchNotification on every launch (line 59). GeofenceManager observes and calls ensureRegionsRegistered() (line 532). MainTabView also calls ensureRegionsRegistered() on scene activation (line 85). |
-| 3 | Enter/exit events are logged even if notification delivery fails | VERIFIED | handleGeofenceEntry/handleGeofenceExit call modelContext.save() BEFORE notification delivery (lines 668, 759). Events are persisted regardless of notification success. Log.geofence calls throughout both handlers. |
+| 3 | Enter/exit events are logged even if notification delivery fails | VERIFIED | handleGeofenceEntry saves event at line 668 BEFORE notification delivery (lines 685-692). handleGeofenceExit saves event at line 759 BEFORE notification delivery (lines 776-784). Events are persisted regardless of notification success. |
 | 4 | User can see which geofences are registered with iOS vs saved in app | VERIFIED | GeofenceHealthStatus provides registeredWithiOS, savedInApp, missingFromiOS, orphanedIniOS sets. GeofenceDebugView displays Health Status section with counts (lines 76-85), Missing from iOS section (lines 91-117), and Orphaned in iOS section (lines 120-146). |
+| 5 | Registered Regions section displays coordinates and radius | VERIFIED | GeofenceDebugView lines 175-182 cast CLRegion to CLCircularRegion and display latitude/longitude (4 decimal places) and radius in meters. Gap from UAT Test 2 is now closed. |
 
-**Score:** 4/4 truths verified
+**Score:** 5/5 truths verified (4 original + 1 UAT gap closure)
 
 ### Required Artifacts (from Plan must_haves)
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `apps/ios/trendy/AppDelegate.swift` | Background launch handler | VERIFIED | 124 lines, handles .location key, CLLocationManagerDelegate, forwards events via NotificationCenter |
-| `apps/ios/trendy/trendyApp.swift` | UIApplicationDelegateAdaptor | VERIFIED | 467 lines, contains @UIApplicationDelegateAdaptor(AppDelegate.self) at line 25 |
+| `apps/ios/trendy/AppDelegate.swift` | Background launch handler | VERIFIED | 124 lines, handles .location key (line 43), CLLocationManagerDelegate, forwards events via NotificationCenter |
+| `apps/ios/trendy/trendyApp.swift` | UIApplicationDelegateAdaptor | VERIFIED | Line 25: `@UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate` |
 | `apps/ios/trendy/Services/GeofenceManager.swift` | ensureRegionsRegistered, healthStatus | VERIFIED | 950 lines, ensureRegionsRegistered() at line 416, healthStatus computed property at line 507, GeofenceHealthStatus struct at line 14 |
-| `apps/ios/trendy/Views/Geofence/GeofenceDebugView.swift` | Health dashboard UI | VERIFIED | 352 lines (plan required 350+), displays health status, missing regions, orphaned regions |
-| `apps/ios/trendy/Views/MainTabView.swift` | scenePhase observer | VERIFIED | 255 lines, scenePhase environment at line 16, onChange observer at line 79 calls ensureRegionsRegistered() |
+| `apps/ios/trendy/Views/Geofence/GeofenceDebugView.swift` | Health dashboard UI with coordinates | VERIFIED | 363 lines, displays health status, missing regions, orphaned regions, AND coordinate/radius for each registered region (lines 175-182) |
+| `apps/ios/trendy/Views/MainTabView.swift` | scenePhase observer | VERIFIED | Line 16: @Environment(\.scenePhase), line 79: onChange observer calls ensureRegionsRegistered() |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Evidence |
 |------|----|----|--------|----------|
 | trendyApp.swift | AppDelegate.swift | UIApplicationDelegateAdaptor | WIRED | Line 25: `@UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate` |
-| AppDelegate.swift | GeofenceManager | CLLocationManagerDelegate callbacks | WIRED | didEnterRegion posts GeofenceManager.backgroundEntryNotification (line 75-78), didExitRegion posts backgroundExitNotification (line 88-91) |
-| AppDelegate.swift | GeofenceManager | normalLaunchNotification | WIRED | Posted at line 59, observed in GeofenceManager init() at line 155-158, handled by handleNormalLaunch() at line 530-532 |
-| MainTabView.swift | GeofenceManager | scenePhase observer | WIRED | onChange at line 79-85 checks newPhase == .active and calls geofenceManager?.ensureRegionsRegistered() |
-| GeofenceDebugView.swift | GeofenceManager | healthStatus property | WIRED | Private healthStatus computed property at line 24-26 returns geofenceManager?.healthStatus |
+| AppDelegate.swift | GeofenceManager | CLLocationManagerDelegate callbacks | WIRED | didEnterRegion posts GeofenceManager.backgroundEntryNotification (lines 75-79), didExitRegion posts backgroundExitNotification (lines 88-92) |
+| AppDelegate.swift | GeofenceManager | normalLaunchNotification | WIRED | Posted at line 59, observed in GeofenceManager.swift line 157, handled by handleNormalLaunch() at line 530-532 |
+| MainTabView.swift | GeofenceManager | scenePhase observer | WIRED | onChange at lines 79-85 checks newPhase == .active and calls geofenceManager?.ensureRegionsRegistered() |
+| GeofenceDebugView.swift | GeofenceManager | healthStatus property | WIRED | Private healthStatus computed at line 24-26 returns geofenceManager?.healthStatus |
+| GeofenceDebugView.swift | GeofenceManager | monitoredRegions | WIRED | Line 150: accesses geofenceManager?.monitoredRegions, iterates and casts to CLCircularRegion for coordinate access |
 
 ### Plan-Specific Must-Haves
 
@@ -58,7 +67,7 @@ re_verification: false
 | Must-Have | Status | Evidence |
 |-----------|--------|----------|
 | Geofences re-registered when app becomes active | VERIFIED | MainTabView.swift line 85 calls ensureRegionsRegistered() in onChange of scenePhase |
-| Geofences re-registered when authorization changes to .authorizedAlways | VERIFIED | GeofenceManager lines 835-837 check previousStatus != .authorizedAlways and call ensureRegionsRegistered() |
+| Geofences re-registered when authorization changes to .authorizedAlways | VERIFIED | GeofenceManager lines 834-837 check previousStatus != .authorizedAlways and call ensureRegionsRegistered() |
 | Geofences re-registered on app launch | VERIFIED | AppDelegate posts normalLaunchNotification, GeofenceManager handles it |
 | Re-registration is idempotent | VERIFIED | ensureRegionsRegistered() calls reconcileRegions() which safely adds/removes regions |
 
@@ -70,13 +79,20 @@ re_verification: false
 | User sees orphaned in iOS | VERIFIED | Conditional section at lines 120-146 displays orphaned regions |
 | Health status shows healthy/unhealthy | VERIFIED | Lines 59-72 show checkmark.shield.fill (green) or exclamationmark.shield.fill (orange) based on isHealthy |
 
+#### 03-04: Coordinate Display (Gap Closure)
+| Must-Have | Status | Evidence |
+|-----------|--------|----------|
+| Registered Regions displays latitude and longitude | VERIFIED | GeofenceDebugView line 176: `Text("\(String(format: "%.4f", circular.center.latitude)), \(String(format: "%.4f", circular.center.longitude))")` |
+| Registered Regions displays radius | VERIFIED | GeofenceDebugView line 179: `Text("Radius: \(Int(circular.radius))m")` |
+| Regions sorted by identifier | VERIFIED | Line 151: `let sortedRegions = regions.sorted { $0.identifier < $1.identifier }` |
+
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| - | - | - | - | No anti-patterns found |
+| - | - | - | - | No anti-patterns found in Phase 3 files |
 
-**No TODO/FIXME/placeholder patterns found in implementation files.**
+**Note:** TODOs found in GoogleSignInService.swift and LocalStore.swift are unrelated to Phase 3 geofence work and do not impact this phase's goal achievement.
 
 ### Human Verification Required
 
@@ -95,16 +111,16 @@ re_verification: false
 **Expected:** Health Status shows "Healthy", counts match, no missing/orphaned sections
 **Why human:** Requires visual inspection of UI state
 
-#### 4. Memory Pressure Recovery
-**Test:** Enable geofences, run memory-intensive apps until iOS evicts Trendy, return to Trendy
-**Expected:** Geofences re-registered (check console for "Scene became active" log)
-**Why human:** Requires simulating iOS memory pressure
+#### 4. Coordinate Display Verification (NEW - from gap closure)
+**Test:** Navigate to Settings > Geofences > Debug Status, look at Registered Regions section
+**Expected:** Each region shows name, identifier, coordinates (e.g., "37.3318, -122.0312"), and radius (e.g., "Radius: 100m")
+**Why human:** Requires visual inspection of UI state
 
 ---
 
 ## Summary
 
-All four success criteria from ROADMAP.md are verified:
+All success criteria from ROADMAP.md are verified plus UAT gap closure:
 
 1. **Geofences remain active after app is closed for days/weeks** - AppDelegate handles background launches with .location key, creates CLLocationManager immediately to receive pending events, forwards them via NotificationCenter.
 
@@ -114,9 +130,19 @@ All four success criteria from ROADMAP.md are verified:
 
 4. **User can see which geofences are registered with iOS vs saved in app** - GeofenceHealthStatus model provides registeredWithiOS, savedInApp, missingFromiOS, orphanedIniOS. GeofenceDebugView renders full health dashboard with conditional sections.
 
+5. **Registered Regions displays coordinates and radius** (UAT gap closure) - GeofenceDebugView now iterates over monitoredRegions Set<CLRegion>, casts to CLCircularRegion, and displays latitude, longitude (4 decimal places), and radius in meters.
+
+### UAT Results Summary
+
+From 03-UAT.md:
+- 7 tests total
+- 6 passed initially
+- 1 issue (coordinate display) - **CLOSED** by 03-04-PLAN
+
 **Phase 3 goal achieved: Persistent geofence monitoring that survives iOS lifecycle events.**
 
 ---
 
 *Verified: 2026-01-16*
 *Verifier: Claude (gsd-verifier)*
+*Re-verification: Yes - after 03-04-PLAN gap closure*

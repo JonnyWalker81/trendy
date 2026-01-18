@@ -94,6 +94,17 @@ extension HealthKitService {
         if !samples.isEmpty {
             recordCategoryUpdate(for: category)
         }
+
+        // Batch sync after initial bulk import (first-time sync with no anchor)
+        // Individual events skip sync during bulk import to avoid flooding.
+        // Now that processing is complete, queue all events for sync.
+        if isBulkImport && totalCount > 0 {
+            Log.healthKit.info("Starting batch sync for initial bulk import", context: .with { ctx in
+                ctx.add("category", category.displayName)
+                ctx.add("count", totalCount)
+            })
+            await eventStore.resyncHealthKitEvents()
+        }
     }
 
     /// Cancel the current historical import
@@ -200,6 +211,14 @@ extension HealthKitService {
             ctx.add("category", category.displayName)
             ctx.add("processed", totalCount)
         })
+
+        // Batch sync all imported events to backend
+        // During bulk import, individual events skip sync to avoid flooding.
+        // Now that import is complete, queue all HealthKit events for sync.
+        if totalCount > 0 {
+            Log.healthKit.info("Starting batch sync for imported HealthKit events")
+            await eventStore.resyncHealthKitEvents()
+        }
 
         return true
     }

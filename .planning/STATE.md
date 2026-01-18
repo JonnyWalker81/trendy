@@ -5,26 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 5 Sync Engine - Blocked on sync progress UI bug
+**Current focus:** Phase 5 Sync Engine - Ready for verification
 
 ## Current Position
 
 Phase: 5 of 7 (Sync Engine)
-Plan: 05-06 complete, 05-03 checkpoint blocked
-Status: Bug fix required before verification
-Last activity: 2026-01-17 — 05-03 checkpoint revealed sync progress UI bug
+Plan: 05-06 complete, 05-03 checkpoint ready
+Status: Ready for verification
+Last activity: 2026-01-17 — Fixed sync progress UI bug
 
 Progress: ██████████ 68% (17/25 plans complete)
 
-## Active Blocker
+## Recently Resolved
 
 **Bug:** Sync progress UI not updating during batch operations
-**Debug file:** `.planning/debug/sync-progress-ui-stale.md`
-**Impact:** Cannot complete 05-03 verification checkpoint (Test 1 fails)
-
-**Root cause:** SyncEngine only updates progress after successful batch completion. When batches timeout, progress stays at "0 of N".
-
-**Fix location:** `apps/ios/trendy/Services/Sync/SyncEngine.swift` lines 558-611
+**Resolution:** Added progress update before each batch attempt (SyncEngine.swift:578-580)
+**Debug file:** `.planning/debug/resolved/sync-progress-ui-stale.resolved.md`
 
 ## UAT Status
 
@@ -32,15 +28,13 @@ Progress: ██████████ 68% (17/25 plans complete)
 |-------|--------|--------|--------|-------|
 | 02-healthkit-reliability | complete | 9/9 | 0 | Gap closure fixed initial sync performance |
 | 03-geofence-reliability | complete | 5/6 | 1 minor | Coordinates not shown in debug view |
-| 05-sync-engine | blocked | 0/6 | 1 | Progress UI bug blocks verification |
+| 05-sync-engine | ready | 0/6 | 0 | Bug fixed, ready to verify |
 
 ## Next Action
 
-**Fix bug, then resume verification:**
+**Resume verification:**
 
-1. Read `.planning/debug/sync-progress-ui-stale.md`
-2. Implement fix (Option A: update progress before each batch attempt)
-3. Re-run `/gsd:execute-phase 5` to complete 05-03 checkpoint
+Bug fixed — run `/gsd:execute-phase 5` to complete 05-03 checkpoint and verify phase 5
 
 ## Performance Metrics
 
@@ -78,18 +72,16 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- **ACTIVE:** Fix sync progress UI bug (see debug file)
 - Phase 3 minor gap: coordinates not shown in geofence debug view
 
 ### Blockers/Concerns
 
-- Sync progress UI bug blocks phase 5 verification
 - Build verification passes for simulator destination
 - Provisioning profile issues only affect device builds (not blocking)
 
 ## Session Continuity
 
 Last session: 2026-01-17
-Stopped at: 05-03 checkpoint - Test 1 failed (progress UI not updating)
-Resume file: `.planning/debug/sync-progress-ui-stale.md`
-Next: Fix bug, then `/gsd:execute-phase 5`
+Stopped at: Bug fixed — ready to resume verification
+Resume file: None
+Next: `/gsd:execute-phase 5`

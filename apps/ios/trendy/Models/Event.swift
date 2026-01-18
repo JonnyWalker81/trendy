@@ -59,48 +59,30 @@ final class Event {
     }
 
     // Computed property for convenient access to properties
+    // Note: Verbose logging removed to prevent performance issues during bulk operations.
     var properties: [String: PropertyValue] {
         get {
             guard let data = propertiesData else {
-                #if DEBUG
-                print("📖 Event.properties GET: propertiesData is nil, returning empty dict")
-                #endif
                 return [:]
             }
             do {
-                let decoded = try JSONDecoder().decode([String: PropertyValue].self, from: data)
-                #if DEBUG
-                print("📖 Event.properties GET: Decoded \(decoded.count) properties: \(decoded.keys.joined(separator: ", "))")
-                #endif
-                return decoded
+                return try JSONDecoder().decode([String: PropertyValue].self, from: data)
             } catch {
                 #if DEBUG
                 print("❌ Event.properties GET: Failed to decode - \(error)")
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("❌ Raw JSON was: \(jsonString)")
-                }
                 #endif
                 return [:]
             }
         }
         set {
-            #if DEBUG
-            print("📝 Event.properties SET: Setting \(newValue.count) properties: \(newValue.keys.joined(separator: ", "))")
-            for (key, value) in newValue {
-                print("   - \(key): type=\(value.type.rawValue), value=\(value.value.value)")
-            }
-            #endif
+            // Note: Verbose logging removed to prevent performance issues during bulk operations.
+            // With 1000+ events during bootstrap, the previous logging generated 10,000+ print() calls.
             do {
                 let encoded = try JSONEncoder().encode(newValue)
-                #if DEBUG
-                if let jsonString = String(data: encoded, encoding: .utf8) {
-                    print("📝 Event.properties SET: Encoded JSON: \(jsonString)")
-                }
-                #endif
                 propertiesData = encoded
             } catch {
                 #if DEBUG
-                print("❌ Event.properties SET: Failed to encode - \(error)")
+                print("❌ Event.properties SET: Failed to encode \(newValue.count) properties - \(error)")
                 #endif
                 propertiesData = nil
             }
@@ -146,21 +128,12 @@ final class Event {
         self.healthKitSampleId = healthKitSampleId
         self.healthKitCategory = healthKitCategory
 
-        #if DEBUG
-        print("🆕 Event.init() with \(properties.count) properties: \(properties.keys.joined(separator: ", "))")
-        #endif
-
+        // Note: Verbose logging removed to prevent performance issues during bulk operations.
         do {
-            let encoded = try JSONEncoder().encode(properties)
-            self.propertiesData = encoded
-            #if DEBUG
-            if let jsonString = String(data: encoded, encoding: .utf8) {
-                print("🆕 Event.init() encoded JSON: \(jsonString)")
-            }
-            #endif
+            self.propertiesData = try JSONEncoder().encode(properties)
         } catch {
             #if DEBUG
-            print("❌ Event.init() failed to encode properties: \(error)")
+            print("❌ Event.init() failed to encode \(properties.count) properties: \(error)")
             #endif
             self.propertiesData = nil
         }

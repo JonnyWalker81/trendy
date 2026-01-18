@@ -1,13 +1,13 @@
 {
-  "originHash" : "b47545abdfbfa5ccfb472b6fdf8e9842a34424c222271dfad20362ea25c8fb77",
+  "originHash" : "2119a807630858ca2ef05d333c8274156d4c7fa00f19f75ddbbe69bb772db23a",
   "pins" : [
     {
       "identity" : "posthog-ios",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/PostHog/posthog-ios.git",
       "state" : {
-        "revision" : "6146a9f0bc41e687b1978a5d10d76dd85331c410",
-        "version" : "3.37.0"
+        "revision" : "6d1186fe0471f76d9b87b83e96bcb8ff5db72732",
+        "version" : "3.37.2"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase-community/supabase-swift.git",
       "state" : {
-        "revision" : "65507b524f0ec09ebb6f6b1db0db1a8e4265436e",
-        "version" : "2.37.0"
+        "revision" : "7a6f6554ce030d8733b3ba32d4255278450e5328",
+        "version" : "2.40.0"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "40d25bbb2fc5b557a9aa8512210bded327c0f60d",
-        "version" : "1.5.0"
+        "revision" : "810496cf121e525d660cd0ea89a758740476b85f",
+        "version" : "1.5.1"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "4c27acf5394b645b70d8ba19dc249c0472d5f618",
-        "version" : "1.7.0"
+        "revision" : "34e463e98ab8541c604af706c99bed7160f5ec70",
+        "version" : "1.8.1"
       }
     }
   ],

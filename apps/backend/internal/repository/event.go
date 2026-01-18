@@ -489,15 +489,17 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 		return nil, nil, fmt.Errorf("failed to check existing events: %w", err)
 	}
 
-	// Build map of existing sample IDs to their event IDs (for updates)
-	existingSampleIDToEventID := make(map[string]string)
+	// Build map of existing sample IDs to their full event (for deduplication)
+	// HealthKit events are immutable - once a workout/sample is recorded, its data never changes.
+	// So for existing events, we just return them as-is without updating.
+	existingSampleIDToEvent := make(map[string]models.Event)
 	for _, e := range existingEvents {
 		if e.HealthKitSampleID != nil {
-			existingSampleIDToEventID[*e.HealthKitSampleID] = e.ID
+			existingSampleIDToEvent[*e.HealthKitSampleID] = e
 		}
 	}
 
-	// Separate events into inserts vs updates
+	// Separate events into inserts vs already-exists
 	insertData := make([]map[string]interface{}, 0)
 	var createdIDs []string
 	var allResults []models.Event
@@ -507,46 +509,37 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 			continue // Skip events without sample ID
 		}
 
-		data := map[string]interface{}{
-			"user_id":             event.UserID,
-			"event_type_id":       event.EventTypeID,
-			"timestamp":           event.Timestamp,
-			"is_all_day":          event.IsAllDay,
-			"source_type":         event.SourceType,
-			"healthkit_sample_id": *event.HealthKitSampleID,
-			"notes":               event.Notes,
-			"end_date":            event.EndDate,
-			"external_id":         event.ExternalID,
-			"original_title":      event.OriginalTitle,
-			"geofence_id":         event.GeofenceID,
-			"location_latitude":   event.LocationLatitude,
-			"location_longitude":  event.LocationLongitude,
-			"location_name":       event.LocationName,
-			"healthkit_category":  event.HealthKitCategory,
-		}
-
-		// Properties - use empty object if nil
-		if event.Properties != nil && len(event.Properties) > 0 {
-			data["properties"] = event.Properties
-		} else {
-			data["properties"] = map[string]interface{}{}
-		}
-
-		if existingID, exists := existingSampleIDToEventID[*event.HealthKitSampleID]; exists {
-			// UPDATE: Event already exists
-			body, err := r.client.Update("events", existingID, data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to update HealthKit event %s: %w", existingID, err)
-			}
-			var updated []models.Event
-			if err := json.Unmarshal(body, &updated); err != nil {
-				return nil, nil, fmt.Errorf("failed to unmarshal update response: %w", err)
-			}
-			if len(updated) > 0 {
-				allResults = append(allResults, updated[0])
-			}
+		if existingEvent, exists := existingSampleIDToEvent[*event.HealthKitSampleID]; exists {
+			// EXISTING: Return the existing event as-is (HealthKit data is immutable)
+			// This is O(1) instead of O(n) database UPDATE calls
+			allResults = append(allResults, existingEvent)
 		} else {
 			// INSERT: New event - collect for batch insert
+			data := map[string]interface{}{
+				"user_id":             event.UserID,
+				"event_type_id":       event.EventTypeID,
+				"timestamp":           event.Timestamp,
+				"is_all_day":          event.IsAllDay,
+				"source_type":         event.SourceType,
+				"healthkit_sample_id": *event.HealthKitSampleID,
+				"notes":               event.Notes,
+				"end_date":            event.EndDate,
+				"external_id":         event.ExternalID,
+				"original_title":      event.OriginalTitle,
+				"geofence_id":         event.GeofenceID,
+				"location_latitude":   event.LocationLatitude,
+				"location_longitude":  event.LocationLongitude,
+				"location_name":       event.LocationName,
+				"healthkit_category":  event.HealthKitCategory,
+			}
+
+			// Properties - use empty object if nil
+			if event.Properties != nil && len(event.Properties) > 0 {
+				data["properties"] = event.Properties
+			} else {
+				data["properties"] = map[string]interface{}{}
+			}
+
 			if event.ID != "" {
 				data["id"] = event.ID
 			}

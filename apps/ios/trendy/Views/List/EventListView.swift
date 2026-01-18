@@ -18,6 +18,9 @@ struct EventListView: View {
     @State private var cachedSortedDates: [Date] = []
     @State private var lastEventsHash: Int = 0
 
+    /// Timer for periodic sync state refresh during active syncing
+    @State private var syncStateRefreshTimer: Timer?
+
     private var selectedEventType: EventType? {
         guard let id = selectedEventTypeID else { return nil }
         return eventStore.eventTypes.first { $0.id == id }
@@ -54,7 +57,12 @@ struct EventListView: View {
                     pendingCount: eventStore.currentPendingCount,
                     lastSyncTime: eventStore.currentLastSyncTime,
                     onRetry: {
-                        await eventStore.performSync()
+                        // If rate limited, reset circuit breaker before retrying
+                        if case .rateLimited = eventStore.currentSyncState {
+                            await eventStore.resetCircuitBreakerAndSync()
+                        } else {
+                            await eventStore.performSync()
+                        }
                     }
                 )
 
@@ -133,8 +141,39 @@ struct EventListView: View {
             .onChange(of: selectedEventTypeID) { _, _ in
                 updateCachedData()
             }
+            .onChange(of: eventStore.currentSyncState) { oldState, newState in
+                // Start/stop periodic refresh based on sync state
+                switch newState {
+                case .syncing(_, _), .pulling:
+                    startSyncStateRefreshTimer()
+                case .rateLimited:
+                    // During rate limit, refresh every few seconds to update pending count if it changes
+                    startSyncStateRefreshTimer(interval: 5.0)
+                default:
+                    stopSyncStateRefreshTimer()
+                }
+            }
+            .onDisappear {
+                stopSyncStateRefreshTimer()
+            }
         }
         .accessibilityIdentifier("eventListView")
+    }
+
+    /// Start periodic refresh of sync state during active operations
+    private func startSyncStateRefreshTimer(interval: TimeInterval = 1.0) {
+        stopSyncStateRefreshTimer()
+        syncStateRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            Task { @MainActor in
+                await eventStore.refreshSyncStateForUI()
+            }
+        }
+    }
+
+    /// Stop the sync state refresh timer
+    private func stopSyncStateRefreshTimer() {
+        syncStateRefreshTimer?.invalidate()
+        syncStateRefreshTimer = nil
     }
 
     /// Updates cached grouped events and sorted dates

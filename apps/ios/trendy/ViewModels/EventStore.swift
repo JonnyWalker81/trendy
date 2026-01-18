@@ -1232,6 +1232,22 @@ class EventStore {
         return getLocalGeofenceDefinitions()
     }
 
+    /// Skip to latest cursor (for recovery from change_log backlog)
+    func skipToLatestCursor() async throws -> Int64 {
+        guard let syncEngine = syncEngine else {
+            throw NSError(domain: "EventStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Sync engine not available"])
+        }
+        return try await syncEngine.skipToLatestCursor()
+    }
+
+    /// Get latest cursor from backend
+    func getLatestCursor() async throws -> Int64 {
+        guard let apiClient = apiClient else {
+            throw NSError(domain: "EventStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "API client not available"])
+        }
+        return try await apiClient.getLatestCursor()
+    }
+
     /// Sync geofences from the server without doing a full resync.
     /// This is useful when geofences exist on the server but weren't pulled during incremental sync.
     /// Returns the number of geofences synced.
