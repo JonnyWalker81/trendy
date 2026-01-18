@@ -35,15 +35,37 @@ final class SyncStatusViewModel {
     /// Whether a sync just completed successfully (for success state display)
     private(set) var justSynced: Bool = false
 
+    // MARK: - Error Persistence Properties
+
+    /// Persisted error that stays until dismissed or resolved
+    private(set) var persistedError: (message: String, timestamp: Date)?
+
+    /// Whether the last error was authentication-related (401/403)
+    private(set) var lastErrorWasAuthError: Bool = false
+
+    /// Number of consecutive sync failures for escalation tracking
+    private(set) var consecutiveFailureCount: Int = 0
+
+    /// Whether errors should be visually escalated (3+ consecutive failures)
+    var isErrorEscalated: Bool {
+        consecutiveFailureCount >= 3
+    }
+
     // MARK: - Computed Properties
 
     /// The current display state for the sync indicator
     var displayState: SyncIndicatorDisplayState {
-        SyncIndicatorDisplayState.from(
+        // If we have a persisted error, show error state even when sync is idle
+        if let errorInfo = persistedError {
+            let (userMessage, _) = SyncErrorView.classifyError(errorInfo.message)
+            return .error(message: userMessage, canRetry: !lastErrorWasAuthError)
+        }
+
+        return SyncIndicatorDisplayState.from(
             syncState: state,
             pendingCount: pendingCount,
             isOnline: isOnline,
-            failureCount: failureCount,
+            failureCount: consecutiveFailureCount,
             justSynced: justSynced
         )
     }
@@ -97,18 +119,29 @@ final class SyncStatusViewModel {
         lastSyncTime = eventStore.currentLastSyncTime
         isOnline = eventStore.isOnline
 
+        // Handle error state from sync engine
+        if case .error(let message) = state {
+            recordError(message: message)
+        }
+
         // Detect sync completion for success state
         if previousState.isSyncing && !state.isSyncing && pendingCount == 0 {
-            justSynced = true
+            // Only show success if no error occurred
+            if case .error = state {
+                // Error already recorded above
+            } else {
+                justSynced = true
+                recordSuccess()
 
-            // Auto-clear success state after delay
-            Task {
-                try? await Task.sleep(for: .seconds(2))
-                justSynced = false
+                // Auto-clear success state after delay
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    justSynced = false
+                }
             }
         }
 
-        // Reset failure count on successful sync
+        // Reset failure count on successful sync (legacy support)
         if previousState.isSyncing && state == .idle && pendingCount == 0 {
             failureCount = 0
         }
@@ -148,5 +181,40 @@ final class SyncStatusViewModel {
     /// Clears the just-synced flag immediately.
     func clearSuccessState() {
         justSynced = false
+    }
+
+    // MARK: - Error Persistence Methods
+
+    /// Records an error for persistence until dismissed or resolved.
+    /// Classifies the error and tracks consecutive failures for escalation.
+    ///
+    /// - Parameter message: The error message from sync engine
+    func recordError(message: String) {
+        persistedError = (message: message, timestamp: Date())
+
+        // Classify error to determine if it's auth-related
+        let (_, isAuth) = SyncErrorView.classifyError(message)
+        lastErrorWasAuthError = isAuth
+
+        // Track consecutive failures for escalation
+        consecutiveFailureCount += 1
+    }
+
+    /// Dismisses the current persisted error.
+    /// Does NOT reset consecutive failure count - that only resets on success.
+    func dismissError() {
+        persistedError = nil
+    }
+
+    /// Records a successful sync, clearing errors and resetting failure tracking.
+    func recordSuccess() {
+        persistedError = nil
+        consecutiveFailureCount = 0
+        lastErrorWasAuthError = false
+    }
+
+    /// The technical details of the persisted error (for SyncErrorView expansion)
+    var persistedErrorDetails: String? {
+        persistedError?.message
     }
 }
