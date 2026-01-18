@@ -65,6 +65,27 @@ type CreateEventRequest struct {
 	Properties        map[string]PropertyValue `json:"properties,omitempty"`
 }
 
+// RawCreateEventRequest is used for manual parsing to enable aggregated validation.
+// Fields that require type conversion use string/interface{} to defer parsing.
+type RawCreateEventRequest struct {
+	ID                *string                  `json:"id,omitempty"`
+	EventTypeID       string                   `json:"event_type_id"`
+	Timestamp         string                   `json:"timestamp"`   // RFC3339 string, parsed manually
+	Notes             *string                  `json:"notes"`
+	IsAllDay          interface{}              `json:"is_all_day"`  // bool or string, parsed manually
+	EndDate           *string                  `json:"end_date"`    // RFC3339 string, parsed manually
+	SourceType        string                   `json:"source_type"`
+	ExternalID        *string                  `json:"external_id"`
+	OriginalTitle     *string                  `json:"original_title"`
+	GeofenceID        *string                  `json:"geofence_id"`
+	LocationLatitude  *float64                 `json:"location_latitude"`
+	LocationLongitude *float64                 `json:"location_longitude"`
+	LocationName      *string                  `json:"location_name"`
+	HealthKitSampleID *string                  `json:"healthkit_sample_id,omitempty"`
+	HealthKitCategory *string                  `json:"healthkit_category,omitempty"`
+	Properties        map[string]PropertyValue `json:"properties,omitempty"`
+}
+
 // UpdateEventRequest represents the request to update an event
 type UpdateEventRequest struct {
 	EventTypeID       *string                   `json:"event_type_id"`
