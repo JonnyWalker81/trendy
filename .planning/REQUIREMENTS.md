@@ -26,10 +26,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Sync Engine (iOS + Server)
 
-- [ ] **SYNC-01**: User can create, edit, and delete events while offline — changes saved locally
-- [ ] **SYNC-02**: Offline changes automatically sync when network is restored (no manual action)
-- [ ] **SYNC-03**: Client pushes mutations to server; server handles retry/queue persistence (client does simple fire-and-forget with local fallback)
-- [ ] **SYNC-04**: User can see sync state (pending count, last sync time, error state)
+- [x] **SYNC-01**: User can create, edit, and delete events while offline — changes saved locally
+- [x] **SYNC-02**: Offline changes automatically sync when network is restored (no manual action)
+- [x] **SYNC-03**: Client pushes mutations to server; server handles retry/queue persistence (client does simple fire-and-forget with local fallback)
+- [x] **SYNC-04**: User can see sync state (pending count, last sync time, error state)
 
 ### Server API
 
@@ -108,10 +108,10 @@ Which phases cover which requirements. Updated by create-roadmap.
 | GEO-02 | Phase 3 | Complete |
 | GEO-03 | Phase 3 | Complete |
 | GEO-04 | Phase 3 | Complete |
-| SYNC-01 | Phase 5 | Pending |
-| SYNC-02 | Phase 5 | Pending |
-| SYNC-03 | Phase 5 | Pending |
-| SYNC-04 | Phase 5 | Pending |
+| SYNC-01 | Phase 5 | Complete |
+| SYNC-02 | Phase 5 | Complete |
+| SYNC-03 | Phase 5 | Complete |
+| SYNC-04 | Phase 5 | Complete |
 | API-01 | Phase 6 | Pending |
 | API-02 | Phase 6 | Pending |
 | API-03 | Phase 6 | Pending |
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-16 after Phase 4 completion (CODE-01, CODE-03 complete)*
+*Last updated: 2026-01-17 after Phase 5 completion (SYNC-01 through SYNC-04 complete)*
