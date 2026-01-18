@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/apierror"
 	"github.com/JonnyWalker81/trendy/backend/internal/logger"
 	"github.com/JonnyWalker81/trendy/backend/pkg/supabase"
 	"github.com/gin-gonic/gin"
@@ -17,7 +17,8 @@ func Auth(client *supabase.Client) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			log.Debug("authentication failed: missing authorization header")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			requestID := apierror.GetRequestID(c)
+			apierror.WriteProblem(c, apierror.NewUnauthorizedError(requestID))
 			c.Abort()
 			return
 		}
@@ -26,7 +27,8 @@ func Auth(client *supabase.Client) gin.HandlerFunc {
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			log.Debug("authentication failed: invalid authorization format")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
+			requestID := apierror.GetRequestID(c)
+			apierror.WriteProblem(c, apierror.NewUnauthorizedError(requestID))
 			c.Abort()
 			return
 		}
@@ -39,7 +41,8 @@ func Auth(client *supabase.Client) gin.HandlerFunc {
 			log.Warn("authentication failed: token verification error",
 				logger.Err(err),
 			)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			requestID := apierror.GetRequestID(c)
+			apierror.WriteProblem(c, apierror.NewUnauthorizedError(requestID))
 			c.Abort()
 			return
 		}
