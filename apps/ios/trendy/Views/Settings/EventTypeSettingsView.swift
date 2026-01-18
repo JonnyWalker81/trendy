@@ -38,6 +38,43 @@ struct EventTypeSettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        SyncSettingsView()
+                    } label: {
+                        HStack {
+                            Label("Sync Settings", systemImage: "arrow.triangle.2.circlepath")
+                            Spacer()
+                            // Show pending count badge if any pending changes
+                            if eventStore.currentPendingCount > 0 {
+                                Text("\(eventStore.currentPendingCount)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(Color.dsWarning)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("syncSettingsLink")
+
+                    // Last sync status row
+                    HStack {
+                        Text("Last synced")
+                        Spacer()
+                        if let lastSync = eventStore.currentLastSyncTime {
+                            RelativeTimestampView(date: lastSync)
+                        } else {
+                            Text("Never")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Sync")
+                }
+                .accessibilityIdentifier("syncSection")
+
+                Section {
                     ForEach(eventStore.eventTypes) { eventType in
                         EventTypeRow(eventType: eventType) {
                             editingEventTypeID = eventType.id
