@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 6 Server API - Complete, Phase 7 next
+**Current focus:** Phase 6 Server API - All gap closures complete, Phase 7 next
 
 ## Current Position
 
-Phase: 6 of 7 (Server API) — COMPLETE
-Plan: All 3 plans complete
-Status: Phase verified, ready for Phase 7
-Last activity: 2026-01-17 — Phase 6 complete with verification
+Phase: 6 of 7 (Server API) — COMPLETE (including gap closures)
+Plan: All 4 plans complete (3 core + 1 gap closure)
+Status: Phase verified with gap closures, ready for Phase 7
+Last activity: 2026-01-18 — Completed 06-04 auth middleware RFC 9457 compliance
 
-Progress: █████████████░░ 84% (21/25 plans complete)
+Progress: █████████████░░ 88% (22/25 plans complete)
 
 ## Recently Resolved
 
@@ -39,9 +39,9 @@ Phase 6 complete — run `/gsd:discuss-phase 7` to gather context for UX Indicat
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 7.6 min
-- Total execution time: ~160 minutes
+- Total plans completed: 22
+- Average duration: 7.5 min
+- Total execution time: ~165 minutes
 
 **By Phase:**
 
@@ -52,7 +52,7 @@ Phase 6 complete — run `/gsd:discuss-phase 7` to gather context for UX Indicat
 | 3. Geofence Reliability | 4/4 | 23 min | 5.75 min |
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
 | 5. Sync Engine | 6/6 | 37 min | 6.2 min |
-| 6. Server API | 3/3 | 48 min | 16 min |
+| 6. Server API | 4/4 | 53 min | 13.25 min |
 
 ## Accumulated Context
 
@@ -77,6 +77,7 @@ Recent decisions affecting current work:
 | 06-02 | Batch imports skip UPDATE change_log | Importing client already has data, avoids log flooding |
 | 06-03 | Parallel queries with goroutines | 5 concurrent DB calls reduce latency |
 | 06-03 | 30-second Cache-Control header | Reduces server load while keeping data fresh |
+| 06-04 | Generic auth error messaging for security | All 401s return same message - don't reveal why auth failed |
 
 ### Pending Todos
 
@@ -89,7 +90,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-01-17
-Stopped at: Phase 6 verified complete
+Last session: 2026-01-18
+Stopped at: Completed 06-04-PLAN.md (gap closure)
 Resume file: None
 Next: `/gsd:discuss-phase 7`
