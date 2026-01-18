@@ -2,90 +2,117 @@
 
 ## What This Is
 
-A complete rebuild of Trendy's iOS background data systems — HealthKit integration, geofence monitoring, and sync engine. The goal is reliable, offline-first data capture that works seamlessly in the background without user intervention.
+A complete rebuild of Trendy's iOS background data systems — HealthKit integration, geofence monitoring, and sync engine. The app now has reliable, offline-first data capture that works seamlessly in the background without user intervention.
 
 ## Core Value
 
 **Data capture must be reliable.** When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not. Users should never have to manually refresh or wonder if their data was captured.
 
+## Current State (v1.0 shipped 2026-01-18)
+
+**Tech stack:**
+- iOS: Swift/SwiftUI with SwiftData, 76,420 LOC
+- Backend: Go with Gin/Supabase, 10,506 LOC
+- Total: ~87,000 lines across both platforms
+
+**Architecture:**
+- Server does the heavy lifting
+- iOS handles platform-specific capture (HealthKit, CoreLocation) and offline storage
+- Push mutations to server for processing, deduplication, and persistence
+- Thin client with cache-first loading
+
+**What shipped:**
+- Structured logging with Apple's unified logging (Log.category.level)
+- Reliable HealthKit background delivery with anchor persistence
+- Persistent geofence monitoring with lifecycle re-registration
+- Offline-first sync engine with cache-first loading (<3s)
+- RFC 9457 error handling on server
+
 ## Requirements
 
 ### Validated
 
-<!-- Existing capabilities that work and are relied upon -->
+<!-- Capabilities that have been built and verified -->
 
 - ✓ Manual event creation with timestamps and notes — existing
 - ✓ EventType management with colors, icons, and properties — existing
 - ✓ SwiftData local persistence with UUIDv7 client-generated IDs — existing
-- ✓ Cursor-based sync with backend API — existing (but fragile)
-- ✓ HealthKit sleep and steps data import — existing (reliable)
+- ✓ Cursor-based sync with backend API — v1.0
+- ✓ HealthKit sleep and steps data import — existing
 - ✓ Geofence creation and configuration UI — existing
 - ✓ Supabase authentication with JWT tokens — existing
 - ✓ Backend API with clean architecture (Handler → Service → Repository) — existing
-- ✓ Offline event queueing — existing (basic)
+- ✓ Offline event queueing — v1.0
+
+**HealthKit Reliability (v1.0):**
+- ✓ HLTH-01: Background delivery within iOS timing constraints — v1.0
+- ✓ HLTH-02: Observer queries per enabled data type — v1.0
+- ✓ HLTH-03: Server deduplication by external_id — v1.0
+- ✓ HLTH-04: Freshness indicator for last update — v1.0
+- ✓ HLTH-05: Debug view shows active observers — v1.0
+
+**Geofence Reliability (v1.0):**
+- ✓ GEO-01: Persistent monitoring (days/weeks) — v1.0
+- ✓ GEO-02: Re-registration on launch/restart/eviction — v1.0
+- ✓ GEO-03: Event logging even if notification fails — v1.0
+- ✓ GEO-04: Health monitoring (iOS vs app registered) — v1.0
+
+**Sync Engine (v1.0):**
+- ✓ SYNC-01: Offline CRUD operations — v1.0
+- ✓ SYNC-02: Auto-sync on network restore — v1.0
+- ✓ SYNC-03: Mutation persistence via server — v1.0
+- ✓ SYNC-04: Sync state visibility — v1.0
+
+**Server API (v1.0):**
+- ✓ API-01: UUIDv7 client-generated IDs — v1.0
+- ✓ API-02: HealthKit deduplication — v1.0
+- ✓ API-03: Sync status endpoint — v1.0
+- ✓ API-04: Clear error responses (RFC 9457) — v1.0
+
+**Code Quality (v1.0):**
+- ✓ CODE-01: HealthKitService <400 lines per module — v1.0 (12 modules)
+- ✓ CODE-02: Structured logging (Log.category.level) — v1.0
+- ✓ CODE-03: GeofenceManager separation of concerns — v1.0 (7 extensions)
+- ✓ CODE-04: Proper error handling and recovery — v1.0
+
+**UX Indicators (v1.0):**
+- ✓ UX-01: Sync status indicator — v1.0
+- ✓ UX-02: Last sync timestamp — v1.0
+- ✓ UX-03: Tappable sync errors — v1.0
+- ✓ UX-04: Deterministic progress counts — v1.0
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
+<!-- Current scope for next milestone -->
 
-**HealthKit Reliability:**
-- [ ] Immediate background notification when workout/active energy data arrives (within minutes)
-- [ ] Reliable background delivery for ALL HealthKit data types, not just sleep/steps
-- [ ] Observer queries properly configured for each enabled data type
-- [ ] Proper handling of HealthKit authorization state across app lifecycle
-
-**Geofence Reliability:**
-- [ ] Persistent geofence monitoring that survives days/weeks without dropping
-- [ ] Re-registration of geofences on app launch, device restart, and iOS eviction
-- [ ] Reliable enter/exit notifications that fire every time
-- [ ] Event logging even if notification delivery fails
-
-**Sync Engine Robustness:**
-- [ ] Backend database as single source of truth
-- [ ] Full offline functionality — app works normally, syncs transparently when online
-- [ ] Reliable mutation queue that never loses data
-- [ ] Proper conflict handling when offline edits sync
-- [ ] Clear sync state visibility (what's pending, what's synced)
-
-**Code Quality:**
-- [ ] Split monolithic HealthKitService (1,972 lines) into focused modules
-- [ ] Replace all print() statements with structured logging (Log.category.level)
-- [ ] Clean separation of concerns in GeofenceManager
-- [ ] Proper error handling and recovery throughout
+(None — next milestone not yet planned)
 
 ### Out of Scope
 
 <!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
 
 - Real-time push from backend to iOS (WebSocket/SSE) — adds complexity, pull-based sync is sufficient for now
-- Web app changes — this project focuses on iOS data infrastructure
-- Backend API changes — only if absolutely required for sync; prefer client-side solutions
+- Web app changes — this project focused on iOS data infrastructure
 - Calendar sync improvements — separate concern, not part of this overhaul
 - New HealthKit data types — focus on making existing types reliable first
 - Analytics/insights changes — downstream of reliable data capture
+- Manual "Sync Now" button — Creates unmet expectations; iOS controls timing
+- Unlimited geofences — iOS hard limit is 20; smart rotation deferred to v2
+- Continuous location tracking — Massive battery drain; event-driven only
+- Background HealthKit polling — Apple discourages; may break background delivery
+- Silent conflict resolution — User loses changes without knowing
+- Complex client-side retry logic — Server handles queue persistence; client stays thin
 
 ## Context
 
-**Current State:**
-- HealthKitService is 1,972 lines — largest file in codebase, handles workouts, sleep, steps, and configuration all in one
-- GeofenceManager has 45+ print statements and fragile state management
-- SyncEngine is 1,116 lines with complex cursor logic and pending delete tracking
-- Background delivery works for sleep/steps but not reliably for workouts/active energy
-- Geofences register but silently unregister over time — iOS limits (20 regions) may be a factor
-- Two deprecated SwiftData models still exist (QueuedOperation, HealthKitConfiguration)
+**Shipped v1.0 2026-01-18:**
+- 7 phases, 27 plans, 25 requirements
+- 166 files changed, 3 days of execution
+- All audit checks passed (requirements, integration, E2E flows)
 
-**iOS Background Constraints:**
-- iOS aggressively limits background execution
-- HealthKit background delivery requires proper observer query setup per data type
-- CoreLocation geofence monitoring is managed by iOS, but regions can be evicted
-- App must re-register geofences after restart, update, or iOS eviction
-- Background App Refresh affects sync behavior
-
-**Data Architecture:**
-- Backend (Supabase/PostgreSQL) is the source of truth
-- iOS uses SwiftData for local persistence
-- UUIDv7 enables client-generated IDs for offline-first
-- Cursor-based incremental sync with change feed API
+**Minor tech debt carried forward:**
+- println() debug logging in handlers/event.go:325-343 (should use structured logger)
+- Legacy gin.H error format in non-Phase-6 handlers (other handlers not yet migrated to RFC 9457)
 
 ## Constraints
 
@@ -101,11 +128,17 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Full overhaul vs incremental fixes | Current code is too tangled; patches would compound tech debt | — Pending |
-| Include SyncEngine in scope | Reliable data capture requires reliable sync; they're interconnected | — Pending |
-| Backend as source of truth | Enables multi-device, web access, and data recovery | — Pending |
-| Full offline functionality | Users shouldn't notice or care about network state | — Pending |
-| Split HealthKitService into modules | 1,972 lines is unmaintainable; separation of concerns needed | — Pending |
+| Full overhaul vs incremental fixes | Current code was too tangled; patches would compound tech debt | ✓ Good — clean modular architecture |
+| Include SyncEngine in scope | Reliable data capture requires reliable sync; they're interconnected | ✓ Good — offline-first works |
+| Backend as source of truth | Enables multi-device, web access, and data recovery | ✓ Good — verified |
+| Full offline functionality | Users shouldn't notice or care about network state | ✓ Good — cache-first loading |
+| Split HealthKitService into modules | 1,972 lines was unmaintainable; separation of concerns needed | ✓ Good — 12 modules <400 lines each |
+| Default 30-day HealthKit sync | User has 500+ workouts; importing all causes multi-minute hang | ✓ Good — instant load |
+| Skip heart rate enrichment on bulk import | Each HR query takes 100-500ms; 500 workouts = 50-250 seconds | ✓ Good — fast import |
+| Cache-first, sync-later pattern | Load from SwiftData cache first for instant UI (<3s), sync in background | ✓ Good — verified |
+| RFC 9457 Problem Details for all errors | Standardized error format with type URIs, request correlation, retry hints | ✓ Good — clear errors |
+| Pure idempotency: duplicates return existing | 200 OK with existing record, no update (differs from upsert) | ✓ Good — safe retries |
+| Error persistence until dismissed | Errors don't auto-dismiss; user must dismiss or sync must succeed | ✓ Good — no silent failures |
 
 ---
-*Last updated: 2026-01-15 after initialization*
+*Last updated: 2026-01-18 after v1.0 milestone*
