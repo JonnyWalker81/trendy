@@ -311,6 +311,234 @@ func (r *eventRepository) CountByEventType(ctx context.Context, userID string) (
 	return counts, nil
 }
 
+// buildEventData converts an Event model to a map for PostgREST operations.
+// This is the canonical function to build event data for both insert and upsert.
+func buildEventData(event *models.Event) map[string]interface{} {
+	data := map[string]interface{}{
+		"user_id":             event.UserID,
+		"event_type_id":       event.EventTypeID,
+		"timestamp":           event.Timestamp,
+		"is_all_day":          event.IsAllDay,
+		"source_type":         event.SourceType,
+		"notes":               event.Notes,
+		"end_date":            event.EndDate,
+		"external_id":         event.ExternalID,
+		"original_title":      event.OriginalTitle,
+		"geofence_id":         event.GeofenceID,
+		"location_latitude":   event.LocationLatitude,
+		"location_longitude":  event.LocationLongitude,
+		"location_name":       event.LocationName,
+		"healthkit_sample_id": event.HealthKitSampleID,
+		"healthkit_category":  event.HealthKitCategory,
+	}
+
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if event.ID != "" {
+		data["id"] = event.ID
+	}
+
+	// Properties column has NOT NULL constraint - use empty object {} if no properties
+	if event.Properties != nil && len(event.Properties) > 0 {
+		data["properties"] = event.Properties
+	} else {
+		data["properties"] = map[string]interface{}{}
+	}
+
+	return data
+}
+
+// GetByIDs retrieves events by their IDs.
+func (r *eventRepository) GetByIDs(ctx context.Context, ids []string) ([]models.Event, error) {
+	if len(ids) == 0 {
+		return []models.Event{}, nil
+	}
+
+	// Build "in" filter for IDs
+	idFilter := "in.("
+	for i, id := range ids {
+		if i > 0 {
+			idFilter += ","
+		}
+		idFilter += id
+	}
+	idFilter += ")"
+
+	query := map[string]interface{}{
+		"id":     idFilter,
+		"select": "*,event_type:event_types(*)",
+	}
+
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events by IDs: %w", err)
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return events, nil
+}
+
+// Upsert creates or updates an event by ID.
+// Returns (event, wasCreated, error) where wasCreated indicates if this was a new insert.
+func (r *eventRepository) Upsert(ctx context.Context, event *models.Event) (*models.Event, bool, error) {
+	if event.ID == "" {
+		return nil, false, fmt.Errorf("event ID is required for upsert")
+	}
+
+	// Check if event already exists
+	existingEvents, err := r.GetByIDs(ctx, []string{event.ID})
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to check existing event: %w", err)
+	}
+
+	data := buildEventData(event)
+
+	var body []byte
+
+	if len(existingEvents) == 0 {
+		// INSERT: No existing event, create new one
+		body, err = r.client.Insert("events", data)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to insert event: %w", err)
+		}
+	} else {
+		// UPDATE: Event already exists, update it
+		body, err = r.client.Update("events", event.ID, data)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to update event: %w", err)
+		}
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, false, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(events) == 0 {
+		return nil, false, fmt.Errorf("no event returned from upsert")
+	}
+
+	wasCreated := len(existingEvents) == 0
+	return &events[0], wasCreated, nil
+}
+
+// UpsertBatch creates or updates multiple events by ID.
+// Returns (events, results) where results contains per-item status.
+func (r *eventRepository) UpsertBatch(ctx context.Context, events []models.Event) ([]models.Event, []UpsertResult, error) {
+	if len(events) == 0 {
+		return []models.Event{}, []UpsertResult{}, nil
+	}
+
+	// Collect IDs to check which already exist
+	ids := make([]string, 0, len(events))
+	idToIndex := make(map[string]int)
+	for i, event := range events {
+		if event.ID != "" {
+			ids = append(ids, event.ID)
+			idToIndex[event.ID] = i
+		}
+	}
+
+	// Get existing events to determine which are creates vs updates
+	existingEvents, err := r.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to check existing events: %w", err)
+	}
+
+	// Build map of existing IDs
+	existingIDMap := make(map[string]models.Event)
+	for _, e := range existingEvents {
+		existingIDMap[e.ID] = e
+	}
+
+	// Separate events into inserts vs already-exists
+	insertData := make([]map[string]interface{}, 0)
+	insertIndices := make([]int, 0)
+	results := make([]UpsertResult, len(events))
+	var allResults []models.Event
+
+	for i, event := range events {
+		if event.ID == "" {
+			results[i] = UpsertResult{
+				Index:  i,
+				ID:     "",
+				Action: "failed",
+				Error:  fmt.Errorf("event ID is required for upsert"),
+			}
+			continue
+		}
+
+		if existingEvent, exists := existingIDMap[event.ID]; exists {
+			// DEDUPLICATED: Return the existing event as-is
+			// Per CONTEXT.md: return 200 with existing record (pure idempotency)
+			allResults = append(allResults, existingEvent)
+			results[i] = UpsertResult{
+				Index:  i,
+				ID:     event.ID,
+				Action: "deduplicated",
+			}
+		} else {
+			// INSERT: New event - collect for batch insert
+			data := buildEventData(&event)
+			insertData = append(insertData, data)
+			insertIndices = append(insertIndices, i)
+		}
+	}
+
+	// Batch insert new events
+	if len(insertData) > 0 {
+		body, err := r.client.Insert("events", insertData)
+		if err != nil {
+			// Mark all inserts as failed
+			for _, idx := range insertIndices {
+				results[idx] = UpsertResult{
+					Index:  idx,
+					ID:     events[idx].ID,
+					Action: "failed",
+					Error:  err,
+				}
+			}
+			// Return what we have so far (deduplicated events)
+			return allResults, results, nil
+		}
+
+		var inserted []models.Event
+		if err := json.Unmarshal(body, &inserted); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal insert response: %w", err)
+		}
+
+		// Map inserted events back to their indices
+		insertedByID := make(map[string]models.Event)
+		for _, e := range inserted {
+			insertedByID[e.ID] = e
+		}
+
+		for _, idx := range insertIndices {
+			eventID := events[idx].ID
+			if insertedEvent, ok := insertedByID[eventID]; ok {
+				allResults = append(allResults, insertedEvent)
+				results[idx] = UpsertResult{
+					Index:  idx,
+					ID:     eventID,
+					Action: "created",
+				}
+			} else {
+				results[idx] = UpsertResult{
+					Index:  idx,
+					ID:     eventID,
+					Action: "failed",
+					Error:  fmt.Errorf("event not returned from insert"),
+				}
+			}
+		}
+	}
+
+	return allResults, results, nil
+}
+
 func (r *eventRepository) GetForExport(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error) {
 	query := map[string]interface{}{
 		"user_id": fmt.Sprintf("eq.%s", userID),

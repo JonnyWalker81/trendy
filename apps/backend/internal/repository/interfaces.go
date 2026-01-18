@@ -7,6 +7,14 @@ import (
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 )
 
+// UpsertResult represents the outcome of a single upsert operation in a batch.
+type UpsertResult struct {
+	Index  int    // Position in original request
+	ID     string // Event ID
+	Action string // "created" | "deduplicated" | "failed"
+	Error  error  // Non-nil if Action is "failed"
+}
+
 // EventRepository defines the interface for event data access
 type EventRepository interface {
 	Create(ctx context.Context, event *models.Event) (*models.Event, error)
@@ -18,6 +26,14 @@ type EventRepository interface {
 	Update(ctx context.Context, id string, event *models.Event) (*models.Event, error)
 	Delete(ctx context.Context, id string) error
 	CountByEventType(ctx context.Context, userID string) (map[string]int64, error)
+	// Upsert creates or updates an event by ID. Returns (event, wasCreated, error).
+	// wasCreated is true if this was a new insert, false if existing was updated.
+	Upsert(ctx context.Context, event *models.Event) (*models.Event, bool, error)
+	// UpsertBatch creates or updates multiple events by ID.
+	// Returns (events, results) where results contains per-item status.
+	UpsertBatch(ctx context.Context, events []models.Event) ([]models.Event, []UpsertResult, error)
+	// GetByIDs retrieves events by their IDs.
+	GetByIDs(ctx context.Context, ids []string) ([]models.Event, error)
 	// UpsertHealthKitEvent inserts or updates a HealthKit event by sample ID.
 	// Returns (event, wasCreated, error) where wasCreated indicates if this was a new insert.
 	UpsertHealthKitEvent(ctx context.Context, event *models.Event) (*models.Event, bool, error)
