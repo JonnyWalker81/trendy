@@ -16,7 +16,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 - [x] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
 - [x] **Phase 5: Sync Engine** - Offline-first CRUD, automatic sync, mutation persistence
 - [x] **Phase 6: Server API** - UUIDv7 support, deduplication, sync status endpoint
-- [ ] **Phase 7: UX Indicators** - Sync status, timestamps, error surfacing, progress counts
+- [x] **Phase 7: UX Indicators** - Sync status, timestamps, error surfacing, progress counts
 
 ## Phase Details
 
@@ -140,10 +140,10 @@ Plans:
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 07-01-PLAN.md — Floating indicator components (SyncIndicatorView, display state machine, progress bar)
-- [ ] 07-02-PLAN.md — Settings integration (SyncHistoryStore, SyncSettingsView, RelativeTimestampView)
-- [ ] 07-03-PLAN.md — Error enhancement (persistence, tap-to-expand, escalation)
-- [ ] 07-04-PLAN.md — App integration (MainTabView wiring, environment injection)
+- [x] 07-01-PLAN.md — Floating indicator components (SyncIndicatorView, display state machine, progress bar)
+- [x] 07-02-PLAN.md — Settings integration (SyncHistoryStore, SyncSettingsView, RelativeTimestampView)
+- [x] 07-03-PLAN.md — Error enhancement (persistence, tap-to-expand, escalation)
+- [x] 07-04-PLAN.md — App integration (MainTabView wiring, environment injection)
 
 ## Progress
 
@@ -159,7 +159,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 6/6 | Complete | 2026-01-17 |
 | 6. Server API | 5/5 | Complete | 2026-01-17 |
-| 7. UX Indicators | 0/4 | Not started | - |
+| 7. UX Indicators | 4/4 | Complete | 2026-01-18 |
 
 ---
 *Roadmap created: 2026-01-15*

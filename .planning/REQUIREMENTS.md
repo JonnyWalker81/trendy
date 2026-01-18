@@ -47,10 +47,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UX Indicators (iOS)
 
-- [ ] **UX-01**: User sees clear sync status indicator (online/syncing/pending/offline)
-- [ ] **UX-02**: User can see last sync timestamp ("Last synced: 5 min ago")
-- [ ] **UX-03**: Sync errors are surfaced with tappable explanation (not silent failures)
-- [ ] **UX-04**: Sync progress shows deterministic counts ("Syncing 3 of 5") not just spinner
+- [x] **UX-01**: User sees clear sync status indicator (online/syncing/pending/offline)
+- [x] **UX-02**: User can see last sync timestamp ("Last synced: 5 min ago")
+- [x] **UX-03**: Sync errors are surfaced with tappable explanation (not silent failures)
+- [x] **UX-04**: Sync progress shows deterministic counts ("Syncing 3 of 5") not just spinner
 
 ## v2 Requirements
 
@@ -120,10 +120,10 @@ Which phases cover which requirements. Updated by create-roadmap.
 | CODE-02 | Phase 1 | Complete |
 | CODE-03 | Phase 4 | Complete |
 | CODE-04 | Phase 1 | Complete |
-| UX-01 | Phase 7 | Pending |
-| UX-02 | Phase 7 | Pending |
-| UX-03 | Phase 7 | Pending |
-| UX-04 | Phase 7 | Pending |
+| UX-01 | Phase 7 | Complete |
+| UX-02 | Phase 7 | Complete |
+| UX-03 | Phase 7 | Complete |
+| UX-04 | Phase 7 | Complete |
 
 **Coverage:**
 - v1 requirements: 25 total
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-17 after Phase 6 completion (API-01 through API-04 complete)*
+*Last updated: 2026-01-18 after Phase 7 completion (UX-01 through UX-04 complete)*
