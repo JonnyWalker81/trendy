@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 06-server-api
 source: 06-01-SUMMARY.md, 06-02-SUMMARY.md, 06-03-SUMMARY.md
 started: 2026-01-18T02:30:00Z
@@ -59,17 +59,28 @@ skipped: 0
   reason: "User reported: Auth middleware errors use old format {\"error\":\"...\"} instead of RFC 9457. Validation errors DO use RFC 9457 correctly."
   severity: minor
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Auth middleware uses legacy c.JSON(gin.H{\"error\": ...}) instead of apierror.WriteProblem() with RFC 9457 ProblemDetails"
+  artifacts:
+    - path: "apps/backend/internal/middleware/auth.go"
+      issue: "Lines 20, 29, 42 use c.JSON(http.StatusUnauthorized, gin.H{\"error\": \"...\"}) instead of apierror package"
+  missing:
+    - "Import apierror package in auth.go"
+    - "Replace c.JSON calls with apierror.WriteProblem(c, apierror.NewUnauthorizedError(...))"
+  debug_session: ".planning/debug/auth-middleware-rfc9457.md"
 
 - truth: "Validation errors aggregate all field errors"
   status: failed
   reason: "User reported: Only first error shown. Sent id=not-uuid, event_type_id=empty, timestamp=bad but only got timestamp parsing error back."
   severity: minor
   test: 2
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Gin's ShouldBindJSON fails on first json.Unmarshal type error before validation runs; handler uses NewBadRequestError instead of aggregating with NewValidationError"
+  artifacts:
+    - path: "apps/backend/internal/handlers/event.go"
+      issue: "Lines 37-41 use ShouldBindJSON which fails on first parse error"
+    - path: "apps/backend/internal/models/models.go"
+      issue: "CreateEventRequest.Timestamp is time.Time (parsed during unmarshal, not validation)"
+  missing:
+    - "Create RawCreateEventRequest struct with string fields"
+    - "Manually parse and validate each field, collecting errors into []FieldError"
+    - "Use NewValidationError for aggregated errors"
+  debug_session: ".planning/debug/validation-errors-not-aggregated.md"
