@@ -14,6 +14,8 @@ struct MainTabView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.foundationModelService) private var foundationModelService
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(SyncStatusViewModel.self) private var syncStatusViewModel
     @State private var eventStore: EventStore?
     @State private var insightsViewModel = InsightsViewModel()
     @StateObject private var calendarManager = CalendarManager()
@@ -22,6 +24,8 @@ struct MainTabView: View {
     @State private var healthKitService: HealthKitService?
     @State private var selectedTab = 0
     @State private var isLoading = true
+    @State private var showIndicator = false
+    @State private var successHideTask: Task<Void, Never>?
 
     #if DEBUG
     /// Check if running in screenshot mode for UI tests
@@ -178,6 +182,47 @@ struct MainTabView: View {
         .environment(notificationManager)
         .environment(geofenceManager)
         .environment(healthKitService)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if showIndicator {
+                SyncIndicatorView(
+                    displayState: syncStatusViewModel.displayState,
+                    onTap: {
+                        // Navigate to sync settings by switching to settings tab
+                        selectedTab = 4
+                    },
+                    onRetry: {
+                        await eventStore?.fetchData()
+                    }
+                )
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8), value: showIndicator)
+        .onChange(of: syncStatusViewModel.shouldShowIndicator) { _, shouldShow in
+            showIndicator = shouldShow
+        }
+        .onChange(of: syncStatusViewModel.displayState) { _, newState in
+            // Handle success auto-hide: when displayState becomes .success,
+            // start a 2-second timer then hide the indicator
+            if case .success = newState {
+                // Cancel any existing hide task
+                successHideTask?.cancel()
+                successHideTask = Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    if !Task.isCancelled {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
+                            showIndicator = false
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: eventStore?.currentSyncState) {
+            // Refresh SyncStatusViewModel when EventStore sync state changes
+            if let store = eventStore {
+                await syncStatusViewModel.refresh(from: store)
+            }
+        }
     }
 
     // MARK: - Initialization Methods
