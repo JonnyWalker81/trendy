@@ -121,7 +121,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — RFC 9457 Problem Details error infrastructure
+- [x] 06-01-PLAN.md — RFC 9457 Problem Details error infrastructure
 - [ ] 06-02-PLAN.md — UUIDv7 validation and idempotent event creation
 - [ ] 06-03-PLAN.md — Sync status endpoint (GET /api/v1/me/sync)
 
@@ -153,7 +153,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 6/6 | Complete | 2026-01-17 |
-| 6. Server API | 0/3 | Planned | - |
+| 6. Server API | 1/3 | In progress | - |
 | 7. UX Indicators | 0/? | Not started | - |
 
 ---
