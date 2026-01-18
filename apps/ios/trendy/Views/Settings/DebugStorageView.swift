@@ -51,6 +51,13 @@ struct DebugStorageView: View {
     @State private var currentUserId: String = "Loading..."
     @State private var geofenceTestResult: String?
 
+    // Skip cursor
+    @State private var showingSkipCursorConfirmation = false
+    @State private var showingSkipCursorSuccess = false
+    @State private var skipCursorResult: String?
+    @State private var isSkippingCursor = false
+    @State private var estimatedBacklog: Int = 0
+
     var body: some View {
         List {
             mainContent
@@ -72,90 +79,36 @@ struct DebugStorageView: View {
             await loadContainerInfo()
             await loadUserId()
         }
-        .confirmationDialog(
-            "Clear All Data?",
-            isPresented: $showingClearConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear All Data", role: .destructive) {
-                clearAllData()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will delete all local data. You will need to restart the app. This cannot be undone.")
-        }
-        .alert("Data Cleared", isPresented: $showingClearSuccess) {
-            Button("OK") {
-                exit(0)
-            }
-        } message: {
-            Text("All local data has been cleared. The app will now close. Please reopen it to start fresh.")
-        }
-        .confirmationDialog(
-            "Log Out & Clear All Data?",
-            isPresented: $showingClearAndLogoutConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Log Out & Clear All", role: .destructive) {
-                Task {
-                    await logOutAndClearAllData()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will sign you out and delete all local data. The app will restart without syncing from the server. You'll need to log in again.")
-        }
-        .confirmationDialog(
-            "Force Full Resync?",
-            isPresented: $showingForceResyncConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Resync Now") {
-                Task {
-                    await forceResync()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will reset the sync cursor, re-download all data from the backend, and remove any stale local data.")
-        }
-        .alert("Resync Complete", isPresented: $showingResyncSuccess) {
-            Button("OK") {}
-        } message: {
-            Text("All data has been re-synced from the backend. Stale local data has been removed.")
-        }
-        .alert("Geofence Sync Complete", isPresented: $showingGeofenceSyncSuccess) {
-            Button("OK") {
-                Task {
-                    await loadSwiftDataCounts()
-                }
-            }
-        } message: {
-            Text(geofenceSyncResult ?? "Geofences have been synced from the server.")
-        }
-        .confirmationDialog(
-            "Clear Mutation Queue?",
-            isPresented: $showingClearMutationsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Queue", role: .destructive) {
-                Task {
-                    await clearMutationQueue()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will clear all pending sync mutations. Any unsynced local changes will be lost and NOT synced to the backend. Use this to recover from a retry storm.")
-        }
-        .alert("Mutation Queue Cleared", isPresented: $showingClearMutationsSuccess) {
-            Button("OK") {
-                Task {
-                    await loadSwiftDataCounts()
-                }
-            }
-        } message: {
-            Text(clearMutationsResult ?? "The mutation queue has been cleared.")
-        }
+        .modifier(ClearDataDialogs(
+            showingClearConfirmation: $showingClearConfirmation,
+            showingClearSuccess: $showingClearSuccess,
+            showingClearAndLogoutConfirmation: $showingClearAndLogoutConfirmation,
+            clearAllData: clearAllData,
+            logOutAndClearAllData: logOutAndClearAllData
+        ))
+        .modifier(SyncDialogs(
+            showingForceResyncConfirmation: $showingForceResyncConfirmation,
+            showingResyncSuccess: $showingResyncSuccess,
+            showingGeofenceSyncSuccess: $showingGeofenceSyncSuccess,
+            geofenceSyncResult: geofenceSyncResult,
+            forceResync: forceResync,
+            loadSwiftDataCounts: loadSwiftDataCounts
+        ))
+        .modifier(MutationDialogs(
+            showingClearMutationsConfirmation: $showingClearMutationsConfirmation,
+            showingClearMutationsSuccess: $showingClearMutationsSuccess,
+            clearMutationsResult: clearMutationsResult,
+            clearMutationQueue: clearMutationQueue,
+            loadSwiftDataCounts: loadSwiftDataCounts
+        ))
+        .modifier(SkipCursorDialogs(
+            showingSkipCursorConfirmation: $showingSkipCursorConfirmation,
+            showingSkipCursorSuccess: $showingSkipCursorSuccess,
+            skipCursorResult: skipCursorResult,
+            estimatedBacklog: estimatedBacklog,
+            skipToLatestCursor: skipToLatestCursor,
+            loadSwiftDataCounts: loadSwiftDataCounts
+        ))
     }
 
     // MARK: - Main Content
@@ -393,13 +346,34 @@ struct DebugStorageView: View {
                 }
                 .disabled(isSyncing)
             }
+
+            // Skip change log backlog
+            // Now allowed even with pending mutations - they are independent operations
+            // The skip cursor operation doesn't affect pending mutations, and sometimes
+            // you need to skip the cursor to unblock sync when rate-limited by pull phase
+            Button {
+                Task {
+                    await calculateBacklog()
+                    showingSkipCursorConfirmation = true
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "forward.end.fill")
+                    Text("Skip Change Log Backlog")
+                    Spacer()
+                    if isSkippingCursor {
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isSkippingCursor || isSyncing)
         } header: {
             Text("Sync Actions")
         } footer: {
             if pendingMutationCount > 0 {
-                Text("'Clear Mutation Queue' abandons unsynced changes to recover from a retry storm. Use with caution - data will be lost.")
+                Text("'Clear Mutation Queue' abandons unsynced changes. 'Skip Change Log Backlog' jumps cursor to latest - safe even with pending mutations.")
             } else {
-                Text("'Sync Geofences' fetches geofences from the server without a full resync. 'Force Full Resync' re-downloads all data and removes stale local data.")
+                Text("'Skip Change Log Backlog' jumps cursor to latest when stuck with thousands of stale entries. 'Force Full Resync' re-downloads all data.")
             }
         }
     }
@@ -430,6 +404,32 @@ struct DebugStorageView: View {
             clearMutationsResult = "No mutations to clear."
         }
         showingClearMutationsSuccess = true
+    }
+
+    private func calculateBacklog() async {
+        let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+        let currentCursor = UserDefaults.standard.integer(forKey: cursorKey)
+
+        do {
+            let latestCursor = try await eventStore.getLatestCursor()
+            estimatedBacklog = max(0, Int(latestCursor) - currentCursor)
+        } catch {
+            estimatedBacklog = 0
+        }
+    }
+
+    private func skipToLatestCursor() async {
+        isSkippingCursor = true
+        defer { isSkippingCursor = false }
+
+        do {
+            let newCursor = try await eventStore.skipToLatestCursor()
+            skipCursorResult = "Cursor updated to \(newCursor). Next sync will start from here."
+            showingSkipCursorSuccess = true
+        } catch {
+            skipCursorResult = "Error: \(error.localizedDescription)"
+            showingSkipCursorSuccess = true
+        }
     }
 
     private func testGeofenceFetch() async {
@@ -825,6 +825,165 @@ extension DebugStorageView {
         }
 
         syncStatusInfo = info
+    }
+}
+
+// MARK: - Dialog ViewModifiers (extracted to help Swift type-checker)
+
+private struct ClearDataDialogs: ViewModifier {
+    @Binding var showingClearConfirmation: Bool
+    @Binding var showingClearSuccess: Bool
+    @Binding var showingClearAndLogoutConfirmation: Bool
+    let clearAllData: () -> Void
+    let logOutAndClearAllData: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Clear All Data?",
+                isPresented: $showingClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear All Data", role: .destructive) {
+                    clearAllData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will delete all local data. You will need to restart the app. This cannot be undone.")
+            }
+            .alert("Data Cleared", isPresented: $showingClearSuccess) {
+                Button("OK") {
+                    exit(0)
+                }
+            } message: {
+                Text("All local data has been cleared. The app will now close. Please reopen it to start fresh.")
+            }
+            .confirmationDialog(
+                "Log Out & Clear All Data?",
+                isPresented: $showingClearAndLogoutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Log Out & Clear All", role: .destructive) {
+                    Task {
+                        await logOutAndClearAllData()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will sign you out and delete all local data. The app will restart without syncing from the server. You'll need to log in again.")
+            }
+    }
+}
+
+private struct SyncDialogs: ViewModifier {
+    @Binding var showingForceResyncConfirmation: Bool
+    @Binding var showingResyncSuccess: Bool
+    @Binding var showingGeofenceSyncSuccess: Bool
+    let geofenceSyncResult: String?
+    let forceResync: () async -> Void
+    let loadSwiftDataCounts: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Force Full Resync?",
+                isPresented: $showingForceResyncConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Resync Now") {
+                    Task {
+                        await forceResync()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will reset the sync cursor, re-download all data from the backend, and remove any stale local data.")
+            }
+            .alert("Resync Complete", isPresented: $showingResyncSuccess) {
+                Button("OK") {}
+            } message: {
+                Text("All data has been re-synced from the backend. Stale local data has been removed.")
+            }
+            .alert("Geofence Sync Complete", isPresented: $showingGeofenceSyncSuccess) {
+                Button("OK") {
+                    Task {
+                        await loadSwiftDataCounts()
+                    }
+                }
+            } message: {
+                Text(geofenceSyncResult ?? "Geofences have been synced from the server.")
+            }
+    }
+}
+
+private struct MutationDialogs: ViewModifier {
+    @Binding var showingClearMutationsConfirmation: Bool
+    @Binding var showingClearMutationsSuccess: Bool
+    let clearMutationsResult: String?
+    let clearMutationQueue: () async -> Void
+    let loadSwiftDataCounts: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Clear Mutation Queue?",
+                isPresented: $showingClearMutationsConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear Queue", role: .destructive) {
+                    Task {
+                        await clearMutationQueue()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will clear all pending sync mutations. Any unsynced local changes will be lost and NOT synced to the backend. Use this to recover from a retry storm.")
+            }
+            .alert("Mutation Queue Cleared", isPresented: $showingClearMutationsSuccess) {
+                Button("OK") {
+                    Task {
+                        await loadSwiftDataCounts()
+                    }
+                }
+            } message: {
+                Text(clearMutationsResult ?? "The mutation queue has been cleared.")
+            }
+    }
+}
+
+private struct SkipCursorDialogs: ViewModifier {
+    @Binding var showingSkipCursorConfirmation: Bool
+    @Binding var showingSkipCursorSuccess: Bool
+    let skipCursorResult: String?
+    let estimatedBacklog: Int
+    let skipToLatestCursor: () async -> Void
+    let loadSwiftDataCounts: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Skip Change Log Backlog?",
+                isPresented: $showingSkipCursorConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Skip to Latest", role: .destructive) {
+                    Task {
+                        await skipToLatestCursor()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will skip downloading ~\(estimatedBacklog) change log entries. This is SAFE - it only affects which server changes to download, not your pending local changes. Use this when sync is stuck due to rate limiting.")
+            }
+            .alert("Cursor Skipped", isPresented: $showingSkipCursorSuccess) {
+                Button("OK") {
+                    Task {
+                        await loadSwiftDataCounts()
+                    }
+                }
+            } message: {
+                Text(skipCursorResult ?? "Cursor has been updated to latest.")
+            }
     }
 }
 

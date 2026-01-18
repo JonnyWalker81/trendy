@@ -220,22 +220,24 @@ func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req
 			createdIDSet[id] = true
 		}
 
-		// Append to change log with correct operation (create vs update)
+		// Append to change log ONLY for genuinely new events (CREATE operations)
+		// Skip UPDATE operations for HealthKit batch imports - the client already has
+		// this data and logging updates floods the change_log unnecessarily
 		for _, event := range upserted {
-			operation := models.OperationUpdate
 			if createdIDSet[event.ID] {
-				operation = models.OperationCreate
+				if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
+					EntityType: models.EntityTypeEvent,
+					Operation:  models.OperationCreate,
+					EntityID:   event.ID,
+					UserID:     userID,
+					Data:       event,
+				}); err != nil {
+					log.Warn("failed to append HealthKit event to change log", logger.Err(err), logger.String("event_id", event.ID))
+				}
 			}
-
-			if _, err := s.changeLogRepo.Append(ctx, &models.ChangeLogInput{
-				EntityType: models.EntityTypeEvent,
-				Operation:  operation,
-				EntityID:   event.ID,
-				UserID:     userID,
-				Data:       event,
-			}); err != nil {
-				log.Warn("failed to append HealthKit event to change log", logger.Err(err), logger.String("event_id", event.ID))
-			}
+			// Note: Intentionally skip change_log for UPDATE operations in batch imports
+			// The importing client already has the data, and other clients will get it
+			// via bootstrap or the next CREATE that triggers a sync
 		}
 	}
 

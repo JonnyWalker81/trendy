@@ -13,8 +13,22 @@ import SwiftData
 /// Observable state for the sync engine
 enum SyncState: Equatable {
     case idle
-    case syncing
+    /// Pushing local changes with progress: synced count and total count
+    case syncing(synced: Int, total: Int)
+    /// Pulling remote changes (after push completes)
+    case pulling
+    case rateLimited(retryAfter: TimeInterval, pending: Int)
     case error(String)
+
+    /// Convenience for checking if syncing (regardless of progress)
+    var isSyncing: Bool {
+        switch self {
+        case .syncing, .pulling:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 /// Actor that manages synchronization between local SwiftData and the backend.
@@ -159,7 +173,7 @@ actor SyncEngine {
         }
 
         isSyncing = true
-        await updateState(.syncing)
+        await updateState(.syncing(synced: 0, total: 0))
 
         defer {
             isSyncing = false
@@ -209,6 +223,8 @@ actor SyncEngine {
                     ctx.add("force_bootstrap_flag", forceBootstrapOnNextSync)
                 })
                 forceBootstrapOnNextSync = false // Reset the flag
+                // Update state to show we're pulling (bootstrap downloads all data)
+                await updateState(.pulling)
                 try await bootstrapFetch()
             }
 
@@ -244,6 +260,8 @@ actor SyncEngine {
                     })
                 }
             } else {
+                // Update state to show we're pulling changes (not stuck at last push progress)
+                await updateState(.pulling)
                 try await pullChanges()
 
                 // Step 4: Always sync geofences from server to ensure we have the latest state.
@@ -297,6 +315,40 @@ actor SyncEngine {
 
         Log.sync.info("Cursor reset to 0, starting forced bootstrap sync")
         await performSync()
+    }
+
+    /// Skip all pending change_log entries and jump cursor to latest.
+    /// Use when change_log backlog is too large and causing rate limit errors.
+    ///
+    /// This is SAFE to use even with pending mutations because:
+    /// 1. Pending mutations are pushed BEFORE pullChanges runs
+    /// 2. The cursor only affects which change_log entries to PULL
+    /// 3. Skipping cursor doesn't affect the push phase at all
+    /// 4. The push phase will still push all pending mutations on next sync
+    ///
+    /// - Returns: The new cursor value
+    /// - Throws: Error if API call fails
+    func skipToLatestCursor() async throws -> Int64 {
+        // Log pending mutation count for informational purposes
+        let context = ModelContext(modelContainer)
+        let localStore = LocalStore(modelContext: context)
+        let pendingMutations = try localStore.fetchPendingMutations()
+        let pendingCount = pendingMutations.count
+
+        // Get the latest cursor from the backend
+        let latestCursor = try await apiClient.getLatestCursor()
+
+        // Update local cursor
+        lastSyncCursor = latestCursor
+        UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
+        UserDefaults.standard.synchronize()
+
+        Log.sync.info("Skipped to latest cursor", context: .with { ctx in
+            ctx.add("new_cursor", Int(latestCursor))
+            ctx.add("pending_mutations", pendingCount)
+        })
+
+        return latestCursor
     }
 
     /// Manually restore broken Event→EventType relationships.
@@ -461,6 +513,16 @@ actor SyncEngine {
         return 0
     }
 
+    /// Reset the circuit breaker to allow immediate retry.
+    /// Call this when the user explicitly requests a retry, bypassing the backoff period.
+    func resetCircuitBreaker() async {
+        Log.sync.info("Circuit breaker manually reset by user")
+        consecutiveRateLimitErrors = 0
+        rateLimitBackoffUntil = nil
+        rateLimitBackoffMultiplier = 1.0
+        await updateState(.idle)
+    }
+
     // MARK: - Private: Health Check
 
     /// Performs a lightweight health check to verify actual internet connectivity.
@@ -489,20 +551,32 @@ actor SyncEngine {
 
     // MARK: - Private: Flush Pending Mutations
 
-    private func flushPendingMutations() async throws {
-        // Check circuit breaker - if we're in backoff, skip flushing
-        if let backoffUntil = rateLimitBackoffUntil, Date() < backoffUntil {
-            let remaining = backoffUntil.timeIntervalSinceNow
-            Log.sync.warning("Circuit breaker tripped - skipping mutation flush", context: .with { ctx in
-                ctx.add("backoff_remaining_seconds", Int(remaining))
-            })
-            return
-        }
+    /// Maximum number of events per batch request.
+    /// Reduced from 500 to 50 because Cloud Run cannot process large batches
+    /// within the iOS 15-second timeout (APIClient.swift line 44).
+    /// With 500 events, every batch times out with NSURLErrorDomain -1001.
+    /// 50 events completes in ~5-8 seconds, leaving headroom for cold starts.
+    private let batchSize = 50
 
+    private func flushPendingMutations() async throws {
         let context = ModelContext(modelContainer)
         let localStore = LocalStore(modelContext: context)
 
         let mutations = try localStore.fetchPendingMutations()
+        let totalPending = mutations.count
+
+        // Check circuit breaker - if we're in backoff, skip flushing but update state
+        if let backoffUntil = rateLimitBackoffUntil, Date() < backoffUntil {
+            let remaining = backoffUntil.timeIntervalSinceNow
+            Log.sync.warning("Circuit breaker tripped - skipping mutation flush", context: .with { ctx in
+                ctx.add("backoff_remaining_seconds", Int(remaining))
+                ctx.add("pending_count", totalPending)
+            })
+            // Update state to show rate limit status to user
+            await updateState(.rateLimited(retryAfter: remaining, pending: totalPending))
+            return
+        }
+
         guard !mutations.isEmpty else {
             Log.sync.debug("No pending mutations to flush")
             return
@@ -513,14 +587,109 @@ actor SyncEngine {
             ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
         })
 
-        for mutation in mutations {
+        // Separate mutations by type for batch processing
+        let eventCreateMutations = mutations.filter { $0.entityType == .event && $0.operation == .create }
+        let otherMutations = mutations.filter { !($0.entityType == .event && $0.operation == .create) }
+
+        var syncedCount = 0
+        await updateState(.syncing(synced: 0, total: totalPending))
+
+        // Step 1: Batch process event CREATE mutations
+        if !eventCreateMutations.isEmpty {
+            Log.sync.info("Batch processing event creates", context: .with { ctx in
+                ctx.add("event_creates", eventCreateMutations.count)
+                ctx.add("batch_size", batchSize)
+                ctx.add("num_batches", (eventCreateMutations.count + batchSize - 1) / batchSize)
+            })
+
+            // Process in batches of batchSize
+            for batchStart in stride(from: 0, to: eventCreateMutations.count, by: batchSize) {
+                // Check circuit breaker before each batch
+                if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
+                    tripCircuitBreaker()
+                    let remaining = circuitBreakerBackoffRemaining
+                    let pendingNow = await getPendingCount()
+                    Log.sync.warning("Circuit breaker tripped during batch flush", context: .with { ctx in
+                        ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                        ctx.add("backoff_seconds", Int(remaining))
+                        ctx.add("pending_remaining", pendingNow)
+                    })
+                    await updateState(.rateLimited(retryAfter: remaining, pending: pendingNow))
+                    try context.save()
+                    await updatePendingCount()
+                    return
+                }
+
+                let batchEnd = min(batchStart + batchSize, eventCreateMutations.count)
+                let batchMutations = Array(eventCreateMutations[batchStart..<batchEnd])
+
+                // Update progress before attempting batch (so UI shows progress even if batch fails)
+                let attemptedCount = batchStart
+                await updateState(.syncing(synced: attemptedCount, total: totalPending))
+
+                Log.sync.debug("Processing event batch", context: .with { ctx in
+                    ctx.add("batch_start", batchStart)
+                    ctx.add("batch_size", batchMutations.count)
+                })
+
+                do {
+                    let batchSyncedCount = try await flushEventCreateBatch(
+                        batchMutations,
+                        localStore: localStore,
+                        context: context
+                    )
+                    syncedCount += batchSyncedCount
+                    await updateState(.syncing(synced: syncedCount, total: totalPending))
+
+                    // Reset consecutive rate limit counter on success
+                    consecutiveRateLimitErrors = 0
+
+                } catch let error as APIError where error.isRateLimitError {
+                    // Rate limit error - increment counter
+                    consecutiveRateLimitErrors += 1
+                    Log.sync.warning("Rate limit error during batch flush", context: .with { ctx in
+                        ctx.add("batch_size", batchMutations.count)
+                        ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                    })
+                    // Don't fail the batch - will retry on next sync cycle
+
+                } catch {
+                    // Other error (timeout, network, etc.) - record failure on each mutation
+                    Log.sync.error("Error during batch flush", error: error, context: .with { ctx in
+                        ctx.add("batch_size", batchMutations.count)
+                        ctx.add("error_type", String(describing: type(of: error)))
+                    })
+
+                    // Record failure for each mutation in the batch so they're retried with backoff
+                    for mutation in batchMutations {
+                        mutation.recordFailure(error: "Batch operation failed: \(error.localizedDescription)")
+                        if mutation.hasExceededRetryLimit {
+                            Log.sync.warning("Mutation exceeded retry limit, marking entity as failed", context: .with { ctx in
+                                ctx.add("entity_id", mutation.entityId)
+                                ctx.add("attempt_count", mutation.attempts)
+                            })
+                            try? markEntityFailed(mutation, context: context)
+                            context.delete(mutation)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 2: Process other mutations one by one (updates, deletes, non-events)
+        for mutation in otherMutations {
             // Check circuit breaker before each mutation
             if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                 tripCircuitBreaker()
+                let remaining = circuitBreakerBackoffRemaining
+                let pendingNow = await getPendingCount()
                 Log.sync.warning("Circuit breaker tripped during flush - aborting remaining mutations", context: .with { ctx in
                     ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
-                    ctx.add("backoff_seconds", Int(circuitBreakerBackoffRemaining))
+                    ctx.add("backoff_seconds", Int(remaining))
+                    ctx.add("pending_remaining", pendingNow)
                 })
+                // Update state to show rate limit status to user
+                await updateState(.rateLimited(retryAfter: remaining, pending: pendingNow))
                 break
             }
 
@@ -538,6 +707,8 @@ actor SyncEngine {
                     ctx.add("entity_id", mutation.entityId)
                 })
                 context.delete(mutation)
+                syncedCount += 1
+                await updateState(.syncing(synced: syncedCount, total: totalPending))
 
                 // Reset consecutive rate limit counter on success
                 consecutiveRateLimitErrors = 0
@@ -555,6 +726,8 @@ actor SyncEngine {
                 // Delete the local duplicate entity - the "real" one already exists and synced
                 try deleteLocalDuplicate(mutation, localStore: localStore)
                 context.delete(mutation)
+                syncedCount += 1
+                await updateState(.syncing(synced: syncedCount, total: totalPending))
 
                 // Reset rate limit counter - duplicates are not rate limit errors
                 consecutiveRateLimitErrors = 0
@@ -591,6 +764,8 @@ actor SyncEngine {
                     })
                     try markEntityFailed(mutation, context: context)
                     context.delete(mutation)
+                    syncedCount += 1
+                    await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
                     Log.sync.info("Mutation will retry", context: .with { ctx in
                         ctx.add("attempts_after", mutation.attempts)
@@ -617,6 +792,8 @@ actor SyncEngine {
                     // Mark the entity as failed
                     try markEntityFailed(mutation, context: context)
                     context.delete(mutation)
+                    syncedCount += 1
+                    await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
                     Log.sync.info("Mutation will retry", context: .with { ctx in
                         ctx.add("attempts_after", mutation.attempts)
@@ -627,6 +804,173 @@ actor SyncEngine {
 
         try context.save()
         await updatePendingCount()
+    }
+
+    /// Flush a batch of event CREATE mutations using the batch API.
+    /// Returns the number of successfully synced events.
+    private func flushEventCreateBatch(
+        _ mutations: [PendingMutation],
+        localStore: LocalStore,
+        context: ModelContext
+    ) async throws -> Int {
+        // Build batch request from mutation payloads
+        // Also build a secondary lookup by healthKitSampleId for upsert matching
+        var requests: [CreateEventRequest] = []
+        var mutationsByIndex: [Int: PendingMutation] = [:]
+        var mutationsBySampleId: [String: (index: Int, mutation: PendingMutation)] = [:]
+
+        for (index, mutation) in mutations.enumerated() {
+            do {
+                let request = try JSONDecoder().decode(CreateEventRequest.self, from: mutation.payload)
+                requests.append(request)
+                let requestIndex = requests.count - 1
+                mutationsByIndex[requestIndex] = mutation
+
+                // Build secondary lookup for HealthKit events by sample ID
+                // This handles the case where backend upserts return a different ID
+                if let sampleId = request.healthKitSampleId, !sampleId.isEmpty {
+                    mutationsBySampleId[sampleId] = (index: requestIndex, mutation: mutation)
+                }
+            } catch {
+                Log.sync.error("Failed to decode mutation payload for batch", error: error, context: .with { ctx in
+                    ctx.add("entity_id", mutation.entityId)
+                })
+                // Mark mutation as failed
+                mutation.recordFailure(error: "Failed to decode payload: \(error.localizedDescription)")
+                if mutation.hasExceededRetryLimit {
+                    try? markEntityFailed(mutation, context: context)
+                    context.delete(mutation)
+                }
+            }
+        }
+
+        guard !requests.isEmpty else {
+            return 0
+        }
+
+        Log.sync.info("Sending batch create request", context: .with { ctx in
+            ctx.add("batch_size", requests.count)
+            ctx.add("healthkit_events", mutationsBySampleId.count)
+        })
+
+        // Call batch API
+        let response = try await apiClient.createEventsBatch(requests)
+
+        Log.sync.info("Batch create response received", context: .with { ctx in
+            ctx.add("total", response.total)
+            ctx.add("success", response.success)
+            ctx.add("failed", response.failed)
+        })
+
+        var syncedCount = 0
+
+        // Mark successfully created events as synced
+        for createdEvent in response.created {
+            var matched = false
+
+            // First try: Match by ID (works for new events with client-generated IDs)
+            for (index, mutation) in mutationsByIndex {
+                if mutation.entityId == createdEvent.id {
+                    do {
+                        try localStore.markEventSynced(id: createdEvent.id)
+                        context.delete(mutation)
+                        syncedCount += 1
+                        matched = true
+                        // Only remove from tracking AFTER successful processing
+                        mutationsByIndex.removeValue(forKey: index)
+                        // Also remove from sampleId lookup if present
+                        if let sampleId = createdEvent.healthKitSampleId {
+                            mutationsBySampleId.removeValue(forKey: sampleId)
+                        }
+                    } catch {
+                        Log.sync.warning("Failed to mark event synced", context: .with { ctx in
+                            ctx.add("event_id", createdEvent.id)
+                            ctx.add("error", error.localizedDescription)
+                        })
+                        // Event was created on server, so delete the mutation anyway
+                        // The local event will be updated via pullChanges on next sync
+                        context.delete(mutation)
+                        syncedCount += 1
+                        matched = true
+                        mutationsByIndex.removeValue(forKey: index)
+                        if let sampleId = createdEvent.healthKitSampleId {
+                            mutationsBySampleId.removeValue(forKey: sampleId)
+                        }
+                    }
+                    break
+                }
+            }
+
+            // Second try: Match by healthKitSampleId (handles HealthKit upserts)
+            // When backend upserts an existing HealthKit event, it returns the EXISTING
+            // event's ID, not the client-provided ID. We match by sample ID instead.
+            if !matched, let sampleId = createdEvent.healthKitSampleId,
+               let matchInfo = mutationsBySampleId[sampleId] {
+                let mutation = matchInfo.mutation
+                Log.sync.info("Matched HealthKit event by sample ID (upsert case)", context: .with { ctx in
+                    ctx.add("sample_id", sampleId)
+                    ctx.add("client_id", mutation.entityId)
+                    ctx.add("server_id", createdEvent.id)
+                })
+
+                // Delete the LOCAL duplicate event (the one with client-generated ID)
+                // The "real" event now has the server's ID
+                do {
+                    try localStore.deleteEvent(id: mutation.entityId)
+                    Log.sync.debug("Deleted local duplicate event", context: .with { ctx in
+                        ctx.add("local_id", mutation.entityId)
+                        ctx.add("server_id", createdEvent.id)
+                    })
+                } catch {
+                    // Event might not exist locally (already deleted or never saved)
+                    Log.sync.debug("Could not delete local event (may not exist)", context: .with { ctx in
+                        ctx.add("local_id", mutation.entityId)
+                        ctx.add("error", error.localizedDescription)
+                    })
+                }
+
+                context.delete(mutation)
+                syncedCount += 1
+                mutationsByIndex.removeValue(forKey: matchInfo.index)
+                mutationsBySampleId.removeValue(forKey: sampleId)
+            }
+        }
+
+        // Handle errors for specific events
+        if let errors = response.errors {
+            for batchError in errors {
+                guard let mutation = mutationsByIndex[batchError.index] else { continue }
+
+                // Check if it's a duplicate error (should be treated as success)
+                if batchError.message.lowercased().contains("duplicate") ||
+                   batchError.message.lowercased().contains("unique") {
+                    Log.sync.warning("Batch item duplicate detected", context: .with { ctx in
+                        ctx.add("index", batchError.index)
+                        ctx.add("entity_id", mutation.entityId)
+                        ctx.add("message", batchError.message)
+                    })
+                    // Delete local duplicate and mark as synced
+                    try? deleteLocalDuplicate(mutation, localStore: localStore)
+                    context.delete(mutation)
+                    syncedCount += 1
+                } else {
+                    // Other error - record failure
+                    Log.sync.error("Batch item failed", context: .with { ctx in
+                        ctx.add("index", batchError.index)
+                        ctx.add("entity_id", mutation.entityId)
+                        ctx.add("message", batchError.message)
+                    })
+                    mutation.recordFailure(error: batchError.message)
+                    if mutation.hasExceededRetryLimit {
+                        try? markEntityFailed(mutation, context: context)
+                        context.delete(mutation)
+                        syncedCount += 1
+                    }
+                }
+            }
+        }
+
+        return syncedCount
     }
 
     /// Trip the circuit breaker - enter backoff state
