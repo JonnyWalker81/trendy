@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-15)
 
 **Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** Phase 7 UX Indicators - Sync settings and timestamps
+**Current focus:** Phase 7 UX Indicators - Error persistence and escalation
 
 ## Current Position
 
 Phase: 7 of 7 (UX Indicators)
-Plan: 2 of 4 complete
+Plan: 3 of 4 complete
 Status: In progress
-Last activity: 2026-01-18 — Completed 07-02 sync settings and timestamps
+Last activity: 2026-01-18 — Completed 07-03 error persistence and escalation
 
-Progress: █████████████░░ 93% (25/27 plans complete)
+Progress: ██████████████░ 96% (26/27 plans complete)
 
 ## Recently Resolved
 
@@ -32,16 +32,16 @@ Progress: █████████████░░ 93% (25/27 plans complet
 
 ## Next Action
 
-**Execute 07-03:**
+**Execute 07-04:**
 
-Run `/gsd:execute-phase 7` to continue with Plan 03 (floating indicator)
+Run `/gsd:execute-phase 7` to continue with Plan 04 (final integration)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
-- Average duration: 7.6 min
-- Total execution time: ~189 minutes
+- Total plans completed: 26
+- Average duration: 8.4 min
+- Total execution time: ~217 minutes
 
 **By Phase:**
 
@@ -53,7 +53,7 @@ Run `/gsd:execute-phase 7` to continue with Plan 03 (floating indicator)
 | 4. Code Quality | 2/2 | 27 min | 13.5 min |
 | 5. Sync Engine | 6/6 | 37 min | 6.2 min |
 | 6. Server API | 5/5 | 55 min | 11 min |
-| 7. UX Indicators | 2/4 | ~30 min | ~15 min |
+| 7. UX Indicators | 3/4 | ~58 min | ~19 min |
 
 ## Accumulated Context
 
@@ -77,6 +77,8 @@ Recent decisions affecting current work:
 | 06-05 | RawRequest pattern for validation aggregation | String/interface{} fields defer parsing to collect all errors |
 | 07-02 | 10-entry cap for sync history | Prevents unbounded UserDefaults growth while showing useful history |
 | 07-02 | Static formatters for timestamps | Avoids allocation churn per RESEARCH.md pitfalls |
+| 07-03 | Error persistence until dismissed | Errors don't auto-dismiss; user must dismiss or sync must succeed |
+| 07-03 | Escalation at 3+ consecutive failures | Visual prominence (red border) after repeated failures |
 
 ### Pending Todos
 
@@ -93,6 +95,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-01-18
-Stopped at: Completed 07-02-PLAN.md (sync settings and timestamps)
+Stopped at: Completed 07-03-PLAN.md (error persistence and escalation)
 Resume file: None
-Next: 07-03-PLAN.md (floating indicator)
+Next: 07-04-PLAN.md (final integration)
