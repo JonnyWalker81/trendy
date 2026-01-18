@@ -18,16 +18,24 @@ extension HealthKitService {
     func processWorkoutSample(_ workout: HKWorkout, isBulkImport: Bool = false) async {
         let sampleId = workout.uuid.uuidString
 
-        // In-memory duplicate check (fast path)
+        // In-memory duplicate check with early claim to prevent race condition.
+        // HKObserverQuery can fire multiple times rapidly (app foreground + background delivery).
+        // Without early claim, concurrent calls both pass this check before either saves,
+        // resulting in duplicate events with different UUIDv7 IDs.
         guard !processedSampleIds.contains(sampleId) else { return }
 
-        // Database-level duplicate check (handles race conditions where observer fires twice)
+        // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
+        // This acts as a synchronous mutex - only the first call to reach this point
+        // will proceed, subsequent concurrent calls will exit at the guard above.
+        processedSampleIds.insert(sampleId)
+
+        // Database-level duplicate check (handles app restarts where in-memory set is reset)
         if await eventExistsWithHealthKitSampleId(sampleId) {
             Log.data.debug("Workout already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
                 ctx.add("workoutType", workout.workoutActivityType.name)
             })
-            markSampleAsProcessed(sampleId)
+            saveProcessedSampleIds() // Persist the claim
             return
         }
 
@@ -42,7 +50,7 @@ extension HealthKitService {
                 ctx.add("endDate", workout.endDate.ISO8601Format())
                 ctx.add("workoutType", workout.workoutActivityType.name)
             })
-            markSampleAsProcessed(sampleId)
+            saveProcessedSampleIds() // Persist the claim
             return
         }
 

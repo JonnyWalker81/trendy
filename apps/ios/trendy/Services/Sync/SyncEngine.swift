@@ -414,6 +414,8 @@ actor SyncEngine {
     }
 
     /// Queue a mutation for sync. The mutation will be flushed on the next sync.
+    /// Deduplicates by entityId - if a pending mutation already exists for the same
+    /// entity with the same operation, the new mutation is skipped.
     func queueMutation(
         entityType: MutationEntityType,
         operation: MutationOperation,
@@ -421,6 +423,31 @@ actor SyncEngine {
         payload: Data
     ) async throws {
         let context = ModelContext(modelContainer)
+
+        // DEDUPLICATION: Check if a pending mutation already exists for this entity
+        // This prevents duplicate mutations from being queued when multiple code paths
+        // (e.g., syncEventToBackend, queueMutationsForUnsyncedEvents, resyncHealthKitEvents)
+        // try to sync the same event.
+        let entityTypeRaw = entityType.rawValue
+        let operationRaw = operation.rawValue
+        let existingDescriptor = FetchDescriptor<PendingMutation>(
+            predicate: #Predicate {
+                $0.entityId == entityId &&
+                $0.entityTypeRaw == entityTypeRaw &&
+                $0.operationRaw == operationRaw
+            }
+        )
+
+        let existingCount = (try? context.fetchCount(existingDescriptor)) ?? 0
+        if existingCount > 0 {
+            Log.sync.debug("Skipping duplicate mutation (already pending)", context: .with { ctx in
+                ctx.add("entity_type", entityType.rawValue)
+                ctx.add("operation", operation.rawValue)
+                ctx.add("entity_id", entityId)
+                ctx.add("existing_count", existingCount)
+            })
+            return
+        }
 
         let mutation = PendingMutation(
             entityType: entityType,

@@ -274,15 +274,18 @@ extension HealthKitService {
     func processMindfulnessSample(_ sample: HKCategorySample, isBulkImport: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
-        // In-memory duplicate check (fast path)
+        // In-memory duplicate check with early claim to prevent race condition.
         guard !processedSampleIds.contains(sampleId) else { return }
 
-        // Database-level duplicate check (handles race conditions)
+        // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
+        processedSampleIds.insert(sampleId)
+
+        // Database-level duplicate check (handles app restarts where in-memory set is reset)
         if await eventExistsWithHealthKitSampleId(sampleId) {
             Log.data.debug("Mindfulness session already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
             })
-            markSampleAsProcessed(sampleId)
+            saveProcessedSampleIds() // Persist the claim
             return
         }
 
@@ -325,15 +328,18 @@ extension HealthKitService {
     func processWaterSample(_ sample: HKQuantitySample, isBulkImport: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
-        // In-memory duplicate check (fast path)
+        // In-memory duplicate check with early claim to prevent race condition.
         guard !processedSampleIds.contains(sampleId) else { return }
 
-        // Database-level duplicate check (handles race conditions)
+        // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
+        processedSampleIds.insert(sampleId)
+
+        // Database-level duplicate check (handles app restarts where in-memory set is reset)
         if await eventExistsWithHealthKitSampleId(sampleId) {
             Log.data.debug("Water intake already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
             })
-            markSampleAsProcessed(sampleId)
+            saveProcessedSampleIds() // Persist the claim
             return
         }
 
