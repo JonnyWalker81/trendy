@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
+	"github.com/JonnyWalker81/trendy/backend/internal/repository"
 )
 
 // mockEventRepository is a mock implementation of EventRepository for testing
@@ -155,6 +156,76 @@ func (m *mockEventRepository) UpsertHealthKitEventsBatch(ctx context.Context, ev
 	return result, createdIDs, nil
 }
 
+func (m *mockEventRepository) GetByIDs(ctx context.Context, ids []string) ([]models.Event, error) {
+	var result []models.Event
+	for _, id := range ids {
+		if event, ok := m.events[id]; ok {
+			result = append(result, *event)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockEventRepository) Upsert(ctx context.Context, event *models.Event) (*models.Event, bool, error) {
+	m.upsertCalls++
+	// Check if event already exists by ID
+	if existing, ok := m.events[event.ID]; ok && existing.UserID == event.UserID {
+		// Update existing event
+		existing.Timestamp = event.Timestamp
+		existing.Notes = event.Notes
+		existing.Properties = event.Properties
+		existing.UpdatedAt = time.Now()
+		return existing, false, nil // wasCreated = false
+	}
+
+	// Create new event
+	event.CreatedAt = time.Now()
+	event.UpdatedAt = time.Now()
+	m.events[event.ID] = event
+	return event, true, nil // wasCreated = true
+}
+
+func (m *mockEventRepository) UpsertBatch(ctx context.Context, events []models.Event) ([]models.Event, []repository.UpsertResult, error) {
+	var result []models.Event
+	var results []repository.UpsertResult
+
+	for i := range events {
+		event := &events[i]
+		if event.ID == "" {
+			results = append(results, repository.UpsertResult{
+				Index:  i,
+				ID:     "",
+				Action: "failed",
+				Error:  nil,
+			})
+			continue
+		}
+
+		upserted, wasCreated, err := m.Upsert(ctx, event)
+		if err != nil {
+			results = append(results, repository.UpsertResult{
+				Index:  i,
+				ID:     event.ID,
+				Action: "failed",
+				Error:  err,
+			})
+			continue
+		}
+
+		result = append(result, *upserted)
+		action := "deduplicated"
+		if wasCreated {
+			action = "created"
+		}
+		results = append(results, repository.UpsertResult{
+			Index:  i,
+			ID:     upserted.ID,
+			Action: action,
+		})
+	}
+	return result, results, nil
+}
+
 // mockEventTypeRepository is a mock implementation of EventTypeRepository
 type mockEventTypeRepository struct {
 	eventTypes map[string]*models.EventType
@@ -274,19 +345,25 @@ func TestCreateEvent_HealthKit_Idempotency(t *testing.T) {
 	}
 
 	// First import
-	event1, err := service.CreateEvent(ctx, userID, req)
+	event1, wasCreated, err := service.CreateEvent(ctx, userID, req)
 	if err != nil {
 		t.Fatalf("First CreateEvent failed: %v", err)
+	}
+	if !wasCreated {
+		t.Error("Expected wasCreated=true for first create")
 	}
 
 	// Import same event 10 more times
 	for i := 0; i < 10; i++ {
-		event, err := service.CreateEvent(ctx, userID, req)
+		event, wasCreated, err := service.CreateEvent(ctx, userID, req)
 		if err != nil {
 			t.Fatalf("CreateEvent %d failed: %v", i+2, err)
 		}
 		if event.ID != event1.ID {
 			t.Errorf("Expected same event ID on re-import, got different: %s vs %s", event.ID, event1.ID)
+		}
+		if wasCreated {
+			t.Errorf("Expected wasCreated=false for duplicate, iteration %d", i+2)
 		}
 	}
 
@@ -340,7 +417,7 @@ func TestCreateEvent_HealthKit_UpdatesValues(t *testing.T) {
 		Notes:             ptr("5000 steps"),
 	}
 
-	event1, _ := service.CreateEvent(ctx, userID, req1)
+	event1, _, _ := service.CreateEvent(ctx, userID, req1)
 
 	// Re-import with updated values
 	req2 := &models.CreateEventRequest{
@@ -351,7 +428,7 @@ func TestCreateEvent_HealthKit_UpdatesValues(t *testing.T) {
 		Notes:             ptr("5500 steps"), // Updated value
 	}
 
-	event2, _ := service.CreateEvent(ctx, userID, req2)
+	event2, _, _ := service.CreateEvent(ctx, userID, req2)
 
 	// Verify same event was updated
 	if event2.ID != event1.ID {
@@ -393,12 +470,12 @@ func TestCreateEvent_MultipleWorkoutsAtSameTimestamp(t *testing.T) {
 		HealthKitSampleID: ptr("workout-def456"), // Different sample ID
 	}
 
-	event1, err := service.CreateEvent(ctx, userID, req1)
+	event1, _, err := service.CreateEvent(ctx, userID, req1)
 	if err != nil {
 		t.Fatalf("First workout creation failed: %v", err)
 	}
 
-	event2, err := service.CreateEvent(ctx, userID, req2)
+	event2, _, err := service.CreateEvent(ctx, userID, req2)
 	if err != nil {
 		t.Fatalf("Second workout creation failed: %v", err)
 	}
@@ -446,12 +523,12 @@ func TestCreateEvent_ManualAndHealthKitAtSameTimestamp(t *testing.T) {
 		HealthKitSampleID: ptr("steps-2025-01-15"),
 	}
 
-	event1, err := service.CreateEvent(ctx, userID, manualReq)
+	event1, _, err := service.CreateEvent(ctx, userID, manualReq)
 	if err != nil {
 		t.Fatalf("Manual event creation failed: %v", err)
 	}
 
-	event2, err := service.CreateEvent(ctx, userID, healthKitReq)
+	event2, _, err := service.CreateEvent(ctx, userID, healthKitReq)
 	if err != nil {
 		t.Fatalf("HealthKit event creation failed: %v", err)
 	}
@@ -530,7 +607,7 @@ func TestCreateEventsBatch_HealthKit_Idempotency(t *testing.T) {
 		t.Errorf("Expected 3 events after re-import, got %d", len(events))
 	}
 
-	// Verify changelog: 3 creates + 3 updates
+	// Verify changelog: 3 creates only (per CONTEXT.md, batch imports skip UPDATE entries)
 	createCount := 0
 	updateCount := 0
 	for _, entry := range changeLogRepo.entries {
@@ -543,8 +620,8 @@ func TestCreateEventsBatch_HealthKit_Idempotency(t *testing.T) {
 	if createCount != 3 {
 		t.Errorf("Expected 3 creates in changelog, got %d", createCount)
 	}
-	if updateCount != 3 {
-		t.Errorf("Expected 3 updates in changelog, got %d", updateCount)
+	if updateCount != 0 {
+		t.Errorf("Expected 0 updates in changelog (skipped in batch), got %d", updateCount)
 	}
 }
 
@@ -702,7 +779,7 @@ func TestCreateEventsBatch_PartialDuplicates(t *testing.T) {
 		t.Errorf("Expected 5 events, got %d", len(events))
 	}
 
-	// Verify changelog: first batch 2 creates, second batch 3 creates + 2 updates
+	// Verify changelog: 5 creates total (batch imports skip UPDATE entries)
 	createCount := 0
 	updateCount := 0
 	for _, entry := range changeLogRepo.entries {
@@ -715,7 +792,7 @@ func TestCreateEventsBatch_PartialDuplicates(t *testing.T) {
 	if createCount != 5 {
 		t.Errorf("Expected 5 creates in changelog, got %d", createCount)
 	}
-	if updateCount != 2 {
-		t.Errorf("Expected 2 updates in changelog, got %d", updateCount)
+	if updateCount != 0 {
+		t.Errorf("Expected 0 updates in changelog (skipped in batch), got %d", updateCount)
 	}
 }

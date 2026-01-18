@@ -25,15 +25,23 @@ func NewEventService(eventRepo repository.EventRepository, eventTypeRepo reposit
 	}
 }
 
-func (s *eventService) CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, error) {
+func (s *eventService) CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, bool, error) {
+	// Validate UUIDv7 if client-provided ID
+	if req.ID != nil && *req.ID != "" {
+		if err := ValidateUUIDv7(*req.ID); err != nil {
+			// Return the validation error - handler translates to ProblemDetails
+			return nil, false, err
+		}
+	}
+
 	// Validate event type exists and belongs to user
 	eventType, err := s.eventTypeRepo.GetByID(ctx, req.EventTypeID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid event type: %w", err)
+		return nil, false, fmt.Errorf("invalid event type: %w", err)
 	}
 
 	if eventType.UserID != userID {
-		return nil, fmt.Errorf("event type does not belong to user")
+		return nil, false, fmt.Errorf("event type does not belong to user")
 	}
 
 	// Set default source_type if not provided
@@ -62,33 +70,45 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 		event.ID = *req.ID
 	}
 
-	// Check if this is a HealthKit event that should use upsert
+	// Determine upsert strategy based on event type
+	// - HealthKit events: upsert by sample ID (immutable data, dedup by sample)
+	// - Events with client ID: upsert by event ID (idempotent creates)
+	// - Events without ID: standard insert
 	isHealthKit := sourceType == "healthkit" &&
 		req.HealthKitSampleID != nil &&
 		*req.HealthKitSampleID != ""
+	hasClientID := req.ID != nil && *req.ID != ""
 
 	var created *models.Event
+	var wasCreated bool
 	var operation models.Operation
 
 	if isHealthKit {
 		// Use upsert for HealthKit events - idempotent by sample ID
-		var wasCreated bool
 		created, wasCreated, err = s.eventRepo.UpsertHealthKitEvent(ctx, event)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		if wasCreated {
-			operation = models.OperationCreate
-		} else {
-			operation = models.OperationUpdate
+	} else if hasClientID {
+		// Use upsert for events with client-provided ID - idempotent by event ID
+		created, wasCreated, err = s.eventRepo.Upsert(ctx, event)
+		if err != nil {
+			return nil, false, err
 		}
 	} else {
-		// Standard insert for non-HealthKit events
+		// Standard insert for events without client ID
 		created, err = s.eventRepo.Create(ctx, event)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		wasCreated = true
+	}
+
+	// Determine operation for change log
+	if wasCreated {
 		operation = models.OperationCreate
+	} else {
+		operation = models.OperationUpdate
 	}
 
 	// Append to change log with correct operation
@@ -104,7 +124,7 @@ func (s *eventService) CreateEvent(ctx context.Context, userID string, req *mode
 		log.Warn("failed to append to change log", logger.Err(err), logger.String("event_id", created.ID))
 	}
 
-	return created, nil
+	return created, wasCreated, nil
 }
 
 func (s *eventService) CreateEventsBatch(ctx context.Context, userID string, req *models.BatchCreateEventsRequest) (*models.BatchCreateEventsResponse, error) {

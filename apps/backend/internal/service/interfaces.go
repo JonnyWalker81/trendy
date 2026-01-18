@@ -9,7 +9,9 @@ import (
 
 // EventService defines the interface for event business logic
 type EventService interface {
-	CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, error)
+	// CreateEvent creates or upserts an event. Returns (event, wasCreated, error).
+	// wasCreated is true for new creates, false for duplicates (idempotent behavior).
+	CreateEvent(ctx context.Context, userID string, req *models.CreateEventRequest) (*models.Event, bool, error)
 	CreateEventsBatch(ctx context.Context, userID string, req *models.BatchCreateEventsRequest) (*models.BatchCreateEventsResponse, error)
 	GetEvent(ctx context.Context, userID, eventID string) (*models.Event, error)
 	GetUserEvents(ctx context.Context, userID string, limit, offset int) ([]models.Event, error)

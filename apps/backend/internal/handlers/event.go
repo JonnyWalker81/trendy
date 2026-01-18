@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/JonnyWalker81/trendy/backend/internal/apierror"
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -26,29 +28,50 @@ func NewEventHandler(eventService service.EventService) *EventHandler {
 func (h *EventHandler) CreateEvent(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		requestID := apierror.GetRequestID(c)
+		apierror.WriteProblem(c, apierror.NewUnauthorizedError(requestID))
 		return
 	}
 
 	var req models.CreateEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		requestID := apierror.GetRequestID(c)
+		apierror.WriteProblem(c, apierror.NewBadRequestError(requestID, err.Error(), "Invalid request format"))
 		return
 	}
 
-	event, err := h.eventService.CreateEvent(c.Request.Context(), userID.(string), &req)
+	event, wasCreated, err := h.eventService.CreateEvent(c.Request.Context(), userID.(string), &req)
 	if err != nil {
-		// Check for unique constraint violation (duplicate event)
-		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") ||
-			strings.Contains(err.Error(), "23505") { // PostgreSQL unique violation code
-			c.JSON(http.StatusConflict, gin.H{"error": "duplicate event: an event with this type and timestamp already exists", "detail": err.Error()})
+		requestID := apierror.GetRequestID(c)
+
+		// Handle UUIDv7 validation errors
+		if errors.Is(err, service.ErrInvalidUUID) || errors.Is(err, service.ErrNotUUIDv7) {
+			apierror.WriteProblem(c, apierror.NewInvalidUUIDError(requestID, "id", *req.ID))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, service.ErrFutureTimestamp) {
+			apierror.WriteProblem(c, apierror.NewFutureTimestampError(requestID, "id"))
+			return
+		}
+
+		// Handle unique constraint violation (shouldn't happen with upsert, but just in case)
+		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") ||
+			strings.Contains(err.Error(), "23505") { // PostgreSQL unique violation code
+			apierror.WriteProblem(c, apierror.NewConflictError(requestID, "An event with this ID already exists"))
+			return
+		}
+
+		// Internal error
+		apierror.WriteProblem(c, apierror.NewInternalError(requestID))
 		return
 	}
 
-	c.JSON(http.StatusCreated, event)
+	// Return 201 for new creates, 200 for duplicates (idempotent)
+	if wasCreated {
+		c.JSON(http.StatusCreated, event)
+	} else {
+		c.JSON(http.StatusOK, event)
+	}
 }
 
 // CreateEventsBatch handles POST /api/v1/events/batch
