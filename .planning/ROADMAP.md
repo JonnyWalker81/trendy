@@ -15,7 +15,7 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 - [x] **Phase 3: Geofence Reliability** - Persistent monitoring, re-registration, health monitoring
 - [x] **Phase 4: Code Quality** - Split HealthKitService, separate GeofenceManager concerns
 - [x] **Phase 5: Sync Engine** - Offline-first CRUD, automatic sync, mutation persistence
-- [ ] **Phase 6: Server API** - UUIDv7 support, deduplication, sync status endpoint
+- [x] **Phase 6: Server API** - UUIDv7 support, deduplication, sync status endpoint
 - [ ] **Phase 7: UX Indicators** - Sync status, timestamps, error surfacing, progress counts
 
 ## Phase Details
@@ -122,8 +122,8 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — RFC 9457 Problem Details error infrastructure
-- [ ] 06-02-PLAN.md — UUIDv7 validation and idempotent event creation
-- [ ] 06-03-PLAN.md — Sync status endpoint (GET /api/v1/me/sync)
+- [x] 06-02-PLAN.md — UUIDv7 validation and idempotent event creation
+- [x] 06-03-PLAN.md — Sync status endpoint (GET /api/v1/me/sync)
 
 ### Phase 7: UX Indicators
 **Goal**: Clear sync state visibility for users
@@ -153,7 +153,7 @@ Note: Phases 2 and 3 can execute in parallel (no dependencies on each other).
 | 3. Geofence Reliability | 3/3 | Complete | 2026-01-16 |
 | 4. Code Quality | 2/2 | Complete | 2026-01-16 |
 | 5. Sync Engine | 6/6 | Complete | 2026-01-17 |
-| 6. Server API | 1/3 | In progress | - |
+| 6. Server API | 3/3 | Complete | 2026-01-17 |
 | 7. UX Indicators | 0/? | Not started | - |
 
 ---

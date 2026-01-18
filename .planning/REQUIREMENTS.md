@@ -33,10 +33,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Server API
 
-- [ ] **API-01**: Server accepts events with client-generated IDs (UUIDv7) for idempotent creates
-- [ ] **API-02**: Server deduplicates HealthKit samples by external_id (same sample not imported twice)
-- [ ] **API-03**: Server provides sync status endpoint (pending mutations, last processed timestamp)
-- [ ] **API-04**: Server returns clear error responses that client can display to user
+- [x] **API-01**: Server accepts events with client-generated IDs (UUIDv7) for idempotent creates
+- [x] **API-02**: Server deduplicates HealthKit samples by external_id (same sample not imported twice)
+- [x] **API-03**: Server provides sync status endpoint (pending mutations, last processed timestamp)
+- [x] **API-04**: Server returns clear error responses that client can display to user
 
 ### Code Quality (iOS)
 
@@ -112,10 +112,10 @@ Which phases cover which requirements. Updated by create-roadmap.
 | SYNC-02 | Phase 5 | Complete |
 | SYNC-03 | Phase 5 | Complete |
 | SYNC-04 | Phase 5 | Complete |
-| API-01 | Phase 6 | Pending |
-| API-02 | Phase 6 | Pending |
-| API-03 | Phase 6 | Pending |
-| API-04 | Phase 6 | Pending |
+| API-01 | Phase 6 | Complete |
+| API-02 | Phase 6 | Complete |
+| API-03 | Phase 6 | Complete |
+| API-04 | Phase 6 | Complete |
 | CODE-01 | Phase 4 | Complete |
 | CODE-02 | Phase 1 | Complete |
 | CODE-03 | Phase 4 | Complete |
@@ -132,4 +132,4 @@ Which phases cover which requirements. Updated by create-roadmap.
 
 ---
 *Requirements defined: 2026-01-15*
-*Last updated: 2026-01-17 after Phase 5 completion (SYNC-01 through SYNC-04 complete)*
+*Last updated: 2026-01-17 after Phase 6 completion (API-01 through API-04 complete)*
