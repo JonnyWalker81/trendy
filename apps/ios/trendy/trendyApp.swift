@@ -43,6 +43,8 @@ struct trendyApp: App {
     @State private var authViewModel: AuthViewModel
     @State private var themeManager: ThemeManager
     @State private var insightsViewModel: InsightsViewModel
+    @State private var syncStatusViewModel = SyncStatusViewModel()
+    @State private var syncHistoryStore = SyncHistoryStore()
 
     // MARK: - SwiftData
 
@@ -416,6 +418,8 @@ struct trendyApp: App {
                 .environment(authViewModel)
                 .environment(themeManager)
                 .environment(insightsViewModel)
+                .environment(syncStatusViewModel)
+                .environment(syncHistoryStore)
                 .environment(\.supabaseService, supabaseService)
                 .environment(\.apiClient, apiClient)
                 .environment(\.foundationModelService, foundationModelService)
