@@ -66,7 +66,7 @@ dev-web:
 # Run backend in development mode
 dev-backend:
     @echo "🚀 Starting backend..."
-    cd apps/backend && go run ./cmd/trendy-api serve
+    cd apps/backend && set -a && [ -f .env ] && . ./.env && set +a && go run ./cmd/trendy-api serve
 
 # Run both web and backend in development (requires tmux or run in separate terminals)
 dev:
