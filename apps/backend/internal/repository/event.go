@@ -793,3 +793,87 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 
 	return allResults, createdIDs, nil
 }
+
+// CountByUser returns total events for a user
+func (r *eventRepository) CountByUser(ctx context.Context, userID string) (int64, error) {
+	query := map[string]interface{}{
+		"user_id": fmt.Sprintf("eq.%s", userID),
+		"select":  "id",
+	}
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count events: %w", err)
+	}
+	var events []struct{ ID string }
+	if err := json.Unmarshal(body, &events); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	return int64(len(events)), nil
+}
+
+// CountHealthKitByUser returns HealthKit events for a user
+func (r *eventRepository) CountHealthKitByUser(ctx context.Context, userID string) (int64, error) {
+	query := map[string]interface{}{
+		"user_id":             fmt.Sprintf("eq.%s", userID),
+		"healthkit_sample_id": "not.is.null",
+		"select":              "id",
+	}
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count HealthKit events: %w", err)
+	}
+	var events []struct{ ID string }
+	if err := json.Unmarshal(body, &events); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	return int64(len(events)), nil
+}
+
+// GetLatestTimestamp returns the most recent event updated_at for a user
+func (r *eventRepository) GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	query := map[string]interface{}{
+		"user_id": fmt.Sprintf("eq.%s", userID),
+		"select":  "updated_at",
+		"order":   "updated_at.desc",
+		"limit":   1,
+	}
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest event timestamp: %w", err)
+	}
+	var events []struct {
+		UpdatedAt *time.Time `json:"updated_at"`
+	}
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+	return events[0].UpdatedAt, nil
+}
+
+// GetLatestHealthKitTimestamp returns the most recent HealthKit event timestamp for a user
+func (r *eventRepository) GetLatestHealthKitTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	query := map[string]interface{}{
+		"user_id":             fmt.Sprintf("eq.%s", userID),
+		"healthkit_sample_id": "not.is.null",
+		"select":              "updated_at",
+		"order":               "updated_at.desc",
+		"limit":               1,
+	}
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest HealthKit timestamp: %w", err)
+	}
+	var events []struct {
+		UpdatedAt *time.Time `json:"updated_at"`
+	}
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+	return events[0].UpdatedAt, nil
+}

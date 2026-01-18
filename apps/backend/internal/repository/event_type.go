@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/JonnyWalker81/trendy/backend/internal/models"
 	"github.com/JonnyWalker81/trendy/backend/pkg/supabase"
@@ -132,4 +133,45 @@ func (r *eventTypeRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to delete event type: %w", err)
 	}
 	return nil
+}
+
+// CountByUser returns total event types for a user
+func (r *eventTypeRepository) CountByUser(ctx context.Context, userID string) (int64, error) {
+	query := map[string]interface{}{
+		"user_id": fmt.Sprintf("eq.%s", userID),
+		"select":  "id",
+	}
+	body, err := r.client.Query("event_types", query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count event types: %w", err)
+	}
+	var eventTypes []struct{ ID string }
+	if err := json.Unmarshal(body, &eventTypes); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	return int64(len(eventTypes)), nil
+}
+
+// GetLatestTimestamp returns the most recent event_type updated_at for a user
+func (r *eventTypeRepository) GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	query := map[string]interface{}{
+		"user_id": fmt.Sprintf("eq.%s", userID),
+		"select":  "updated_at",
+		"order":   "updated_at.desc",
+		"limit":   1,
+	}
+	body, err := r.client.Query("event_types", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest event_type timestamp: %w", err)
+	}
+	var eventTypes []struct {
+		UpdatedAt *time.Time `json:"updated_at"`
+	}
+	if err := json.Unmarshal(body, &eventTypes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if len(eventTypes) == 0 {
+		return nil, nil
+	}
+	return eventTypes[0].UpdatedAt, nil
 }

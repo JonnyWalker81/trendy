@@ -82,6 +82,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	propertyDefService := service.NewPropertyDefinitionService(propertyDefRepo, eventTypeRepo, changeLogRepo)
 	geofenceService := service.NewGeofenceService(geofenceRepo, changeLogRepo)
 	intelligenceService := service.NewIntelligenceService(eventRepo, eventTypeRepo, insightRepo, aggregateRepo, streakRepo)
+	syncService := service.NewSyncService(eventRepo, eventTypeRepo, changeLogRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
@@ -92,6 +93,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	geofenceHandler := handlers.NewGeofenceHandler(geofenceService)
 	insightsHandler := handlers.NewInsightsHandler(intelligenceService)
 	changesHandler := handlers.NewChangesHandler(changeLogRepo)
+	syncHandler := handlers.NewSyncHandler(syncService)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -132,6 +134,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 		protected := v1.Group("")
 		protected.Use(middleware.Auth(supabaseClient))
 		{
+			// Sync status route
+			protected.GET("/me/sync", syncHandler.GetSyncStatus)
+
 			// Change feed routes (for sync)
 			protected.GET("/changes", changesHandler.GetChanges)
 			protected.GET("/changes/latest-cursor", changesHandler.GetLatestCursor)

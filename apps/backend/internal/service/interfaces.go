@@ -71,3 +71,8 @@ type IntelligenceService interface {
 	GetWeeklySummary(ctx context.Context, userID string) ([]models.WeeklySummary, error)
 	GetStreaks(ctx context.Context, userID string) ([]models.Streak, error)
 }
+
+// SyncService provides sync status information for clients
+type SyncService interface {
+	GetSyncStatus(ctx context.Context, userID string) (*SyncStatus, error)
+}

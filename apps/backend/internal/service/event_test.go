@@ -226,6 +226,52 @@ func (m *mockEventRepository) UpsertBatch(ctx context.Context, events []models.E
 	return result, results, nil
 }
 
+func (m *mockEventRepository) CountByUser(ctx context.Context, userID string) (int64, error) {
+	var count int64
+	for _, event := range m.events {
+		if event.UserID == userID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *mockEventRepository) CountHealthKitByUser(ctx context.Context, userID string) (int64, error) {
+	var count int64
+	for _, event := range m.events {
+		if event.UserID == userID && event.HealthKitSampleID != nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *mockEventRepository) GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	var latest *time.Time
+	for _, event := range m.events {
+		if event.UserID == userID {
+			if latest == nil || event.UpdatedAt.After(*latest) {
+				t := event.UpdatedAt
+				latest = &t
+			}
+		}
+	}
+	return latest, nil
+}
+
+func (m *mockEventRepository) GetLatestHealthKitTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	var latest *time.Time
+	for _, event := range m.events {
+		if event.UserID == userID && event.HealthKitSampleID != nil {
+			if latest == nil || event.UpdatedAt.After(*latest) {
+				t := event.UpdatedAt
+				latest = &t
+			}
+		}
+	}
+	return latest, nil
+}
+
 // mockEventTypeRepository is a mock implementation of EventTypeRepository
 type mockEventTypeRepository struct {
 	eventTypes map[string]*models.EventType
@@ -275,6 +321,29 @@ func (m *mockEventTypeRepository) Update(ctx context.Context, id string, et *mod
 func (m *mockEventTypeRepository) Delete(ctx context.Context, id string) error {
 	delete(m.eventTypes, id)
 	return nil
+}
+
+func (m *mockEventTypeRepository) CountByUser(ctx context.Context, userID string) (int64, error) {
+	var count int64
+	for _, et := range m.eventTypes {
+		if et.UserID == userID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *mockEventTypeRepository) GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error) {
+	var latest *time.Time
+	for _, et := range m.eventTypes {
+		if et.UserID == userID {
+			if latest == nil || et.UpdatedAt.After(*latest) {
+				t := et.UpdatedAt
+				latest = &t
+			}
+		}
+	}
+	return latest, nil
 }
 
 // mockChangeLogRepository is a mock implementation of ChangeLogRepository

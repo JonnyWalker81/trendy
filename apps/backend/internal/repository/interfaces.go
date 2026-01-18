@@ -42,6 +42,14 @@ type EventRepository interface {
 	UpsertHealthKitEventsBatch(ctx context.Context, events []models.Event) ([]models.Event, []string, error)
 	// GetByHealthKitSampleIDs retrieves events by their HealthKit sample IDs for a user.
 	GetByHealthKitSampleIDs(ctx context.Context, userID string, sampleIDs []string) ([]models.Event, error)
+	// CountByUser returns total events for a user
+	CountByUser(ctx context.Context, userID string) (int64, error)
+	// CountHealthKitByUser returns HealthKit events for a user
+	CountHealthKitByUser(ctx context.Context, userID string) (int64, error)
+	// GetLatestTimestamp returns the most recent event updated_at for a user
+	GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error)
+	// GetLatestHealthKitTimestamp returns the most recent HealthKit event timestamp for a user
+	GetLatestHealthKitTimestamp(ctx context.Context, userID string) (*time.Time, error)
 }
 
 // EventTypeRepository defines the interface for event type data access
@@ -51,6 +59,10 @@ type EventTypeRepository interface {
 	GetByUserID(ctx context.Context, userID string) ([]models.EventType, error)
 	Update(ctx context.Context, id string, eventType *models.EventType) (*models.EventType, error)
 	Delete(ctx context.Context, id string) error
+	// CountByUser returns total event types for a user
+	CountByUser(ctx context.Context, userID string) (int64, error)
+	// GetLatestTimestamp returns the most recent event_type updated_at for a user
+	GetLatestTimestamp(ctx context.Context, userID string) (*time.Time, error)
 }
 
 // UserRepository defines the interface for user data access
