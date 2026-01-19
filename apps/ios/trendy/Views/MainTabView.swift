@@ -141,6 +141,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var mainTabContent: some View {
         TabView(selection: $selectedTab) {
+            // Dashboard is the default tab - render immediately for fast startup
             BubblesView()
                 .tabItem {
                     Label("Dashboard", systemImage: "square.grid.2x2.fill")
@@ -148,28 +149,30 @@ struct MainTabView: View {
                 .tag(0)
                 .accessibilityIdentifier("dashboardTab")
 
-            EventListView()
+            // Non-default tabs wrapped in LazyView to defer rendering until selected
+            // This prevents the 2+ second startup hang from eager TabView pre-rendering
+            LazyView(EventListView())
                 .tabItem {
                     Label("List", systemImage: "list.bullet")
                 }
                 .tag(1)
                 .accessibilityIdentifier("eventListTab")
 
-            CalendarView()
+            LazyView(CalendarView())
                 .tabItem {
                     Label("Calendar", systemImage: "calendar")
                 }
                 .tag(2)
                 .accessibilityIdentifier("calendarTab")
 
-            AnalyticsView()
+            LazyView(AnalyticsView())
                 .tabItem {
                     Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .tag(3)
                 .accessibilityIdentifier("analyticsTab")
 
-            EventTypeSettingsView()
+            LazyView(EventTypeSettingsView())
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
