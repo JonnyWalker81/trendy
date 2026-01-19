@@ -36,14 +36,14 @@ const (
 
 // Titles for each error type - human-readable summaries
 const (
-	TitleValidation       = "Validation Error"
-	TitleNotFound         = "Resource Not Found"
-	TitleConflict         = "Resource Conflict"
-	TitleRateLimit        = "Rate Limit Exceeded"
-	TitleUnauthorized     = "Authentication Required"
-	TitleForbidden        = "Permission Denied"
-	TitleInternal         = "Internal Server Error"
-	TitleInvalidUUID      = "Invalid UUID Format"
-	TitleFutureTimestamp  = "Future Timestamp Not Allowed"
-	TitleBadRequest       = "Bad Request"
+	TitleValidation      = "Validation Error"
+	TitleNotFound        = "Resource Not Found"
+	TitleConflict        = "Resource Conflict"
+	TitleRateLimit       = "Rate Limit Exceeded"
+	TitleUnauthorized    = "Authentication Required"
+	TitleForbidden       = "Permission Denied"
+	TitleInternal        = "Internal Server Error"
+	TitleInvalidUUID     = "Invalid UUID Format"
+	TitleFutureTimestamp = "Future Timestamp Not Allowed"
+	TitleBadRequest      = "Bad Request"
 )

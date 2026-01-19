@@ -6,10 +6,10 @@ package apierror
 // See https://www.rfc-editor.org/rfc/rfc9457.html
 type ProblemDetails struct {
 	// RFC 9457 standard fields
-	Type     string `json:"type"`              // URI reference identifying the problem type
-	Title    string `json:"title"`             // Short human-readable summary
-	Status   int    `json:"status"`            // HTTP status code
-	Detail   string `json:"detail,omitempty"`  // Human-readable explanation specific to this occurrence
+	Type     string `json:"type"`               // URI reference identifying the problem type
+	Title    string `json:"title"`              // Short human-readable summary
+	Status   int    `json:"status"`             // HTTP status code
+	Detail   string `json:"detail,omitempty"`   // Human-readable explanation specific to this occurrence
 	Instance string `json:"instance,omitempty"` // URI reference for this specific occurrence
 
 	// Extension fields for trendy API

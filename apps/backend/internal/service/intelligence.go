@@ -507,11 +507,11 @@ func (s *intelligenceService) computeStreaks(ctx context.Context, userID string,
 					ValidUntil:   validUntil,
 					EventTypeA:   &et,
 					Metadata: map[string]interface{}{
-						"is_longest":     isNew,
-						"previous_best":  longest.Length,
-						"start_date":     current.StartDate,
-						"streak_type":    "current",
-						"is_active":      current.IsActive,
+						"is_longest":    isNew,
+						"previous_best": longest.Length,
+						"start_date":    current.StartDate,
+						"streak_type":   "current",
+						"is_active":     current.IsActive,
 					},
 				}
 

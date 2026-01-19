@@ -26,14 +26,14 @@ const (
 
 // ChangeEntry represents a single entry in the change log
 type ChangeEntry struct {
-	ID         int64           `json:"id"`                    // Monotonic cursor
-	EntityType EntityType      `json:"entity_type"`           // Type of entity changed
-	Operation  Operation       `json:"operation"`             // Type of change
-	EntityID   string          `json:"entity_id"`             // ID of the affected entity
-	UserID     string          `json:"user_id,omitempty"`     // Owner of the entity (omitted in responses)
-	Data       json.RawMessage `json:"data,omitempty"`        // Full entity data for create/update
-	DeletedAt  *time.Time      `json:"deleted_at,omitempty"`  // Timestamp for delete operations
-	CreatedAt  time.Time       `json:"created_at"`            // When the change was recorded
+	ID         int64           `json:"id"`                   // Monotonic cursor
+	EntityType EntityType      `json:"entity_type"`          // Type of entity changed
+	Operation  Operation       `json:"operation"`            // Type of change
+	EntityID   string          `json:"entity_id"`            // ID of the affected entity
+	UserID     string          `json:"user_id,omitempty"`    // Owner of the entity (omitted in responses)
+	Data       json.RawMessage `json:"data,omitempty"`       // Full entity data for create/update
+	DeletedAt  *time.Time      `json:"deleted_at,omitempty"` // Timestamp for delete operations
+	CreatedAt  time.Time       `json:"created_at"`           // When the change was recorded
 }
 
 // ChangeFeedResponse represents the response from the changes endpoint

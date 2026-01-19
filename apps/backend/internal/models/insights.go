@@ -142,12 +142,12 @@ type TimePattern struct {
 type CorrelationResult struct {
 	EventTypeAID   string     `json:"event_type_a_id"`
 	EventTypeBID   string     `json:"event_type_b_id"`
-	Coefficient    float64    `json:"coefficient"`    // Pearson r value (-1 to 1)
-	PValue         float64    `json:"p_value"`        // Statistical significance
-	SampleSize     int        `json:"sample_size"`    // Number of overlapping days
-	Confidence     Confidence `json:"confidence"`     // high/medium/low
-	Direction      Direction  `json:"direction"`      // positive/negative/neutral
-	LagDays        int        `json:"lag_days"`       // 0 = same day, 1 = next day correlation
+	Coefficient    float64    `json:"coefficient"` // Pearson r value (-1 to 1)
+	PValue         float64    `json:"p_value"`     // Statistical significance
+	SampleSize     int        `json:"sample_size"` // Number of overlapping days
+	Confidence     Confidence `json:"confidence"`  // high/medium/low
+	Direction      Direction  `json:"direction"`   // positive/negative/neutral
+	LagDays        int        `json:"lag_days"`    // 0 = same day, 1 = next day correlation
 	EventTypeAName string     `json:"event_type_a_name,omitempty"`
 	EventTypeBName string     `json:"event_type_b_name,omitempty"`
 }
