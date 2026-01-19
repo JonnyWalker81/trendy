@@ -11,8 +11,8 @@ import (
 
 // mockEventRepository is a mock implementation of EventRepository for testing
 type mockEventRepository struct {
-	events           map[string]*models.Event          // id -> event
-	sampleIDToEvent  map[string]*models.Event          // healthkit_sample_id -> event
+	events           map[string]*models.Event // id -> event
+	sampleIDToEvent  map[string]*models.Event // healthkit_sample_id -> event
 	createCalls      int
 	upsertCalls      int
 	batchUpsertCalls int
@@ -80,6 +80,43 @@ func (m *mockEventRepository) Update(ctx context.Context, id string, event *mode
 		}
 		if !event.Timestamp.IsZero() {
 			existing.Timestamp = event.Timestamp
+		}
+		existing.UpdatedAt = time.Now()
+		return existing, nil
+	}
+	return nil, nil
+}
+
+func (m *mockEventRepository) UpdateFields(ctx context.Context, id string, fields map[string]interface{}) (*models.Event, error) {
+	if existing, ok := m.events[id]; ok {
+		// Apply fields to existing event
+		for key, value := range fields {
+			switch key {
+			case "notes":
+				if value == nil {
+					existing.Notes = nil
+				} else if s, ok := value.(string); ok {
+					existing.Notes = &s
+				}
+			case "event_type_id":
+				if s, ok := value.(string); ok {
+					existing.EventTypeID = s
+				}
+			case "timestamp":
+				if t, ok := value.(time.Time); ok {
+					existing.Timestamp = t
+				}
+			case "is_all_day":
+				if b, ok := value.(bool); ok {
+					existing.IsAllDay = b
+				}
+			case "end_date":
+				if value == nil {
+					existing.EndDate = nil
+				} else if t, ok := value.(time.Time); ok {
+					existing.EndDate = &t
+				}
+			}
 		}
 		existing.UpdatedAt = time.Now()
 		return existing, nil

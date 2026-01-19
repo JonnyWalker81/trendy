@@ -321,43 +321,91 @@ func (s *eventService) UpdateEvent(ctx context.Context, userID, eventID string, 
 		}
 	}
 
-	// Build update object
-	update := &models.Event{}
+	// Build fields map for update.
+	// For NullableString/NullableTime fields:
+	// - Set=true means the field was present in the request (update it)
+	// - Valid=true means it has a value, Valid=false means clear it (set to null)
+	// Using a map allows explicit null values to be sent to the database.
+	fields := make(map[string]interface{})
+
 	if req.EventTypeID != nil {
-		update.EventTypeID = *req.EventTypeID
+		fields["event_type_id"] = *req.EventTypeID
 	}
 	if req.Timestamp != nil {
-		update.Timestamp = *req.Timestamp
+		fields["timestamp"] = *req.Timestamp
 	}
-	if req.Notes != nil {
-		update.Notes = req.Notes
+	// Notes: use NullableString to distinguish "clear" from "don't update"
+	if req.Notes.Set {
+		if req.Notes.Valid {
+			fields["notes"] = req.Notes.Value
+		} else {
+			fields["notes"] = nil // Explicitly set to NULL
+		}
 	}
 	if req.IsAllDay != nil {
-		update.IsAllDay = *req.IsAllDay
+		fields["is_all_day"] = *req.IsAllDay
 	}
-	if req.EndDate != nil {
-		update.EndDate = req.EndDate
+	// EndDate: use NullableTime to distinguish "clear" from "don't update"
+	if req.EndDate.Set {
+		if req.EndDate.Valid {
+			fields["end_date"] = req.EndDate.Value
+		} else {
+			fields["end_date"] = nil // Explicitly set to NULL
+		}
 	}
 	if req.SourceType != nil {
-		update.SourceType = *req.SourceType
+		fields["source_type"] = *req.SourceType
 	}
-	if req.ExternalID != nil {
-		update.ExternalID = req.ExternalID
+	// ExternalID: use NullableString
+	if req.ExternalID.Set {
+		if req.ExternalID.Valid {
+			fields["external_id"] = req.ExternalID.Value
+		} else {
+			fields["external_id"] = nil
+		}
 	}
-	if req.OriginalTitle != nil {
-		update.OriginalTitle = req.OriginalTitle
+	// OriginalTitle: use NullableString
+	if req.OriginalTitle.Set {
+		if req.OriginalTitle.Valid {
+			fields["original_title"] = req.OriginalTitle.Value
+		} else {
+			fields["original_title"] = nil
+		}
 	}
 	if req.HealthKitSampleID != nil {
-		update.HealthKitSampleID = req.HealthKitSampleID
+		fields["healthkit_sample_id"] = *req.HealthKitSampleID
 	}
 	if req.HealthKitCategory != nil {
-		update.HealthKitCategory = req.HealthKitCategory
+		fields["healthkit_category"] = *req.HealthKitCategory
 	}
 	if req.Properties != nil {
-		update.Properties = *req.Properties
+		fields["properties"] = *req.Properties
+	}
+	// GeofenceID: use NullableString
+	if req.GeofenceID.Set {
+		if req.GeofenceID.Valid {
+			fields["geofence_id"] = req.GeofenceID.Value
+		} else {
+			fields["geofence_id"] = nil
+		}
+	}
+	// LocationLatitude and LocationLongitude
+	if req.LocationLatitude != nil {
+		fields["location_latitude"] = *req.LocationLatitude
+	}
+	if req.LocationLongitude != nil {
+		fields["location_longitude"] = *req.LocationLongitude
+	}
+	// LocationName: use NullableString
+	if req.LocationName.Set {
+		if req.LocationName.Valid {
+			fields["location_name"] = req.LocationName.Value
+		} else {
+			fields["location_name"] = nil
+		}
 	}
 
-	updated, err := s.eventRepo.Update(ctx, eventID, update)
+	updated, err := s.eventRepo.UpdateFields(ctx, eventID, fields)
 	if err != nil {
 		return nil, err
 	}

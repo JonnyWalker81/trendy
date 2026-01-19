@@ -24,6 +24,11 @@ type EventRepository interface {
 	GetByUserIDAndDateRange(ctx context.Context, userID string, startDate, endDate time.Time) ([]models.Event, error)
 	GetForExport(ctx context.Context, userID string, startDate, endDate *time.Time, eventTypeIDs []string) ([]models.Event, error)
 	Update(ctx context.Context, id string, event *models.Event) (*models.Event, error)
+	// UpdateFields updates specific fields of an event.
+	// The fields map contains field names (snake_case) mapped to their new values.
+	// A nil value explicitly sets the field to NULL in the database.
+	// Only fields present in the map are updated.
+	UpdateFields(ctx context.Context, id string, fields map[string]interface{}) (*models.Event, error)
 	Delete(ctx context.Context, id string) error
 	CountByEventType(ctx context.Context, userID string) (map[string]int64, error)
 	// Upsert creates or updates an event by ID. Returns (event, wasCreated, error).

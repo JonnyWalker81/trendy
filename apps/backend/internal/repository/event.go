@@ -278,6 +278,33 @@ func (r *eventRepository) Update(ctx context.Context, id string, event *models.E
 	return &events[0], nil
 }
 
+// UpdateFields updates specific fields of an event.
+// The fields map contains field names (snake_case) mapped to their new values.
+// A nil value explicitly sets the field to NULL in the database.
+// Only fields present in the map are updated.
+func (r *eventRepository) UpdateFields(ctx context.Context, id string, fields map[string]interface{}) (*models.Event, error) {
+	if len(fields) == 0 {
+		// No fields to update - just return the current event
+		return r.GetByID(ctx, id)
+	}
+
+	body, err := r.client.Update("events", id, fields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update event: %w", err)
+	}
+
+	var events []models.Event
+	if err := json.Unmarshal(body, &events); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(events) == 0 {
+		return nil, fmt.Errorf("event not found")
+	}
+
+	return &events[0], nil
+}
+
 func (r *eventRepository) Delete(ctx context.Context, id string) error {
 	if err := r.client.Delete("events", id); err != nil {
 		return fmt.Errorf("failed to delete event: %w", err)

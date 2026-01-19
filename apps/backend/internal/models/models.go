@@ -23,26 +23,26 @@ type EventType struct {
 
 // Event represents a tracked event
 type Event struct {
-	ID                 string                   `json:"id"`
-	UserID             string                   `json:"user_id"`
-	EventTypeID        string                   `json:"event_type_id"`
-	Timestamp          time.Time                `json:"timestamp"`
-	Notes              *string                  `json:"notes,omitempty"`
-	IsAllDay           bool                     `json:"is_all_day"`
-	EndDate            *time.Time               `json:"end_date,omitempty"`
-	SourceType         string                   `json:"source_type"`
-	ExternalID         *string                  `json:"external_id,omitempty"`
-	OriginalTitle      *string                  `json:"original_title,omitempty"`
-	GeofenceID         *string                  `json:"geofence_id,omitempty"`
-	LocationLatitude   *float64                 `json:"location_latitude,omitempty"`
-	LocationLongitude  *float64                 `json:"location_longitude,omitempty"`
-	LocationName       *string                  `json:"location_name,omitempty"`
-	HealthKitSampleID  *string                  `json:"healthkit_sample_id,omitempty"`
-	HealthKitCategory  *string                  `json:"healthkit_category,omitempty"`
-	Properties         map[string]PropertyValue `json:"properties,omitempty"`
-	CreatedAt          time.Time                `json:"created_at"`
-	UpdatedAt          time.Time                `json:"updated_at"`
-	EventType          *EventType               `json:"event_type,omitempty"`
+	ID                string                   `json:"id"`
+	UserID            string                   `json:"user_id"`
+	EventTypeID       string                   `json:"event_type_id"`
+	Timestamp         time.Time                `json:"timestamp"`
+	Notes             *string                  `json:"notes,omitempty"`
+	IsAllDay          bool                     `json:"is_all_day"`
+	EndDate           *time.Time               `json:"end_date,omitempty"`
+	SourceType        string                   `json:"source_type"`
+	ExternalID        *string                  `json:"external_id,omitempty"`
+	OriginalTitle     *string                  `json:"original_title,omitempty"`
+	GeofenceID        *string                  `json:"geofence_id,omitempty"`
+	LocationLatitude  *float64                 `json:"location_latitude,omitempty"`
+	LocationLongitude *float64                 `json:"location_longitude,omitempty"`
+	LocationName      *string                  `json:"location_name,omitempty"`
+	HealthKitSampleID *string                  `json:"healthkit_sample_id,omitempty"`
+	HealthKitCategory *string                  `json:"healthkit_category,omitempty"`
+	Properties        map[string]PropertyValue `json:"properties,omitempty"`
+	CreatedAt         time.Time                `json:"created_at"`
+	UpdatedAt         time.Time                `json:"updated_at"`
+	EventType         *EventType               `json:"event_type,omitempty"`
 }
 
 // CreateEventRequest represents the request to create an event
@@ -70,10 +70,10 @@ type CreateEventRequest struct {
 type RawCreateEventRequest struct {
 	ID                *string                  `json:"id,omitempty"`
 	EventTypeID       string                   `json:"event_type_id"`
-	Timestamp         string                   `json:"timestamp"`   // RFC3339 string, parsed manually
+	Timestamp         string                   `json:"timestamp"` // RFC3339 string, parsed manually
 	Notes             *string                  `json:"notes"`
-	IsAllDay          interface{}              `json:"is_all_day"`  // bool or string, parsed manually
-	EndDate           *string                  `json:"end_date"`    // RFC3339 string, parsed manually
+	IsAllDay          interface{}              `json:"is_all_day"` // bool or string, parsed manually
+	EndDate           *string                  `json:"end_date"`   // RFC3339 string, parsed manually
 	SourceType        string                   `json:"source_type"`
 	ExternalID        *string                  `json:"external_id"`
 	OriginalTitle     *string                  `json:"original_title"`
@@ -86,20 +86,23 @@ type RawCreateEventRequest struct {
 	Properties        map[string]PropertyValue `json:"properties,omitempty"`
 }
 
-// UpdateEventRequest represents the request to update an event
+// UpdateEventRequest represents the request to update an event.
+// Uses NullableString/NullableTime for fields that can be cleared (set to null).
+// This allows distinguishing between "field absent" (don't update) and
+// "field present with null" (clear the value).
 type UpdateEventRequest struct {
 	EventTypeID       *string                   `json:"event_type_id"`
 	Timestamp         *time.Time                `json:"timestamp"`
-	Notes             *string                   `json:"notes"`
+	Notes             NullableString            `json:"notes"`
 	IsAllDay          *bool                     `json:"is_all_day"`
-	EndDate           *time.Time                `json:"end_date"`
+	EndDate           NullableTime              `json:"end_date"`
 	SourceType        *string                   `json:"source_type"`
-	ExternalID        *string                   `json:"external_id"`
-	OriginalTitle     *string                   `json:"original_title"`
-	GeofenceID        *string                   `json:"geofence_id"`
+	ExternalID        NullableString            `json:"external_id"`
+	OriginalTitle     NullableString            `json:"original_title"`
+	GeofenceID        NullableString            `json:"geofence_id"`
 	LocationLatitude  *float64                  `json:"location_latitude"`
 	LocationLongitude *float64                  `json:"location_longitude"`
-	LocationName      *string                   `json:"location_name"`
+	LocationName      NullableString            `json:"location_name"`
 	HealthKitSampleID *string                   `json:"healthkit_sample_id,omitempty"`
 	HealthKitCategory *string                   `json:"healthkit_category,omitempty"`
 	Properties        *map[string]PropertyValue `json:"properties,omitempty"`
@@ -112,11 +115,11 @@ type BatchCreateEventsRequest struct {
 
 // BatchCreateEventsResponse represents the response from batch event creation
 type BatchCreateEventsResponse struct {
-	Created []Event       `json:"created"`
-	Errors  []BatchError  `json:"errors,omitempty"`
-	Total   int           `json:"total"`
-	Success int           `json:"success"`
-	Failed  int           `json:"failed"`
+	Created []Event      `json:"created"`
+	Errors  []BatchError `json:"errors,omitempty"`
+	Total   int          `json:"total"`
+	Success int          `json:"success"`
+	Failed  int          `json:"failed"`
 }
 
 // BatchError represents an error for a specific item in a batch operation
@@ -260,16 +263,16 @@ type Geofence struct {
 
 // CreateGeofenceRequest represents the request to create a geofence
 type CreateGeofenceRequest struct {
-	ID                  string  `json:"id" binding:"required"` // Client-provided UUID
-	Name                string  `json:"name" binding:"required"`
-	Latitude            float64 `json:"latitude" binding:"required,min=-90,max=90"`
-	Longitude           float64 `json:"longitude" binding:"required,min=-180,max=180"`
-	Radius              float64 `json:"radius" binding:"required,min=50,max=10000"`
-	EventTypeEntryID    *string `json:"event_type_entry_id"`
-	EventTypeExitID     *string `json:"event_type_exit_id"`
-	IsActive            bool    `json:"is_active"`
-	NotifyOnEntry       bool    `json:"notify_on_entry"`
-	NotifyOnExit        bool    `json:"notify_on_exit"`
+	ID               string  `json:"id" binding:"required"` // Client-provided UUID
+	Name             string  `json:"name" binding:"required"`
+	Latitude         float64 `json:"latitude" binding:"required,min=-90,max=90"`
+	Longitude        float64 `json:"longitude" binding:"required,min=-180,max=180"`
+	Radius           float64 `json:"radius" binding:"required,min=50,max=10000"`
+	EventTypeEntryID *string `json:"event_type_entry_id"`
+	EventTypeExitID  *string `json:"event_type_exit_id"`
+	IsActive         bool    `json:"is_active"`
+	NotifyOnEntry    bool    `json:"notify_on_entry"`
+	NotifyOnExit     bool    `json:"notify_on_exit"`
 }
 
 // UpdateGeofenceRequest represents the request to update a geofence

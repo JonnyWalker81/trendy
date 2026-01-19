@@ -1235,4 +1235,31 @@ enum AnyCodableValue: Codable {
             try container.encodeNil()
         }
     }
+
+    /// Convert to Any for use with AnyCodable
+    func toAny() -> Any {
+        switch self {
+        case .string(let value): return value
+        case .int(let value): return value
+        case .double(let value): return value
+        case .bool(let value): return value
+        case .array(let value): return value.map { $0.toAny() }
+        case .dictionary(let value): return value.mapValues { $0.toAny() }
+        case .null: return NSNull()
+        }
+    }
+
+    /// Create from Any value
+    static func from(_ value: Any) -> AnyCodableValue {
+        switch value {
+        case let string as String: return .string(string)
+        case let int as Int: return .int(int)
+        case let double as Double: return .double(double)
+        case let bool as Bool: return .bool(bool)
+        case let array as [Any]: return .array(array.map { from($0) })
+        case let dictionary as [String: Any]: return .dictionary(dictionary.mapValues { from($0) })
+        case is NSNull: return .null
+        default: return .string(String(describing: value))
+        }
+    }
 }
