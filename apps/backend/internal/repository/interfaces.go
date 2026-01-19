@@ -47,6 +47,9 @@ type EventRepository interface {
 	UpsertHealthKitEventsBatch(ctx context.Context, events []models.Event) ([]models.Event, []string, error)
 	// GetByHealthKitSampleIDs retrieves events by their HealthKit sample IDs for a user.
 	GetByHealthKitSampleIDs(ctx context.Context, userID string, sampleIDs []string) ([]models.Event, error)
+	// GetByHealthKitContent retrieves HealthKit events by content (user_id, event_type_id, timestamp, healthkit_category)
+	// to detect content-based duplicates when sample IDs differ (e.g., after HealthKit database restore).
+	GetByHealthKitContent(ctx context.Context, userID string, events []models.Event) (map[string]models.Event, error)
 	// CountByUser returns total events for a user
 	CountByUser(ctx context.Context, userID string) (int64, error)
 	// CountHealthKitByUser returns HealthKit events for a user

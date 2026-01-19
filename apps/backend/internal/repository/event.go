@@ -644,21 +644,42 @@ func (r *eventRepository) GetByHealthKitSampleIDs(ctx context.Context, userID st
 // UpsertHealthKitEvent inserts or updates a HealthKit event by sample ID.
 // Returns (event, wasCreated, error) where wasCreated indicates if this was a new insert.
 //
-// NOTE: We use a check-then-insert/update approach instead of PostgREST's upsert
-// because our unique constraint (idx_events_healthkit_dedupe) is a partial index
-// with a WHERE clause, and PostgREST's on_conflict doesn't support partial indexes.
+// This method uses TWO deduplication strategies:
+// 1. Sample ID deduplication: If healthkit_sample_id matches an existing event
+// 2. Content-based deduplication: If (event_type_id, timestamp, healthkit_category) matches
+//
+// Content-based deduplication handles the case where HealthKit sample IDs change
+// (e.g., after iOS restore, device migration, or HealthKit database reset) but the
+// actual event content is identical.
 func (r *eventRepository) UpsertHealthKitEvent(ctx context.Context, event *models.Event) (*models.Event, bool, error) {
 	if event.HealthKitSampleID == nil || *event.HealthKitSampleID == "" {
 		return nil, false, fmt.Errorf("healthkit_sample_id is required for upsert")
 	}
 
-	// Check if event already exists
-	existingEvents, err := r.GetByHealthKitSampleIDs(ctx, event.UserID, []string{*event.HealthKitSampleID})
+	// Check 1: Sample ID duplicate
+	existingBySampleID, err := r.GetByHealthKitSampleIDs(ctx, event.UserID, []string{*event.HealthKitSampleID})
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to check existing event: %w", err)
+		return nil, false, fmt.Errorf("failed to check existing event by sample ID: %w", err)
 	}
 
-	// Build data map with all fields
+	if len(existingBySampleID) > 0 {
+		// Found by sample ID - return existing event (HealthKit data is immutable)
+		return &existingBySampleID[0], false, nil
+	}
+
+	// Check 2: Content-based duplicate (different sample ID but same event content)
+	existingByContent, err := r.GetByHealthKitContent(ctx, event.UserID, []models.Event{*event})
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to check existing event by content: %w", err)
+	}
+
+	contentKey := healthKitContentKey(event.UserID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+	if existingEvent, exists := existingByContent[contentKey]; exists {
+		// Content duplicate found - return existing event instead of creating duplicate
+		return &existingEvent, false, nil
+	}
+
+	// No duplicate found - INSERT new event
 	data := map[string]interface{}{
 		"user_id":             event.UserID,
 		"event_type_id":       event.EventTypeID,
@@ -684,26 +705,14 @@ func (r *eventRepository) UpsertHealthKitEvent(ctx context.Context, event *model
 		data["properties"] = map[string]interface{}{}
 	}
 
-	var body []byte
+	// Use client-provided ID if present (for offline-first/UUIDv7 support)
+	if event.ID != "" {
+		data["id"] = event.ID
+	}
 
-	if len(existingEvents) == 0 {
-		// INSERT: No existing event, create new one
-		// Use client-provided ID if present (for offline-first/UUIDv7 support)
-		if event.ID != "" {
-			data["id"] = event.ID
-		}
-
-		body, err = r.client.Insert("events", data)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to insert HealthKit event: %w", err)
-		}
-	} else {
-		// UPDATE: Event already exists, update it by ID
-		existingID := existingEvents[0].ID
-		body, err = r.client.Update("events", existingID, data)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to update HealthKit event: %w", err)
-		}
+	body, err := r.client.Insert("events", data)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to insert HealthKit event: %w", err)
 	}
 
 	var events []models.Event
@@ -715,22 +724,27 @@ func (r *eventRepository) UpsertHealthKitEvent(ctx context.Context, event *model
 		return nil, false, fmt.Errorf("no event returned from upsert")
 	}
 
-	wasCreated := len(existingEvents) == 0
-	return &events[0], wasCreated, nil
+	return &events[0], true, nil
 }
 
 // UpsertHealthKitEventsBatch inserts or updates multiple HealthKit events.
 // Returns (events, createdIDs, error) where createdIDs contains IDs of newly created events.
 //
-// NOTE: We use a check-then-insert/update approach instead of PostgREST's upsert
-// because our unique constraint (idx_events_healthkit_dedupe) is a partial index
-// with a WHERE clause, and PostgREST's on_conflict doesn't support partial indexes.
+// This method uses TWO deduplication strategies:
+// 1. Sample ID deduplication: If healthkit_sample_id matches an existing event
+// 2. Content-based deduplication: If (event_type_id, timestamp, healthkit_category) matches
+//
+// Content-based deduplication handles the case where HealthKit sample IDs change
+// (e.g., after iOS restore, device migration, or HealthKit database reset) but the
+// actual event content is identical.
 func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events []models.Event) ([]models.Event, []string, error) {
 	if len(events) == 0 {
 		return []models.Event{}, []string{}, nil
 	}
 
-	// Collect sample IDs to check which already exist
+	userID := events[0].UserID
+
+	// Step 1: Check for sample ID duplicates (existing behavior)
 	sampleIDs := make([]string, 0, len(events))
 	for _, event := range events {
 		if event.HealthKitSampleID != nil && *event.HealthKitSampleID != "" {
@@ -738,23 +752,38 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 		}
 	}
 
-	// Get existing events to determine which are creates vs updates
-	existingEvents, err := r.GetByHealthKitSampleIDs(ctx, events[0].UserID, sampleIDs)
+	existingBySampleID, err := r.GetByHealthKitSampleIDs(ctx, userID, sampleIDs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to check existing events: %w", err)
+		return nil, nil, fmt.Errorf("failed to check existing events by sample ID: %w", err)
 	}
 
-	// Build map of existing sample IDs to their full event (for deduplication)
-	// HealthKit events are immutable - once a workout/sample is recorded, its data never changes.
-	// So for existing events, we just return them as-is without updating.
+	// Build map of existing sample IDs
 	existingSampleIDToEvent := make(map[string]models.Event)
-	for _, e := range existingEvents {
+	for _, e := range existingBySampleID {
 		if e.HealthKitSampleID != nil {
 			existingSampleIDToEvent[*e.HealthKitSampleID] = e
 		}
 	}
 
-	// Separate events into inserts vs already-exists
+	// Step 2: Check for content-based duplicates (for events not matched by sample ID)
+	// This catches duplicates where sample IDs changed but content is the same
+	eventsToCheckContent := make([]models.Event, 0)
+	for _, event := range events {
+		if event.HealthKitSampleID == nil || *event.HealthKitSampleID == "" {
+			continue
+		}
+		// If not found by sample ID, we need to check content
+		if _, exists := existingSampleIDToEvent[*event.HealthKitSampleID]; !exists {
+			eventsToCheckContent = append(eventsToCheckContent, event)
+		}
+	}
+
+	existingByContent, err := r.GetByHealthKitContent(ctx, userID, eventsToCheckContent)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to check existing events by content: %w", err)
+	}
+
+	// Step 3: Process events - determine inserts vs duplicates
 	insertData := make([]map[string]interface{}, 0)
 	var createdIDs []string
 	var allResults []models.Event
@@ -764,42 +793,52 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 			continue // Skip events without sample ID
 		}
 
+		// Check 1: Duplicate by sample ID
 		if existingEvent, exists := existingSampleIDToEvent[*event.HealthKitSampleID]; exists {
-			// EXISTING: Return the existing event as-is (HealthKit data is immutable)
-			// This is O(1) instead of O(n) database UPDATE calls
+			// Return the existing event as-is (HealthKit data is immutable)
 			allResults = append(allResults, existingEvent)
-		} else {
-			// INSERT: New event - collect for batch insert
-			data := map[string]interface{}{
-				"user_id":             event.UserID,
-				"event_type_id":       event.EventTypeID,
-				"timestamp":           event.Timestamp,
-				"is_all_day":          event.IsAllDay,
-				"source_type":         event.SourceType,
-				"healthkit_sample_id": *event.HealthKitSampleID,
-				"notes":               event.Notes,
-				"end_date":            event.EndDate,
-				"external_id":         event.ExternalID,
-				"original_title":      event.OriginalTitle,
-				"geofence_id":         event.GeofenceID,
-				"location_latitude":   event.LocationLatitude,
-				"location_longitude":  event.LocationLongitude,
-				"location_name":       event.LocationName,
-				"healthkit_category":  event.HealthKitCategory,
-			}
-
-			// Properties - use empty object if nil
-			if event.Properties != nil && len(event.Properties) > 0 {
-				data["properties"] = event.Properties
-			} else {
-				data["properties"] = map[string]interface{}{}
-			}
-
-			if event.ID != "" {
-				data["id"] = event.ID
-			}
-			insertData = append(insertData, data)
+			continue
 		}
+
+		// Check 2: Duplicate by content (different sample ID but same event)
+		contentKey := healthKitContentKey(userID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+		if existingEvent, exists := existingByContent[contentKey]; exists {
+			// Content duplicate found - return existing event instead of creating duplicate
+			// The existing event has a different sample ID but represents the same workout
+			allResults = append(allResults, existingEvent)
+			continue
+		}
+
+		// Not a duplicate - prepare for insert
+		data := map[string]interface{}{
+			"user_id":             event.UserID,
+			"event_type_id":       event.EventTypeID,
+			"timestamp":           event.Timestamp,
+			"is_all_day":          event.IsAllDay,
+			"source_type":         event.SourceType,
+			"healthkit_sample_id": *event.HealthKitSampleID,
+			"notes":               event.Notes,
+			"end_date":            event.EndDate,
+			"external_id":         event.ExternalID,
+			"original_title":      event.OriginalTitle,
+			"geofence_id":         event.GeofenceID,
+			"location_latitude":   event.LocationLatitude,
+			"location_longitude":  event.LocationLongitude,
+			"location_name":       event.LocationName,
+			"healthkit_category":  event.HealthKitCategory,
+		}
+
+		// Properties - use empty object if nil
+		if event.Properties != nil && len(event.Properties) > 0 {
+			data["properties"] = event.Properties
+		} else {
+			data["properties"] = map[string]interface{}{}
+		}
+
+		if event.ID != "" {
+			data["id"] = event.ID
+		}
+		insertData = append(insertData, data)
 	}
 
 	// Batch insert new events
@@ -819,6 +858,93 @@ func (r *eventRepository) UpsertHealthKitEventsBatch(ctx context.Context, events
 	}
 
 	return allResults, createdIDs, nil
+}
+
+// healthKitContentKey generates a unique key for HealthKit content-based deduplication.
+// This is used when sample IDs differ but the event content is identical.
+func healthKitContentKey(userID, eventTypeID string, timestamp time.Time, healthKitCategory *string) string {
+	category := ""
+	if healthKitCategory != nil {
+		category = *healthKitCategory
+	}
+	// Use timestamp truncated to seconds (HealthKit doesn't track sub-second precision)
+	return fmt.Sprintf("%s|%s|%s|%s", userID, eventTypeID, timestamp.Truncate(time.Second).UTC().Format(time.RFC3339), category)
+}
+
+// GetByHealthKitContent retrieves HealthKit events by content to detect content-based duplicates.
+// This handles the case where sample IDs change (e.g., after HealthKit database restore)
+// but the actual event content (timestamp, type, category) is identical.
+// Returns a map of content key -> existing event for quick lookup.
+func (r *eventRepository) GetByHealthKitContent(ctx context.Context, userID string, events []models.Event) (map[string]models.Event, error) {
+	result := make(map[string]models.Event)
+	if len(events) == 0 {
+		return result, nil
+	}
+
+	// Collect unique (event_type_id, timestamp, healthkit_category) combinations
+	type contentKey struct {
+		eventTypeID       string
+		timestamp         time.Time
+		healthKitCategory *string
+	}
+	uniqueKeys := make(map[string]contentKey)
+	for _, event := range events {
+		key := healthKitContentKey(userID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+		uniqueKeys[key] = contentKey{
+			eventTypeID:       event.EventTypeID,
+			timestamp:         event.Timestamp,
+			healthKitCategory: event.HealthKitCategory,
+		}
+	}
+
+	// Build OR conditions for each unique combination
+	// PostgREST doesn't support complex OR queries well, so we query all HealthKit events
+	// for this user in the timestamp range and filter client-side
+	if len(uniqueKeys) == 0 {
+		return result, nil
+	}
+
+	// Find the min/max timestamps to narrow the query
+	var minTime, maxTime time.Time
+	for _, ck := range uniqueKeys {
+		if minTime.IsZero() || ck.timestamp.Before(minTime) {
+			minTime = ck.timestamp
+		}
+		if maxTime.IsZero() || ck.timestamp.After(maxTime) {
+			maxTime = ck.timestamp
+		}
+	}
+
+	// Expand range slightly to account for timestamp precision issues
+	minTime = minTime.Add(-time.Second)
+	maxTime = maxTime.Add(time.Second)
+
+	query := map[string]interface{}{
+		"user_id":     fmt.Sprintf("eq.%s", userID),
+		"source_type": "eq.healthkit",
+		"and":         fmt.Sprintf("(timestamp.gte.%s,timestamp.lte.%s)", minTime.Format(time.RFC3339), maxTime.Format(time.RFC3339)),
+		"select":      "id,event_type_id,timestamp,healthkit_sample_id,healthkit_category",
+	}
+
+	body, err := r.client.Query("events", query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events by content: %w", err)
+	}
+
+	var existingEvents []models.Event
+	if err := json.Unmarshal(body, &existingEvents); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	// Build result map - only include events that match our content keys
+	for _, existing := range existingEvents {
+		key := healthKitContentKey(userID, existing.EventTypeID, existing.Timestamp, existing.HealthKitCategory)
+		if _, wanted := uniqueKeys[key]; wanted {
+			result[key] = existing
+		}
+	}
+
+	return result, nil
 }
 
 // CountByUser returns total events for a user

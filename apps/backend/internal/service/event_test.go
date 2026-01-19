@@ -149,22 +149,62 @@ func (m *mockEventRepository) GetByHealthKitSampleIDs(ctx context.Context, userI
 	return result, nil
 }
 
+// healthKitContentKey generates a unique key for HealthKit content-based deduplication.
+func mockHealthKitContentKey(userID, eventTypeID string, timestamp time.Time, healthKitCategory *string) string {
+	category := ""
+	if healthKitCategory != nil {
+		category = *healthKitCategory
+	}
+	return userID + "|" + eventTypeID + "|" + timestamp.Truncate(time.Second).UTC().Format(time.RFC3339) + "|" + category
+}
+
+func (m *mockEventRepository) GetByHealthKitContent(ctx context.Context, userID string, events []models.Event) (map[string]models.Event, error) {
+	result := make(map[string]models.Event)
+
+	// Build content keys for events we're looking for
+	lookupKeys := make(map[string]bool)
+	for _, event := range events {
+		key := mockHealthKitContentKey(userID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+		lookupKeys[key] = true
+	}
+
+	// Check all stored events for content matches
+	for _, event := range m.events {
+		if event.UserID != userID || event.SourceType != "healthkit" {
+			continue
+		}
+		key := mockHealthKitContentKey(userID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+		if lookupKeys[key] {
+			result[key] = *event
+		}
+	}
+	return result, nil
+}
+
 func (m *mockEventRepository) UpsertHealthKitEvent(ctx context.Context, event *models.Event) (*models.Event, bool, error) {
 	m.upsertCalls++
 	sampleID := *event.HealthKitSampleID
 
-	// Check if event already exists
+	// Check 1: Sample ID duplicate
 	if existing, ok := m.sampleIDToEvent[sampleID]; ok && existing.UserID == event.UserID {
-		// Update existing event
-		existing.Timestamp = event.Timestamp
-		existing.Notes = event.Notes
-		existing.Properties = event.Properties
-		existing.HealthKitCategory = event.HealthKitCategory
-		existing.UpdatedAt = time.Now()
+		// Return existing event as-is (HealthKit data is immutable)
 		return existing, false, nil // wasCreated = false
 	}
 
-	// Create new event
+	// Check 2: Content-based duplicate (different sample ID but same event content)
+	contentKey := mockHealthKitContentKey(event.UserID, event.EventTypeID, event.Timestamp, event.HealthKitCategory)
+	for _, existing := range m.events {
+		if existing.UserID != event.UserID || existing.SourceType != "healthkit" {
+			continue
+		}
+		existingKey := mockHealthKitContentKey(existing.UserID, existing.EventTypeID, existing.Timestamp, existing.HealthKitCategory)
+		if existingKey == contentKey {
+			// Content duplicate found - return existing event
+			return existing, false, nil
+		}
+	}
+
+	// No duplicate found - create new event
 	if event.ID == "" {
 		event.ID = generateMockID()
 	}
@@ -497,7 +537,9 @@ func TestCreateEvent_HealthKit_Idempotency(t *testing.T) {
 	}
 }
 
-func TestCreateEvent_HealthKit_UpdatesValues(t *testing.T) {
+func TestCreateEvent_HealthKit_Immutable(t *testing.T) {
+	// HealthKit data is immutable - re-importing the same event with different values
+	// should NOT update the existing event. The original values are preserved.
 	ctx := context.Background()
 
 	eventRepo := newMockEventRepository()
@@ -523,29 +565,38 @@ func TestCreateEvent_HealthKit_UpdatesValues(t *testing.T) {
 		Notes:             ptr("5000 steps"),
 	}
 
-	event1, _, _ := service.CreateEvent(ctx, userID, req1)
+	event1, wasCreated1, _ := service.CreateEvent(ctx, userID, req1)
+	if !wasCreated1 {
+		t.Error("Expected wasCreated=true for first create")
+	}
 
-	// Re-import with updated values
+	// Re-import with different values (simulating data correction attempt)
 	req2 := &models.CreateEventRequest{
 		EventTypeID:       eventType.ID,
 		Timestamp:         time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
 		SourceType:        "healthkit",
 		HealthKitSampleID: ptr(sampleID),
-		Notes:             ptr("5500 steps"), // Updated value
+		Notes:             ptr("5500 steps"), // Different value
 	}
 
-	event2, _, _ := service.CreateEvent(ctx, userID, req2)
+	event2, wasCreated2, _ := service.CreateEvent(ctx, userID, req2)
 
-	// Verify same event was updated
+	// Verify same event was returned (not created)
 	if event2.ID != event1.ID {
 		t.Errorf("Expected same event ID, got different")
 	}
-	if event2.Notes == nil || *event2.Notes != "5500 steps" {
-		t.Errorf("Expected notes to be updated to '5500 steps', got %v", event2.Notes)
+	if wasCreated2 {
+		t.Error("Expected wasCreated=false for duplicate")
+	}
+	// Original notes should be preserved (HealthKit data is immutable)
+	if event2.Notes == nil || *event2.Notes != "5000 steps" {
+		t.Errorf("Expected original notes '5000 steps' to be preserved, got %v", event2.Notes)
 	}
 }
 
 func TestCreateEvent_MultipleWorkoutsAtSameTimestamp(t *testing.T) {
+	// Two DIFFERENT workouts at the same timestamp should both be created
+	// if they have DIFFERENT healthkit_categories (which distinguishes them)
 	ctx := context.Background()
 
 	eventRepo := newMockEventRepository()
@@ -562,18 +613,21 @@ func TestCreateEvent_MultipleWorkoutsAtSameTimestamp(t *testing.T) {
 
 	timestamp := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
 
-	// Create two workouts at the same timestamp but with different sample IDs
+	// Create two workouts at the same timestamp with DIFFERENT categories
+	// (This is the realistic scenario - different workout types at same time)
 	req1 := &models.CreateEventRequest{
 		EventTypeID:       eventType.ID,
 		Timestamp:         timestamp,
 		SourceType:        "healthkit",
 		HealthKitSampleID: ptr("workout-abc123"),
+		HealthKitCategory: ptr("running"), // Running
 	}
 	req2 := &models.CreateEventRequest{
 		EventTypeID:       eventType.ID,
 		Timestamp:         timestamp, // Same timestamp
 		SourceType:        "healthkit",
 		HealthKitSampleID: ptr("workout-def456"), // Different sample ID
+		HealthKitCategory: ptr("cycling"),        // Different category
 	}
 
 	event1, _, err := service.CreateEvent(ctx, userID, req1)
@@ -586,14 +640,73 @@ func TestCreateEvent_MultipleWorkoutsAtSameTimestamp(t *testing.T) {
 		t.Fatalf("Second workout creation failed: %v", err)
 	}
 
-	// Verify both events exist with different IDs
+	// Verify both events exist with different IDs (different categories = different events)
 	if event1.ID == event2.ID {
-		t.Error("Expected different event IDs for different workouts")
+		t.Error("Expected different event IDs for different workout categories")
 	}
 
 	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
 	if len(events) != 2 {
 		t.Errorf("Expected 2 events, got %d", len(events))
+	}
+}
+
+func TestCreateEvent_SameTimestampSameCategory_Deduped(t *testing.T) {
+	// Two HealthKit events with same timestamp AND same category are content-based duplicates
+	// (even if they have different sample IDs - this handles HealthKit DB restore scenario)
+	ctx := context.Background()
+
+	eventRepo := newMockEventRepository()
+	eventTypeRepo := newMockEventTypeRepository()
+	changeLogRepo := newMockChangeLogRepository()
+
+	service := NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+
+	userID := "user-123"
+	eventType, _ := eventTypeRepo.Create(ctx, &models.EventType{
+		UserID: userID,
+		Name:   "Workout",
+	})
+
+	timestamp := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+	category := "running"
+
+	// First workout
+	req1 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp,
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("original-sample-id"),
+		HealthKitCategory: ptr(category),
+	}
+
+	event1, wasCreated1, _ := service.CreateEvent(ctx, userID, req1)
+	if !wasCreated1 {
+		t.Error("Expected wasCreated=true for first create")
+	}
+
+	// Same workout re-imported with different sample ID (HealthKit DB restore scenario)
+	req2 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp,           // Same timestamp
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("new-sample-id"), // Different sample ID
+		HealthKitCategory: ptr(category),        // Same category
+	}
+
+	event2, wasCreated2, _ := service.CreateEvent(ctx, userID, req2)
+
+	// Should be deduplicated by content (same timestamp + category)
+	if wasCreated2 {
+		t.Error("Expected wasCreated=false for content-based duplicate")
+	}
+	if event1.ID != event2.ID {
+		t.Error("Expected same event ID for content-based duplicate")
+	}
+
+	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
+	if len(events) != 1 {
+		t.Errorf("Expected 1 event after content-based dedupe, got %d", len(events))
 	}
 }
 
@@ -900,5 +1013,323 @@ func TestCreateEventsBatch_PartialDuplicates(t *testing.T) {
 	}
 	if updateCount != 0 {
 		t.Errorf("Expected 0 updates in changelog (skipped in batch), got %d", updateCount)
+	}
+}
+
+// ============================================================================
+// Content-Based Deduplication Tests
+// ============================================================================
+
+// TestCreateEvent_HealthKit_ContentBasedDedupe tests that when the same workout
+// is synced with a different sample ID (e.g., after HealthKit database restore),
+// it is deduplicated by content (event_type_id + timestamp + category).
+func TestCreateEvent_HealthKit_ContentBasedDedupe(t *testing.T) {
+	ctx := context.Background()
+
+	eventRepo := newMockEventRepository()
+	eventTypeRepo := newMockEventTypeRepository()
+	changeLogRepo := newMockChangeLogRepository()
+
+	service := NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+
+	userID := "user-123"
+	eventType, _ := eventTypeRepo.Create(ctx, &models.EventType{
+		UserID: userID,
+		Name:   "Workout",
+	})
+
+	timestamp := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+	workoutCategory := "workout"
+
+	// First import with original sample ID
+	req1 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp,
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("original-sample-id-123"),
+		HealthKitCategory: ptr(workoutCategory),
+		Notes:             ptr("Running workout"),
+	}
+
+	event1, wasCreated, err := service.CreateEvent(ctx, userID, req1)
+	if err != nil {
+		t.Fatalf("First CreateEvent failed: %v", err)
+	}
+	if !wasCreated {
+		t.Error("Expected wasCreated=true for first create")
+	}
+
+	// Re-sync same workout with DIFFERENT sample ID (simulates HealthKit DB restore)
+	req2 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp,         // Same timestamp
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("new-sample-id-456"), // Different sample ID!
+		HealthKitCategory: ptr(workoutCategory),     // Same category
+		Notes:             ptr("Running workout"),
+	}
+
+	event2, wasCreated2, err := service.CreateEvent(ctx, userID, req2)
+	if err != nil {
+		t.Fatalf("Second CreateEvent failed: %v", err)
+	}
+
+	// Should detect as duplicate and return existing event
+	if wasCreated2 {
+		t.Error("Expected wasCreated=false for content-based duplicate")
+	}
+	if event2.ID != event1.ID {
+		t.Errorf("Expected same event ID (content-based dedupe), got different: %s vs %s", event2.ID, event1.ID)
+	}
+
+	// Verify only 1 event exists
+	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
+	if len(events) != 1 {
+		t.Errorf("Expected 1 event after content-based dedupe, got %d", len(events))
+	}
+}
+
+// TestCreateEvent_HealthKit_DifferentCategoriesNotDeduplicated tests that
+// two workouts at the same timestamp but with different categories are NOT
+// deduplicated (they represent different activities).
+func TestCreateEvent_HealthKit_DifferentCategoriesNotDeduplicated(t *testing.T) {
+	ctx := context.Background()
+
+	eventRepo := newMockEventRepository()
+	eventTypeRepo := newMockEventTypeRepository()
+	changeLogRepo := newMockChangeLogRepository()
+
+	service := NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+
+	userID := "user-123"
+	eventType, _ := eventTypeRepo.Create(ctx, &models.EventType{
+		UserID: userID,
+		Name:   "Activity",
+	})
+
+	timestamp := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+
+	// First: Running workout
+	req1 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp,
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("running-sample-id"),
+		HealthKitCategory: ptr("running"), // Running category
+	}
+
+	event1, _, err := service.CreateEvent(ctx, userID, req1)
+	if err != nil {
+		t.Fatalf("First CreateEvent failed: %v", err)
+	}
+
+	// Second: Cycling workout at same timestamp (different category)
+	req2 := &models.CreateEventRequest{
+		EventTypeID:       eventType.ID,
+		Timestamp:         timestamp, // Same timestamp
+		SourceType:        "healthkit",
+		HealthKitSampleID: ptr("cycling-sample-id"),
+		HealthKitCategory: ptr("cycling"), // Different category!
+	}
+
+	event2, wasCreated, err := service.CreateEvent(ctx, userID, req2)
+	if err != nil {
+		t.Fatalf("Second CreateEvent failed: %v", err)
+	}
+
+	// Should create new event (different category)
+	if !wasCreated {
+		t.Error("Expected wasCreated=true for different category")
+	}
+	if event2.ID == event1.ID {
+		t.Error("Expected different event IDs for different categories at same timestamp")
+	}
+
+	// Verify both events exist
+	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
+	if len(events) != 2 {
+		t.Errorf("Expected 2 events (different categories), got %d", len(events))
+	}
+}
+
+// TestCreateEventsBatch_HealthKit_ContentBasedDedupe tests batch import with
+// content-based deduplication when sample IDs change.
+func TestCreateEventsBatch_HealthKit_ContentBasedDedupe(t *testing.T) {
+	ctx := context.Background()
+
+	eventRepo := newMockEventRepository()
+	eventTypeRepo := newMockEventTypeRepository()
+	changeLogRepo := newMockChangeLogRepository()
+
+	service := NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+
+	userID := "user-123"
+	eventType, _ := eventTypeRepo.Create(ctx, &models.EventType{
+		UserID: userID,
+		Name:   "Workout",
+	})
+
+	workoutCategory := "workout"
+
+	// First batch: Create 3 workouts with original sample IDs
+	firstBatch := &models.BatchCreateEventsRequest{
+		Events: []models.CreateEventRequest{
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("original-sample-1"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 16, 11, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("original-sample-2"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 17, 12, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("original-sample-3"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+		},
+	}
+
+	resp1, err := service.CreateEventsBatch(ctx, userID, firstBatch)
+	if err != nil {
+		t.Fatalf("First batch failed: %v", err)
+	}
+	if resp1.Success != 3 {
+		t.Errorf("Expected 3 successes, got %d", resp1.Success)
+	}
+
+	// Second batch: Re-sync with NEW sample IDs (simulates HealthKit DB restore)
+	secondBatch := &models.BatchCreateEventsRequest{
+		Events: []models.CreateEventRequest{
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC), // Same timestamp
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("new-sample-1"), // DIFFERENT sample ID
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 16, 11, 0, 0, 0, time.UTC), // Same timestamp
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("new-sample-2"), // DIFFERENT sample ID
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 17, 12, 0, 0, 0, time.UTC), // Same timestamp
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("new-sample-3"), // DIFFERENT sample ID
+				HealthKitCategory: ptr(workoutCategory),
+			},
+		},
+	}
+
+	resp2, err := service.CreateEventsBatch(ctx, userID, secondBatch)
+	if err != nil {
+		t.Fatalf("Second batch failed: %v", err)
+	}
+	if resp2.Success != 3 {
+		t.Errorf("Expected 3 successes, got %d", resp2.Success)
+	}
+
+	// Verify still only 3 events (content-based dedupe should prevent duplicates)
+	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
+	if len(events) != 3 {
+		t.Errorf("Expected 3 events after content-based dedupe, got %d", len(events))
+	}
+}
+
+// TestCreateEventsBatch_HealthKit_MixedDeduplication tests batch import
+// with mixed sample ID and content-based deduplication.
+func TestCreateEventsBatch_HealthKit_MixedDeduplication(t *testing.T) {
+	ctx := context.Background()
+
+	eventRepo := newMockEventRepository()
+	eventTypeRepo := newMockEventTypeRepository()
+	changeLogRepo := newMockChangeLogRepository()
+
+	service := NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
+
+	userID := "user-123"
+	eventType, _ := eventTypeRepo.Create(ctx, &models.EventType{
+		UserID: userID,
+		Name:   "Workout",
+	})
+
+	workoutCategory := "workout"
+
+	// First batch: Create 2 workouts
+	firstBatch := &models.BatchCreateEventsRequest{
+		Events: []models.CreateEventRequest{
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("sample-1"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 16, 11, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("sample-2"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+		},
+	}
+
+	_, _ = service.CreateEventsBatch(ctx, userID, firstBatch)
+
+	// Second batch: Mix of same sample ID, same content/different sample, and new
+	secondBatch := &models.BatchCreateEventsRequest{
+		Events: []models.CreateEventRequest{
+			// Duplicate by sample ID (same sample-1)
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("sample-1"), // Same sample ID
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			// Duplicate by content (same timestamp/type/category, different sample ID)
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 16, 11, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("sample-2-new"), // Different sample ID
+				HealthKitCategory: ptr(workoutCategory),
+			},
+			// Genuinely new event
+			{
+				EventTypeID:       eventType.ID,
+				Timestamp:         time.Date(2025, 1, 17, 12, 0, 0, 0, time.UTC),
+				SourceType:        "healthkit",
+				HealthKitSampleID: ptr("sample-3"),
+				HealthKitCategory: ptr(workoutCategory),
+			},
+		},
+	}
+
+	resp, err := service.CreateEventsBatch(ctx, userID, secondBatch)
+	if err != nil {
+		t.Fatalf("Second batch failed: %v", err)
+	}
+	if resp.Success != 3 {
+		t.Errorf("Expected 3 successes, got %d", resp.Success)
+	}
+
+	// Verify 3 total events (2 original + 1 new)
+	events, _ := eventRepo.GetByUserID(ctx, userID, 100, 0)
+	if len(events) != 3 {
+		t.Errorf("Expected 3 events (2 deduped + 1 new), got %d", len(events))
 	}
 }
