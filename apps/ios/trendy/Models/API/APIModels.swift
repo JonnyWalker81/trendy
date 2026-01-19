@@ -38,11 +38,26 @@ struct CreateEventTypeRequest: Codable {
     let icon: String
 }
 
-/// Request model for updating event types
+/// Request model for updating event types.
+/// Custom encoding ensures all fields are included in JSON output (including null values).
 struct UpdateEventTypeRequest: Codable {
     let name: String?
     let color: String?
     let icon: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case color
+        case icon
+    }
+
+    /// Custom encoding to ensure all fields are included in the JSON output.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(color, forKey: .color)
+        try container.encode(icon, forKey: .icon)
+    }
 }
 
 /// Wrapper for queued event type updates (includes backend ID)
@@ -159,7 +174,13 @@ struct BatchError: Codable {
     let message: String
 }
 
-/// Request model for updating events
+/// Request model for updating events.
+/// Custom encoding ensures all fields are included in JSON output (including null values).
+/// This is critical for PATCH-style updates where:
+/// - Field present with value = update to that value
+/// - Field present with null = clear the value
+/// - Field absent = don't change
+/// Swift's default JSONEncoder omits nil values, which would cause "clear field" operations to be ignored.
 struct UpdateEventRequest: Codable {
     let eventTypeId: String?
     let timestamp: Date?
@@ -193,6 +214,31 @@ struct UpdateEventRequest: Codable {
         case healthKitSampleId = "healthkit_sample_id"
         case healthKitCategory = "healthkit_category"
         case properties
+    }
+
+    /// Custom encoding to ensure all fields are included in the JSON output.
+    /// This explicitly encodes nil values as JSON null, which is required for the backend
+    /// to know that a field should be cleared (vs. left unchanged).
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        // Always encode all fields - use encodeNil for nil values
+        // This ensures the backend receives explicit null values for cleared fields
+        try container.encode(eventTypeId, forKey: .eventTypeId)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(isAllDay, forKey: .isAllDay)
+        try container.encode(endDate, forKey: .endDate)
+        try container.encode(sourceType, forKey: .sourceType)
+        try container.encode(externalId, forKey: .externalId)
+        try container.encode(originalTitle, forKey: .originalTitle)
+        try container.encode(geofenceId, forKey: .geofenceId)
+        try container.encode(locationLatitude, forKey: .locationLatitude)
+        try container.encode(locationLongitude, forKey: .locationLongitude)
+        try container.encode(locationName, forKey: .locationName)
+        try container.encode(healthKitSampleId, forKey: .healthKitSampleId)
+        try container.encode(healthKitCategory, forKey: .healthKitCategory)
+        try container.encode(properties, forKey: .properties)
     }
 }
 
@@ -308,7 +354,8 @@ struct CreatePropertyDefinitionRequest: Codable {
     }
 }
 
-/// Request model for updating property definitions
+/// Request model for updating property definitions.
+/// Custom encoding ensures all fields are included in JSON output (including null values).
 struct UpdatePropertyDefinitionRequest: Codable {
     let key: String?
     let label: String?
@@ -324,6 +371,17 @@ struct UpdatePropertyDefinitionRequest: Codable {
         case options
         case defaultValue = "default_value"
         case displayOrder = "display_order"
+    }
+
+    /// Custom encoding to ensure all fields are included in the JSON output.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encode(label, forKey: .label)
+        try container.encode(propertyType, forKey: .propertyType)
+        try container.encode(options, forKey: .options)
+        try container.encode(defaultValue, forKey: .defaultValue)
+        try container.encode(displayOrder, forKey: .displayOrder)
     }
 }
 
@@ -549,7 +607,8 @@ struct CreateGeofenceRequest: Codable {
     }
 }
 
-/// Request model for updating geofences
+/// Request model for updating geofences.
+/// Custom encoding ensures all fields are included in JSON output (including null values).
 struct UpdateGeofenceRequest: Codable {
     let name: String?
     let latitude: Double?
@@ -573,6 +632,21 @@ struct UpdateGeofenceRequest: Codable {
         case notifyOnEntry = "notify_on_entry"
         case notifyOnExit = "notify_on_exit"
         case iosRegionIdentifier = "ios_region_identifier"
+    }
+
+    /// Custom encoding to ensure all fields are included in the JSON output.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(latitude, forKey: .latitude)
+        try container.encode(longitude, forKey: .longitude)
+        try container.encode(radius, forKey: .radius)
+        try container.encode(eventTypeEntryId, forKey: .eventTypeEntryId)
+        try container.encode(eventTypeExitId, forKey: .eventTypeExitId)
+        try container.encode(isActive, forKey: .isActive)
+        try container.encode(notifyOnEntry, forKey: .notifyOnEntry)
+        try container.encode(notifyOnExit, forKey: .notifyOnExit)
+        try container.encode(iosRegionIdentifier, forKey: .iosRegionIdentifier)
     }
 }
 
