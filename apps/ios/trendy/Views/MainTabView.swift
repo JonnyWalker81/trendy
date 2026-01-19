@@ -16,6 +16,7 @@ struct MainTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SyncStatusViewModel.self) private var syncStatusViewModel
+    @Environment(SyncHistoryStore.self) private var syncHistoryStore
     @State private var eventStore: EventStore?
     @State private var insightsViewModel = InsightsViewModel()
     @StateObject private var calendarManager = CalendarManager()
@@ -260,7 +261,7 @@ struct MainTabView: View {
         let store = EventStore(apiClient: apiClient)
         eventStore = store
 
-        store.setModelContext(modelContext)
+        store.setModelContext(modelContext, syncHistoryStore: syncHistoryStore)
         store.setCalendarManager(calendarManager)
 
         // Configure InsightsViewModel with API client

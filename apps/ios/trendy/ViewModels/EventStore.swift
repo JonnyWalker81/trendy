@@ -36,6 +36,7 @@ class EventStore {
     // Backend integration
     private let apiClient: APIClient?
     private var syncEngine: SyncEngine?
+    private var syncHistoryStore: SyncHistoryStore?
 
     // Network monitoring
     private let monitor = NWPathMonitor()
@@ -314,13 +315,18 @@ class EventStore {
 
     // MARK: - Setup
 
-    func setModelContext(_ context: ModelContext) {
+    func setModelContext(_ context: ModelContext, syncHistoryStore: SyncHistoryStore? = nil) {
         self.modelContext = context
         self.modelContainer = context.container
+        self.syncHistoryStore = syncHistoryStore
 
         // Initialize SyncEngine if we have an API client
         if let apiClient = apiClient {
-            self.syncEngine = SyncEngine(apiClient: apiClient, modelContainer: context.container)
+            self.syncEngine = SyncEngine(
+                apiClient: apiClient,
+                modelContainer: context.container,
+                syncHistoryStore: syncHistoryStore
+            )
         }
 
         // Load initial state (pending count, pending delete IDs) and refresh cached sync state

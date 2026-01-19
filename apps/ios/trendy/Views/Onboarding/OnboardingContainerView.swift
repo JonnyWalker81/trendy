@@ -14,6 +14,7 @@ struct OnboardingContainerView: View {
     @Environment(\.supabaseService) private var supabaseService
     @Environment(\.apiClient) private var apiClient
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncHistoryStore.self) private var syncHistoryStore
 
     @State private var viewModel: OnboardingViewModel?
     @State private var eventStore: EventStore?
@@ -45,7 +46,7 @@ struct OnboardingContainerView: View {
 
         // Create event store
         let store = EventStore(apiClient: apiClient)
-        store.setModelContext(modelContext)
+        store.setModelContext(modelContext, syncHistoryStore: syncHistoryStore)
 
         // Connect event store to view model
         vm.setEventStore(store)

@@ -51,6 +51,7 @@ actor SyncEngine {
 
     private let apiClient: APIClient
     private let modelContainer: ModelContainer
+    private let syncHistoryStore: SyncHistoryStore?
 
     // MARK: - State
 
@@ -106,9 +107,10 @@ actor SyncEngine {
     /// Flag to track if initial state has been loaded
     private var initialStateLoaded = false
 
-    init(apiClient: APIClient, modelContainer: ModelContainer) {
+    init(apiClient: APIClient, modelContainer: ModelContainer, syncHistoryStore: SyncHistoryStore? = nil) {
         self.apiClient = apiClient
         self.modelContainer = modelContainer
+        self.syncHistoryStore = syncHistoryStore
         // Use computed cursorKey which includes environment
         let cursorKeyValue = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
         self.lastSyncCursor = Int64(UserDefaults.standard.integer(forKey: cursorKeyValue))
@@ -119,6 +121,7 @@ actor SyncEngine {
             ctx.add("loaded_cursor", Int(self.lastSyncCursor))
             ctx.add("environment", AppEnvironment.current.rawValue)
             ctx.add("last_sync_time", "nil (fresh init)")
+            ctx.add("has_history_store", syncHistoryStore != nil)
         })
     }
 
@@ -181,6 +184,9 @@ actor SyncEngine {
         isSyncing = true
         await updateState(.syncing(synced: 0, total: 0))
 
+        // Track sync timing for history
+        let syncStartTime = Date()
+
         defer {
             isSyncing = false
         }
@@ -190,6 +196,11 @@ actor SyncEngine {
                 ctx.add("cursor", Int(lastSyncCursor))
                 ctx.add("is_first_sync", lastSyncCursor == 0)
             })
+
+            // Count pending mutations before sync for history tracking
+            let pendingContext = ModelContext(modelContainer)
+            let pendingDescriptor = FetchDescriptor<PendingMutation>()
+            let initialPendingCount = (try? pendingContext.fetchCount(pendingDescriptor)) ?? 0
 
             // Capture IDs with pending DELETE mutations BEFORE flush
             // These should not be resurrected by pullChanges even if change_log has CREATE entries
@@ -291,16 +302,58 @@ actor SyncEngine {
 
             await updateLastSyncTime()
             await updateState(.idle)
+
+            // Calculate sync duration and record to history
+            let syncDurationMs = Int(Date().timeIntervalSince(syncStartTime) * 1000)
+            let finalPendingCount = (try? pendingContext.fetchCount(pendingDescriptor)) ?? 0
+            let syncedCount = max(0, initialPendingCount - finalPendingCount)
+
             Log.sync.info("Sync completed successfully", context: .with { ctx in
                 ctx.add("new_cursor", Int(lastSyncCursor))
+                ctx.add("duration_ms", syncDurationMs)
+                ctx.add("items_synced", syncedCount)
             })
+
+            // Record success to sync history
+            await recordSyncHistory(
+                eventsCount: syncedCount,
+                eventTypesCount: 0,
+                durationMs: syncDurationMs,
+                error: nil
+            )
+
             pendingDeleteIds.removeAll()  // Clear tracking after successful sync
             savePendingDeleteIds()
         } catch {
+            // Calculate duration even on failure
+            let syncDurationMs = Int(Date().timeIntervalSince(syncStartTime) * 1000)
+
             Log.sync.error("Sync failed", error: error)
             await updateState(.error(error.localizedDescription))
+
+            // Record failure to sync history
+            await recordSyncHistory(
+                eventsCount: 0,
+                eventTypesCount: 0,
+                durationMs: syncDurationMs,
+                error: error.localizedDescription
+            )
+
             pendingDeleteIds.removeAll()  // Clear tracking even on failure
             savePendingDeleteIds()
+        }
+    }
+
+    /// Record sync result to history store (if available)
+    private func recordSyncHistory(eventsCount: Int, eventTypesCount: Int, durationMs: Int, error: String?) async {
+        guard let syncHistoryStore = syncHistoryStore else { return }
+
+        await MainActor.run {
+            if let errorMessage = error {
+                syncHistoryStore.recordFailure(errorMessage: errorMessage, durationMs: durationMs)
+            } else {
+                syncHistoryStore.recordSuccess(events: eventsCount, eventTypes: eventTypesCount, durationMs: durationMs)
+            }
         }
     }
 
