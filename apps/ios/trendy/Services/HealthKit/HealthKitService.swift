@@ -18,6 +18,7 @@ class HealthKitService: NSObject {
 
     let healthStore: HKHealthStore
     let modelContext: ModelContext
+    let modelContainer: ModelContainer
     let eventStore: EventStore
     let notificationManager: NotificationManager?
 
@@ -168,6 +169,7 @@ class HealthKitService: NSObject {
     init(modelContext: ModelContext, eventStore: EventStore, notificationManager: NotificationManager? = nil) {
         self.healthStore = HKHealthStore()
         self.modelContext = modelContext
+        self.modelContainer = modelContext.container
         self.eventStore = eventStore
         self.notificationManager = notificationManager
 
@@ -186,9 +188,75 @@ class HealthKitService: NSObject {
         loadAllAnchors()
         loadAllUpdateTimes()
 
+        // Listen for bootstrap completion to reload processedSampleIds
+        // This prevents duplicates when force resync downloads HealthKit events from server
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleBootstrapCompleted),
+            name: .syncEngineBootstrapCompleted,
+            object: nil
+        )
+
         // Debug: Log current state
         #if DEBUG
         logCurrentState()
         #endif
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    /// Handle bootstrap completion notification by resetting HealthKit import state.
+    ///
+    /// After a force resync (bootstrap), local events are deleted and replaced with server data.
+    /// We must reset HealthKit tracking to allow re-import of data that:
+    /// 1. Was deleted locally (processedSampleIds cleared to match database)
+    /// 2. Doesn't exist on server but exists in HealthKit (anchors cleared to re-query)
+    ///
+    /// CRITICAL FIX (2026-01-18): Also clear anchors so HealthKit will re-query from scratch.
+    /// Without this, data that was fetched before but never synced to server won't be re-imported,
+    /// because anchored queries only return NEW data since the anchor position.
+    ///
+    /// CRITICAL FIX #2 (2026-01-18): After resetting state, actively trigger a refresh.
+    /// Observer queries are PASSIVE - they only fire when new data arrives in HealthKit.
+    /// We must ACTIVELY query HealthKit to re-import existing data after state reset.
+    ///
+    /// CRITICAL FIX #3 (2026-01-18): Use reconcileHealthKitData() instead of forceRefreshAllCategories().
+    /// forceRefreshAllCategories() only processes TODAY for daily aggregates (steps, activeEnergy).
+    /// reconcileHealthKitData() iterates through the last 30 days and queries HealthKit for each
+    /// missing day, properly re-importing historical data that wasn't synced to the server.
+    @objc private func handleBootstrapCompleted() {
+        Log.healthKit.info("Received bootstrap completed notification - resetting HealthKit import state")
+        Task { @MainActor in
+            // Step 1: Clear all anchors so HealthKit will re-query from scratch
+            // This allows re-import of data that exists in HealthKit but not on server
+            clearAllAnchors()
+
+            // Step 2: Clear daily aggregate throttle timestamps to allow immediate re-aggregation
+            // Without this, steps/activeEnergy won't refresh until 5 minutes passes
+            lastStepDate = nil
+            lastActiveEnergyDate = nil
+            lastSleepDate = nil
+            saveLastStepDate()
+            saveLastActiveEnergyDate()
+            saveLastSleepDate()
+
+            // Step 3: Replace processedSampleIds with only what's in the database
+            // This clears old IDs from deleted events, allowing re-import
+            reloadProcessedSampleIdsFromDatabase()
+
+            Log.healthKit.info("HealthKit import state reset complete - triggering reconciliation")
+
+            // Step 4: ACTIVELY reconcile HealthKit data for all enabled categories
+            // This queries HealthKit for the last 30 days and imports any missing data.
+            // Unlike forceRefreshAllCategories() which only processes TODAY for daily aggregates,
+            // reconcileHealthKitData() iterates through each historical day.
+            let reconciledCount = await reconcileHealthKitData(days: 30)
+
+            Log.healthKit.info("HealthKit reconciliation after bootstrap complete", context: .with { ctx in
+                ctx.add("reconciled_count", reconciledCount)
+            })
+        }
     }
 }

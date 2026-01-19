@@ -30,6 +30,8 @@ struct HealthKitDebugView: View {
     @State private var isRefreshingAll = false
     @State private var isResyncingHealthKit = false
     @State private var isRestoringRelationships = false
+    @State private var isReconciling = false
+    @State private var reconcileResult: Int?
 
     private var enabledCategories: [HealthDataCategory] {
         Array(HealthKitSettings.shared.enabledCategories)
@@ -471,6 +473,29 @@ struct HealthKitDebugView: View {
                 .disabled(isRefreshingAll)
 
                 Button {
+                    reconcileLast30Days()
+                } label: {
+                    HStack {
+                        if isReconciling {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                        }
+                        VStack(alignment: .leading) {
+                            Text("Reconcile Last 30 Days")
+                            if let result = reconcileResult {
+                                Text("Last run: \(result) items reconciled")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .disabled(isReconciling)
+                .foregroundStyle(.green)
+
+                Button {
                     forceSleepCheck()
                 } label: {
                     HStack {
@@ -848,6 +873,24 @@ struct HealthKitDebugView: View {
             await service.forceRefreshAllCategories()
             await MainActor.run {
                 isRefreshingAll = false
+            }
+        }
+    }
+
+    private func reconcileLast30Days() {
+        guard let service = healthKitService else { return }
+        isReconciling = true
+        reconcileResult = nil
+        Task {
+            let result = await service.reconcileHealthKitData(days: 30)
+            await MainActor.run {
+                reconcileResult = result
+                isReconciling = false
+                // Refresh all data displays
+                loadStepData()
+                loadActiveEnergyData()
+                loadWorkoutData()
+                loadSleepData()
             }
         }
     }

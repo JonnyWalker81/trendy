@@ -7,6 +7,7 @@
 
 import Foundation
 import HealthKit
+import SwiftData
 
 // MARK: - Migration
 
@@ -134,6 +135,63 @@ extension HealthKitService {
     func saveProcessedSampleIds() {
         if let encoded = try? JSONEncoder().encode(processedSampleIds) {
             Self.sharedDefaults.set(encoded, forKey: processedSampleIdsKey)
+        }
+    }
+
+    /// Reload processedSampleIds from SwiftData after a full resync.
+    /// This prevents duplicates when bootstrap downloads events that HealthKit would otherwise re-import.
+    /// Call this after SyncEngine.bootstrapFetch() completes.
+    ///
+    /// IMPORTANT: Uses a fresh ModelContext to ensure we see the latest persisted data,
+    /// not stale cached data from the original context.
+    ///
+    /// CRITICAL FIX (2026-01-18): This method now REPLACES processedSampleIds instead of merging.
+    /// After bootstrap clears local events, we must clear old sample IDs too, otherwise
+    /// HealthKit data that was deleted locally won't be re-imported because its sample ID
+    /// is still marked as "processed". The only valid sample IDs after bootstrap are those
+    /// from events that were downloaded from the server.
+    @MainActor
+    func reloadProcessedSampleIdsFromDatabase() {
+        Log.healthKit.info("Reloading processedSampleIds from database after resync")
+
+        // Create a fresh context to see the latest persisted data
+        // This is critical because SyncEngine uses a different context for bootstrap
+        let freshContext = ModelContext(modelContainer)
+
+        // Query all events with healthKitSampleId from the database
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.healthKitSampleId != nil
+            }
+        )
+
+        do {
+            let events = try freshContext.fetch(descriptor)
+            var newSampleIds = Set<String>()
+            for event in events {
+                if let sampleId = event.healthKitSampleId {
+                    newSampleIds.insert(sampleId)
+                }
+            }
+
+            // CRITICAL FIX: REPLACE processedSampleIds entirely instead of merging.
+            // After bootstrap, only events in the database are valid. Any sample IDs
+            // from before the resync (that were deleted) should NOT block re-import.
+            let oldCount = processedSampleIds.count
+            processedSampleIds = newSampleIds  // REPLACE, not merge
+            let newCount = processedSampleIds.count
+
+            Log.healthKit.info("Replaced processedSampleIds after bootstrap", context: .with { ctx in
+                ctx.add("from_database", newSampleIds.count)
+                ctx.add("old_count", oldCount)
+                ctx.add("new_count", newCount)
+                ctx.add("cleared", oldCount - newCount)
+            })
+
+            // Persist the updated set
+            saveProcessedSampleIds()
+        } catch {
+            Log.healthKit.error("Failed to reload processedSampleIds from database", error: error)
         }
     }
 }
