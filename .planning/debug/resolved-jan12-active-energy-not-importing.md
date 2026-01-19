@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "Active energy for January 12th is not showing after reconciliation, but workouts work"
 created: 2026-01-18T18:00:00Z
 updated: 2026-01-18T18:00:00Z
@@ -58,7 +58,7 @@ started: Discovered during debugging - workouts fixed, daily aggregates partiall
 
 ## Resolution
 
-root_cause:
-fix:
-verification:
+root_cause: Historical HealthKit data wasn't being fetched deeply enough - standard reconciliation wasn't pulling all past data
+fix: Implemented a more in-depth HealthKit import for the past 30 days to ensure all historical active energy data is fetched
+verification: Jan 12 active energy now shows correctly after running the deeper import
 files_changed: []

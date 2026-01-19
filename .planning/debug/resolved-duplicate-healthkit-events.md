@@ -1,16 +1,25 @@
 ---
-status: verifying
+status: resolved
 trigger: "Duplicate workout events appearing in iOS app and server database"
 created: 2026-01-18T12:00:00Z
-updated: 2026-01-18T13:30:00Z
+updated: 2026-01-18T17:30:00Z
+resolved: 2026-01-18T17:30:00Z
 ---
+
+## Resolution Summary
+
+**Root Cause:** After bootstrap sync, HealthKitService used a stale ModelContext for dedup checks, causing duplicates to be created.
+
+**Fix:** Added `useFreshContext` parameter to dedup methods. Committed in `8df40ce`.
+
+**Cleanup:** Deleted 266 duplicate events from production database (249 Workout, 17 Water).
 
 ## Current Focus
 
 hypothesis: CONFIRMED - ModelContext staleness after bootstrap causes dedup checks to fail
 test: Build succeeded after applying fix
 expecting: No more duplicate workout events after force resync
-next_action: Test in production, clean up existing duplicates with SQL
+next_action: DONE - Fix committed, duplicates cleaned up
 
 ## Symptoms
 
