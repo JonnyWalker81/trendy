@@ -58,6 +58,13 @@ struct DebugStorageView: View {
     @State private var isSkippingCursor = false
     @State private var estimatedBacklog: Int = 0
 
+    // Deduplication
+    @State private var isDeduplicating = false
+    @State private var showingDeduplicationConfirmation = false
+    @State private var showingDeduplicationResult = false
+    @State private var deduplicationResult: EventStore.DeduplicationResult?
+    @State private var duplicateAnalysis: EventStore.DeduplicationResult?
+
     var body: some View {
         List {
             mainContent
@@ -107,6 +114,14 @@ struct DebugStorageView: View {
             skipCursorResult: skipCursorResult,
             estimatedBacklog: estimatedBacklog,
             skipToLatestCursor: skipToLatestCursor,
+            loadSwiftDataCounts: loadSwiftDataCounts
+        ))
+        .modifier(DeduplicationDialogs(
+            showingDeduplicationConfirmation: $showingDeduplicationConfirmation,
+            showingDeduplicationResult: $showingDeduplicationResult,
+            duplicateAnalysis: duplicateAnalysis,
+            deduplicationResult: deduplicationResult,
+            performDeduplication: performDeduplication,
             loadSwiftDataCounts: loadSwiftDataCounts
         ))
     }
@@ -367,13 +382,31 @@ struct DebugStorageView: View {
                 }
             }
             .disabled(isSkippingCursor || isSyncing)
+
+            // Deduplication
+            Button {
+                Task {
+                    duplicateAnalysis = await eventStore.analyzeDuplicates()
+                    showingDeduplicationConfirmation = true
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "doc.on.doc")
+                    Text("Remove Duplicate Events")
+                    Spacer()
+                    if isDeduplicating {
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(isDeduplicating || isSyncing)
         } header: {
             Text("Sync Actions")
         } footer: {
             if pendingMutationCount > 0 {
                 Text("'Clear Mutation Queue' abandons unsynced changes. 'Skip Change Log Backlog' jumps cursor to latest - safe even with pending mutations.")
             } else {
-                Text("'Skip Change Log Backlog' jumps cursor to latest when stuck with thousands of stale entries. 'Force Full Resync' re-downloads all data.")
+                Text("'Skip Change Log Backlog' jumps cursor to latest when stuck with thousands of stale entries. 'Remove Duplicate Events' cleans up HealthKit duplicates.")
             }
         }
     }
@@ -430,6 +463,14 @@ struct DebugStorageView: View {
             skipCursorResult = "Error: \(error.localizedDescription)"
             showingSkipCursorSuccess = true
         }
+    }
+
+    private func performDeduplication() async {
+        isDeduplicating = true
+        defer { isDeduplicating = false }
+
+        deduplicationResult = await eventStore.deduplicateHealthKitEvents()
+        showingDeduplicationResult = true
     }
 
     private func testGeofenceFetch() async {
@@ -983,6 +1024,60 @@ private struct SkipCursorDialogs: ViewModifier {
                 }
             } message: {
                 Text(skipCursorResult ?? "Cursor has been updated to latest.")
+            }
+    }
+}
+
+private struct DeduplicationDialogs: ViewModifier {
+    @Binding var showingDeduplicationConfirmation: Bool
+    @Binding var showingDeduplicationResult: Bool
+    let duplicateAnalysis: EventStore.DeduplicationResult?
+    let deduplicationResult: EventStore.DeduplicationResult?
+    let performDeduplication: () async -> Void
+    let loadSwiftDataCounts: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Remove Duplicate Events?",
+                isPresented: $showingDeduplicationConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Remove Duplicates", role: .destructive) {
+                    Task {
+                        await performDeduplication()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                if let analysis = duplicateAnalysis {
+                    if analysis.duplicatesFound > 0 {
+                        Text("Found \(analysis.duplicatesFound) duplicate HealthKit events in \(analysis.groupsProcessed) groups. This will keep the synced version (or oldest) and remove duplicates.")
+                    } else {
+                        Text("No duplicate HealthKit events found.")
+                    }
+                } else {
+                    Text("Analyzing duplicates...")
+                }
+            }
+            .alert("Deduplication Complete", isPresented: $showingDeduplicationResult) {
+                Button("OK") {
+                    Task {
+                        await loadSwiftDataCounts()
+                    }
+                }
+            } message: {
+                if let result = deduplicationResult {
+                    if result.duplicatesRemoved > 0 {
+                        Text("Removed \(result.duplicatesRemoved) duplicate events from \(result.groupsProcessed) groups.")
+                    } else if result.duplicatesFound == 0 {
+                        Text("No duplicate events found.")
+                    } else {
+                        Text("Processed \(result.groupsProcessed) groups.")
+                    }
+                } else {
+                    Text("Deduplication completed.")
+                }
             }
     }
 }

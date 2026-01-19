@@ -1706,4 +1706,213 @@ class EventStore {
         }
         return try await apiClient.getGeofences()
     }
+
+    // MARK: - Deduplication
+
+    /// Result of a deduplication operation
+    struct DeduplicationResult {
+        let duplicatesFound: Int
+        let duplicatesRemoved: Int
+        let groupsProcessed: Int
+        let details: [String]
+    }
+
+    /// Find and remove duplicate events based on healthKitSampleId.
+    /// For each group of duplicates:
+    /// - Keep the one that's synced to the server (if any)
+    /// - Otherwise keep the oldest one (by id, which is UUIDv7 time-ordered)
+    /// - Delete the rest locally (and queue delete mutations if they're synced)
+    ///
+    /// - Returns: DeduplicationResult with stats about what was removed
+    func deduplicateHealthKitEvents() async -> DeduplicationResult {
+        guard let modelContainer else {
+            Log.sync.error("deduplicateHealthKitEvents: modelContainer is nil")
+            return DeduplicationResult(duplicatesFound: 0, duplicatesRemoved: 0, groupsProcessed: 0, details: ["Error: modelContainer is nil"])
+        }
+
+        // Use a fresh context to ensure we see the latest data
+        let freshContext = ModelContext(modelContainer)
+        var details: [String] = []
+        var totalDuplicatesFound = 0
+        var totalDuplicatesRemoved = 0
+        var groupsProcessed = 0
+
+        do {
+            // Fetch all events with a healthKitSampleId
+            let descriptor = FetchDescriptor<Event>(
+                predicate: #Predicate { $0.healthKitSampleId != nil }
+            )
+            let allHealthKitEvents = try freshContext.fetch(descriptor)
+
+            Log.sync.info("Deduplication: scanning HealthKit events", context: .with { ctx in
+                ctx.add("total_healthkit_events", allHealthKitEvents.count)
+            })
+
+            // Group by healthKitSampleId
+            let groupedBySampleId = Dictionary(grouping: allHealthKitEvents) { $0.healthKitSampleId! }
+
+            // Find groups with duplicates
+            let duplicateGroups = groupedBySampleId.filter { $0.value.count > 1 }
+
+            if duplicateGroups.isEmpty {
+                Log.sync.info("Deduplication: no duplicates found")
+                return DeduplicationResult(
+                    duplicatesFound: 0,
+                    duplicatesRemoved: 0,
+                    groupsProcessed: 0,
+                    details: ["No duplicate HealthKit events found"]
+                )
+            }
+
+            Log.sync.info("Deduplication: found duplicate groups", context: .with { ctx in
+                ctx.add("duplicate_groups", duplicateGroups.count)
+            })
+
+            for (sampleId, events) in duplicateGroups {
+                groupsProcessed += 1
+                let duplicateCount = events.count - 1
+                totalDuplicatesFound += duplicateCount
+
+                // Determine which one to keep:
+                // 1. Prefer synced events (they exist on the server)
+                // 2. If multiple synced or none synced, keep the oldest (smallest UUIDv7)
+                let syncedStatus = SyncStatus.synced.rawValue
+                let sortedEvents = events.sorted { $0.id < $1.id }  // UUIDv7 is time-ordered
+
+                let eventToKeep: Event
+                if let syncedEvent = sortedEvents.first(where: { $0.syncStatusRaw == syncedStatus }) {
+                    eventToKeep = syncedEvent
+                } else {
+                    eventToKeep = sortedEvents.first!  // Oldest by UUIDv7
+                }
+
+                let eventsToDelete = sortedEvents.filter { $0.id != eventToKeep.id }
+
+                let shortSampleId = String(sampleId.prefix(8))
+                let typeName = eventToKeep.eventType?.name ?? eventToKeep.healthKitCategory ?? "Unknown"
+                details.append("• \(typeName) (\(shortSampleId)...): kept 1, removing \(eventsToDelete.count)")
+
+                // Delete duplicates
+                for event in eventsToDelete {
+                    // If the event was synced, queue a delete mutation
+                    if event.syncStatus == .synced, let syncEngine = syncEngine {
+                        do {
+                            try await syncEngine.queueMutation(
+                                entityType: .event,
+                                operation: .delete,
+                                entityId: event.id,
+                                payload: Data()
+                            )
+                            Log.sync.debug("Queued delete mutation for duplicate", context: .with { ctx in
+                                ctx.add("event_id", event.id)
+                                ctx.add("healthkit_sample_id", sampleId)
+                            })
+                        } catch {
+                            Log.sync.error("Failed to queue delete mutation for duplicate", error: error)
+                        }
+                    }
+
+                    freshContext.delete(event)
+                    totalDuplicatesRemoved += 1
+                }
+            }
+
+            // Save all deletions
+            try freshContext.save()
+
+            Log.sync.info("Deduplication complete", context: .with { ctx in
+                ctx.add("groups_processed", groupsProcessed)
+                ctx.add("duplicates_found", totalDuplicatesFound)
+                ctx.add("duplicates_removed", totalDuplicatesRemoved)
+            })
+
+            // Trigger sync if online to push delete mutations
+            if isOnline, let syncEngine = syncEngine {
+                await syncEngine.performSync()
+            }
+
+            // Refresh local data
+            try? await fetchFromLocal()
+
+        } catch {
+            Log.sync.error("Deduplication failed", error: error)
+            details.append("Error: \(error.localizedDescription)")
+        }
+
+        return DeduplicationResult(
+            duplicatesFound: totalDuplicatesFound,
+            duplicatesRemoved: totalDuplicatesRemoved,
+            groupsProcessed: groupsProcessed,
+            details: details
+        )
+    }
+
+    /// Analyze duplicate events without removing them.
+    /// Returns information about duplicate groups found.
+    func analyzeDuplicates() async -> DeduplicationResult {
+        guard let modelContainer else {
+            return DeduplicationResult(duplicatesFound: 0, duplicatesRemoved: 0, groupsProcessed: 0, details: ["Error: modelContainer is nil"])
+        }
+
+        let freshContext = ModelContext(modelContainer)
+        var details: [String] = []
+        var totalDuplicates = 0
+
+        do {
+            // Fetch all events with a healthKitSampleId
+            let descriptor = FetchDescriptor<Event>(
+                predicate: #Predicate { $0.healthKitSampleId != nil }
+            )
+            let allHealthKitEvents = try freshContext.fetch(descriptor)
+
+            // Group by healthKitSampleId
+            let groupedBySampleId = Dictionary(grouping: allHealthKitEvents) { $0.healthKitSampleId! }
+
+            // Find groups with duplicates
+            let duplicateGroups = groupedBySampleId.filter { $0.value.count > 1 }
+
+            if duplicateGroups.isEmpty {
+                return DeduplicationResult(
+                    duplicatesFound: 0,
+                    duplicatesRemoved: 0,
+                    groupsProcessed: 0,
+                    details: ["No duplicate HealthKit events found"]
+                )
+            }
+
+            for (sampleId, events) in duplicateGroups.prefix(10) {  // Limit details to first 10 groups
+                let duplicateCount = events.count - 1
+                totalDuplicates += duplicateCount
+
+                let shortSampleId = String(sampleId.prefix(8))
+                let typeName = events.first?.eventType?.name ?? events.first?.healthKitCategory ?? "Unknown"
+                let syncedCount = events.filter { $0.syncStatus == .synced }.count
+                let dateStr = events.first?.timestamp.formatted(date: .abbreviated, time: .shortened) ?? "?"
+                details.append("• \(typeName) @ \(dateStr): \(events.count) copies (\(syncedCount) synced)")
+            }
+
+            // Add remaining count if more than 10 groups
+            let remainingGroups = duplicateGroups.count - 10
+            if remainingGroups > 0 {
+                let remainingDuplicates = duplicateGroups.dropFirst(10).reduce(0) { $0 + $1.value.count - 1 }
+                totalDuplicates += remainingDuplicates
+                details.append("... and \(remainingGroups) more groups with \(remainingDuplicates) duplicates")
+            }
+
+            return DeduplicationResult(
+                duplicatesFound: totalDuplicates,
+                duplicatesRemoved: 0,
+                groupsProcessed: duplicateGroups.count,
+                details: details
+            )
+
+        } catch {
+            return DeduplicationResult(
+                duplicatesFound: 0,
+                duplicatesRemoved: 0,
+                groupsProcessed: 0,
+                details: ["Error analyzing: \(error.localizedDescription)"]
+            )
+        }
+    }
 }

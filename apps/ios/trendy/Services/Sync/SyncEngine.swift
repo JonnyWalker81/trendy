@@ -10,6 +10,12 @@
 import Foundation
 import SwiftData
 
+/// Notification posted after bootstrap fetch completes.
+/// HealthKitService listens for this to reload processedSampleIds from the database.
+extension Notification.Name {
+    static let syncEngineBootstrapCompleted = Notification.Name("syncEngineBootstrapCompleted")
+}
+
 /// Observable state for the sync engine
 enum SyncState: Equatable {
     case idle
@@ -1656,6 +1662,15 @@ actor SyncEngine {
             ctx.add("verify_events_fresh_context", verifyEventCount)
             ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
         })
+
+        // Notify HealthKitService to reload processedSampleIds from the database.
+        // This prevents duplicate event creation when HealthKit observer queries fire after bootstrap.
+        // The bootstrap downloaded events with healthKitSampleIds, but HealthKitService's in-memory
+        // processedSampleIds set doesn't include them yet.
+        Log.sync.info("Posting bootstrap completed notification for HealthKit")
+        await MainActor.run {
+            NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
+        }
     }
 
     /// Restore Event→EventType relationships for events with missing eventType relationship.
