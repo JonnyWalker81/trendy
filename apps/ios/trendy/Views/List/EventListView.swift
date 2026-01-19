@@ -21,6 +21,10 @@ struct EventListView: View {
     /// Tracks whether the initial data load has completed (for showing loading state)
     @State private var hasCompletedInitialLoad = false
 
+    /// Number of date sections to display (for pagination to avoid List layout explosion)
+    /// Start with fewer sections to enable fast initial render, expand as user scrolls
+    @State private var visibleSectionCount: Int = 10
+
     /// Timer for periodic sync state refresh during active syncing
     @State private var syncStateRefreshTimer: Timer?
 
@@ -50,6 +54,17 @@ struct EventListView: View {
     // Use cached values for rendering
     private var groupedEvents: [Date: [Event]] { cachedGroupedEvents }
     private var sortedDates: [Date] { cachedSortedDates }
+
+    /// Dates to display (limited for initial render performance)
+    /// SwiftUI List layout solver becomes expensive with many sections
+    private var visibleDates: [Date] {
+        Array(sortedDates.prefix(visibleSectionCount))
+    }
+
+    /// Whether there are more dates to load
+    private var hasMoreDates: Bool {
+        sortedDates.count > visibleSectionCount
+    }
     
     var body: some View {
         NavigationStack {
@@ -89,11 +104,15 @@ struct EventListView: View {
                 }
             }
             .onChange(of: searchText) { _, _ in
+                // Reset pagination when filter changes
+                visibleSectionCount = 10
                 Task {
                     await updateCachedDataAsync()
                 }
             }
             .onChange(of: selectedEventTypeID) { _, _ in
+                // Reset pagination when filter changes
+                visibleSectionCount = 10
                 Task {
                     await updateCachedDataAsync()
                 }
@@ -153,7 +172,8 @@ struct EventListView: View {
                         .listRowBackground(Color.clear)
                 }
             } else {
-                ForEach(sortedDates, id: \.self) { date in
+                // Use visibleDates to limit initial render - prevents List layout explosion
+                ForEach(visibleDates, id: \.self) { date in
                     Section {
                         ForEach(groupedEvents[date] ?? []) { event in
                             EventRowView(event: event)
@@ -164,6 +184,24 @@ struct EventListView: View {
                     } header: {
                         Text(date, format: .dateTime.weekday().month().day().year())
                             .font(.headline)
+                    }
+                }
+
+                // Load more button when there are additional dates
+                if hasMoreDates {
+                    Section {
+                        Button {
+                            // Load 20 more sections at a time
+                            visibleSectionCount += 20
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Load Earlier Events")
+                                    .foregroundColor(.blue)
+                                Spacer()
+                            }
+                        }
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
