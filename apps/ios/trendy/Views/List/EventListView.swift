@@ -51,21 +51,6 @@ struct EventListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Sync status banner at top
-                SyncStatusBanner(
-                    syncState: eventStore.currentSyncState,
-                    pendingCount: eventStore.currentPendingCount,
-                    lastSyncTime: eventStore.currentLastSyncTime,
-                    onRetry: {
-                        // If rate limited, reset circuit breaker before retrying
-                        if case .rateLimited = eventStore.currentSyncState {
-                            await eventStore.resetCircuitBreakerAndSync()
-                        } else {
-                            await eventStore.performSync()
-                        }
-                    }
-                )
-
                 // HealthKit refresh indicator
                 if healthKitService?.isRefreshingDailyAggregates == true {
                     HealthKitRefreshBanner()

@@ -32,16 +32,6 @@ struct BubblesView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Sync status banner - visible during background sync
-                    SyncStatusBanner(
-                        syncState: eventStore.currentSyncState,
-                        pendingCount: eventStore.currentPendingCount,
-                        lastSyncTime: eventStore.currentLastSyncTime,
-                        onRetry: {
-                            await eventStore.performSync()
-                        }
-                    )
-
                     // Insights banner (only show when there are events and insights)
                     if !eventStore.eventTypes.isEmpty {
                         InsightsBannerView(viewModel: insightsViewModel) { insight in

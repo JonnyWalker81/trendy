@@ -31,12 +31,17 @@ struct SyncProgressBar: View {
         return min(Double(current) / Double(total), 1.0)
     }
 
+    /// Percentage value (0-100)
+    private var percent: Int {
+        Int(progress * 100)
+    }
+
     // MARK: - Body
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Count display
-            Text("Syncing \(current) of \(total)")
+            // Count display with percentage
+            Text("Syncing \(current) of \(total) (\(percent)%)")
                 .font(.subheadline)
                 .foregroundStyle(Color.dsPrimaryForeground)
 
