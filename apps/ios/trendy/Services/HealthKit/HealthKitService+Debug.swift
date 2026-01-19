@@ -274,7 +274,8 @@ extension HealthKitService {
         if samples.isEmpty { return 0 }
 
         // Get all local healthKitSampleIds for this category
-        let localSampleIds = await getLocalHealthKitSampleIds(for: category)
+        // Use fresh context because after bootstrap, modelContext may be stale
+        let localSampleIds = await getLocalHealthKitSampleIds(for: category, useFreshContext: true)
 
         Log.healthKit.debug("Reconciliation: local sample IDs", context: .with { ctx in
             ctx.add("category", category.displayName)
@@ -300,7 +301,8 @@ extension HealthKitService {
             }
 
             // Process this sample (will create event if not a duplicate)
-            await processSample(sample, category: category, isBulkImport: true)
+            // Use fresh context for dedup checks to see events saved by SyncEngine's context
+            await processSample(sample, category: category, isBulkImport: true, useFreshContext: true)
             reconciledCount += 1
         }
 
@@ -325,8 +327,13 @@ extension HealthKitService {
     }
 
     /// Get all healthKitSampleId values from local events for a category
+    ///
+    /// - Parameters:
+    ///   - category: The HealthKit category to query
+    ///   - useFreshContext: If true, creates a fresh ModelContext to see the latest persisted data.
+    ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
-    private func getLocalHealthKitSampleIds(for category: HealthDataCategory) async -> Set<String> {
+    private func getLocalHealthKitSampleIds(for category: HealthDataCategory, useFreshContext: Bool = false) async -> Set<String> {
         let categoryRaw = category.rawValue
         let descriptor = FetchDescriptor<Event>(
             predicate: #Predicate { event in
@@ -335,7 +342,8 @@ extension HealthKitService {
         )
 
         do {
-            let events = try modelContext.fetch(descriptor)
+            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            let events = try context.fetch(descriptor)
             return Set(events.compactMap { $0.healthKitSampleId })
         } catch {
             Log.healthKit.error("Failed to fetch local HealthKit sample IDs", error: error)

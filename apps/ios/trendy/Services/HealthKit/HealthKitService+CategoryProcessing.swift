@@ -224,9 +224,15 @@ extension HealthKitService {
     }
 
     /// Process a single sample based on its category
-    /// - Parameter isBulkImport: If true, skips notifications and sync (for historical data)
+    ///
+    /// - Parameters:
+    ///   - sample: The HKSample to process
+    ///   - category: The HealthKit category for the sample
+    ///   - isBulkImport: If true, skips notifications and sync (for historical data)
+    ///   - useFreshContext: If true, uses a fresh ModelContext for dedup checks to see the latest persisted data.
+    ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
-    func processSample(_ sample: HKSample, category: HealthDataCategory, isBulkImport: Bool = false) async {
+    func processSample(_ sample: HKSample, category: HealthDataCategory, isBulkImport: Bool = false, useFreshContext: Bool = false) async {
         // Check for duplicates using individual sample UUID
         let sampleId = sample.uuid.uuidString
         guard !processedSampleIds.contains(sampleId) else {
@@ -236,7 +242,7 @@ extension HealthKitService {
         switch category {
         case .workout:
             if let workout = sample as? HKWorkout {
-                await processWorkoutSample(workout, isBulkImport: isBulkImport)
+                await processWorkoutSample(workout, isBulkImport: isBulkImport, useFreshContext: useFreshContext)
             }
         case .sleep:
             if let categorySample = sample as? HKCategorySample {

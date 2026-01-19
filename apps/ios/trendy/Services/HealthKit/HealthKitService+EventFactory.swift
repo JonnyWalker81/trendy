@@ -69,8 +69,13 @@ extension HealthKitService {
 
     /// Check if an event with the given HealthKit sample ID already exists in SwiftData
     /// This provides database-level deduplication as a final safety net
+    ///
+    /// - Parameters:
+    ///   - sampleId: The HealthKit sample UUID to check
+    ///   - useFreshContext: If true, creates a fresh ModelContext to see the latest persisted data.
+    ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
-    func eventExistsWithHealthKitSampleId(_ sampleId: String) async -> Bool {
+    func eventExistsWithHealthKitSampleId(_ sampleId: String, useFreshContext: Bool = false) async -> Bool {
         let descriptor = FetchDescriptor<Event>(
             predicate: #Predicate { event in
                 event.healthKitSampleId == sampleId
@@ -78,7 +83,8 @@ extension HealthKitService {
         )
 
         do {
-            let existingEvents = try modelContext.fetch(descriptor)
+            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            let existingEvents = try context.fetch(descriptor)
             return !existingEvents.isEmpty
         } catch {
             Log.healthKit.error("Error checking for existing event", error: error)
@@ -90,11 +96,19 @@ extension HealthKitService {
     /// Check if a workout event with matching timestamps already exists
     /// This handles the case where the same workout has different HealthKit sample IDs
     /// (e.g., synced from multiple devices, or edited in Health app)
+    ///
+    /// - Parameters:
+    ///   - startDate: The workout start timestamp
+    ///   - endDate: The workout end timestamp (optional)
+    ///   - tolerance: Maximum time difference in seconds to consider a match (default 1.0)
+    ///   - useFreshContext: If true, creates a fresh ModelContext to see the latest persisted data.
+    ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
     func eventExistsWithMatchingWorkoutTimestamp(
         startDate: Date,
         endDate: Date?,
-        tolerance: TimeInterval = 1.0
+        tolerance: TimeInterval = 1.0,
+        useFreshContext: Bool = false
     ) async -> Bool {
         let descriptor = FetchDescriptor<Event>(
             predicate: #Predicate { event in
@@ -103,7 +117,8 @@ extension HealthKitService {
         )
 
         do {
-            let events = try modelContext.fetch(descriptor)
+            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            let events = try context.fetch(descriptor)
             return events.contains { event in
                 let startMatches = abs(event.timestamp.timeIntervalSince(startDate)) < tolerance
                 let endMatches: Bool

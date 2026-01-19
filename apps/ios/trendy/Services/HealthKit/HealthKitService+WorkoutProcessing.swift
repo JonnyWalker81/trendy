@@ -14,8 +14,14 @@ import SwiftData
 extension HealthKitService {
 
     /// Process a workout sample
+    ///
+    /// - Parameters:
+    ///   - workout: The HKWorkout sample to process
+    ///   - isBulkImport: If true, skips notifications and immediate sync (for historical data import)
+    ///   - useFreshContext: If true, uses a fresh ModelContext for dedup checks to see the latest persisted data.
+    ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
-    func processWorkoutSample(_ workout: HKWorkout, isBulkImport: Bool = false) async {
+    func processWorkoutSample(_ workout: HKWorkout, isBulkImport: Bool = false, useFreshContext: Bool = false) async {
         let sampleId = workout.uuid.uuidString
 
         // In-memory duplicate check with early claim to prevent race condition.
@@ -30,7 +36,8 @@ extension HealthKitService {
         processedSampleIds.insert(sampleId)
 
         // Database-level duplicate check (handles app restarts where in-memory set is reset)
-        if await eventExistsWithHealthKitSampleId(sampleId) {
+        // Use fresh context during reconciliation to see events saved by SyncEngine's context
+        if await eventExistsWithHealthKitSampleId(sampleId, useFreshContext: useFreshContext) {
             Log.data.debug("Workout already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
                 ctx.add("workoutType", workout.workoutActivityType.name)
@@ -40,9 +47,11 @@ extension HealthKitService {
         }
 
         // Timestamp-based duplicate check (handles different sample IDs for same workout)
+        // Use fresh context during reconciliation to see events saved by SyncEngine's context
         if await eventExistsWithMatchingWorkoutTimestamp(
             startDate: workout.startDate,
-            endDate: workout.endDate
+            endDate: workout.endDate,
+            useFreshContext: useFreshContext
         ) {
             Log.data.debug("Workout with matching timestamp already exists, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
