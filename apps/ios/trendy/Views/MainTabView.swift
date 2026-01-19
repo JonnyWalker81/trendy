@@ -141,7 +141,7 @@ struct MainTabView: View {
     @ViewBuilder
     private var mainTabContent: some View {
         TabView(selection: $selectedTab) {
-            // Dashboard is the default tab - render immediately for fast startup
+            // Dashboard is the default tab (tag 0) - render immediately for fast startup
             BubblesView()
                 .tabItem {
                     Label("Dashboard", systemImage: "square.grid.2x2.fill")
@@ -149,35 +149,44 @@ struct MainTabView: View {
                 .tag(0)
                 .accessibilityIdentifier("dashboardTab")
 
-            // Non-default tabs wrapped in LazyView to defer rendering until selected
-            // This prevents the 2+ second startup hang from eager TabView pre-rendering
-            LazyView(EventListView())
-                .tabItem {
-                    Label("List", systemImage: "list.bullet")
-                }
-                .tag(1)
-                .accessibilityIdentifier("eventListTab")
+            // Non-default tabs wrapped in LazyView to defer rendering until SELECTED
+            // LazyView uses selection binding to truly defer - onAppear doesn't work
+            // because TabView fires onAppear for ALL tabs when measuring layout
+            LazyView(tag: 1, selection: $selectedTab) {
+                EventListView()
+            }
+            .tabItem {
+                Label("List", systemImage: "list.bullet")
+            }
+            .tag(1)
+            .accessibilityIdentifier("eventListTab")
 
-            LazyView(CalendarView())
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                .tag(2)
-                .accessibilityIdentifier("calendarTab")
+            LazyView(tag: 2, selection: $selectedTab) {
+                CalendarView()
+            }
+            .tabItem {
+                Label("Calendar", systemImage: "calendar")
+            }
+            .tag(2)
+            .accessibilityIdentifier("calendarTab")
 
-            LazyView(AnalyticsView())
-                .tabItem {
-                    Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tag(3)
-                .accessibilityIdentifier("analyticsTab")
+            LazyView(tag: 3, selection: $selectedTab) {
+                AnalyticsView()
+            }
+            .tabItem {
+                Label("Analytics", systemImage: "chart.line.uptrend.xyaxis")
+            }
+            .tag(3)
+            .accessibilityIdentifier("analyticsTab")
 
-            LazyView(EventTypeSettingsView())
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(4)
-                .accessibilityIdentifier("settingsTab")
+            LazyView(tag: 4, selection: $selectedTab) {
+                EventTypeSettingsView()
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gear")
+            }
+            .tag(4)
+            .accessibilityIdentifier("settingsTab")
         }
         .accessibilityIdentifier("mainTabView")
         .environment(eventStore)

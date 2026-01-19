@@ -18,6 +18,9 @@ struct EventListView: View {
     @State private var cachedSortedDates: [Date] = []
     @State private var lastEventsHash: Int = 0
 
+    /// Tracks whether the initial data load has completed (for showing loading state)
+    @State private var hasCompletedInitialLoad = false
+
     /// Timer for periodic sync state refresh during active syncing
     @State private var syncStateRefreshTimer: Timer?
 
@@ -57,44 +60,12 @@ struct EventListView: View {
                         .animation(.easeInOut(duration: 0.3), value: healthKitService?.isRefreshingDailyAggregates)
                 }
 
-                List {
-                    if !eventStore.eventTypes.isEmpty {
-                        filterSection
-                    }
-
-                    // Use cached data for empty check to avoid expensive recalculation
-                    if cachedSortedDates.isEmpty {
-                        if eventStore.isLoading && !eventStore.hasLoadedOnce {
-                            // Initial loading - show loading indicator
-                            ProgressView("Loading...")
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 50)
-                                .listRowBackground(Color.clear)
-                        } else if eventStore.hasLoadedOnce {
-                            // Truly empty after loading completed
-                            emptyStateView
-                        } else {
-                            // Cache not yet populated - show brief loading
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 50)
-                                .listRowBackground(Color.clear)
-                        }
-                    } else {
-                        ForEach(sortedDates, id: \.self) { date in
-                            Section {
-                                ForEach(groupedEvents[date] ?? []) { event in
-                                    EventRowView(event: event)
-                                }
-                                .onDelete { indexSet in
-                                    deleteEvents(at: indexSet, for: date)
-                                }
-                            } header: {
-                                Text(date, format: .dateTime.weekday().month().day().year())
-                                    .font(.headline)
-                            }
-                        }
-                    }
+                // Show loading state until initial data processing is complete
+                // This prevents blocking the main thread with expensive List rendering
+                if !hasCompletedInitialLoad {
+                    loadingPlaceholder
+                } else {
+                    eventsList
                 }
             }
             .navigationTitle("Events")
@@ -108,23 +79,24 @@ struct EventListView: View {
                 if !eventStore.hasLoadedOnce {
                     await eventStore.fetchData()
                 }
-                // Initial cache population
-                updateCachedData()
-            }
-            .onAppear {
-                // Rebuild cache when view appears (e.g., switching tabs)
-                // This handles events added while on another tab, where .onChange didn't fire
-                // because this view wasn't in the active view hierarchy
-                updateCachedData()
+                // Initial cache population on background thread to avoid blocking main thread
+                await updateCachedDataAsync()
+                hasCompletedInitialLoad = true
             }
             .onChange(of: eventStore.events.count) { _, _ in
-                updateCachedData()
+                Task {
+                    await updateCachedDataAsync()
+                }
             }
             .onChange(of: searchText) { _, _ in
-                updateCachedData()
+                Task {
+                    await updateCachedDataAsync()
+                }
             }
             .onChange(of: selectedEventTypeID) { _, _ in
-                updateCachedData()
+                Task {
+                    await updateCachedDataAsync()
+                }
             }
             .onChange(of: eventStore.currentSyncState) { oldState, newState in
                 // Start/stop periodic refresh based on sync state
@@ -145,6 +117,59 @@ struct EventListView: View {
         .accessibilityIdentifier("eventListView")
     }
 
+    /// Loading placeholder shown before data processing completes
+    private var loadingPlaceholder: some View {
+        List {
+            ProgressView("Loading events...")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 50)
+                .listRowBackground(Color.clear)
+        }
+    }
+
+    /// The main events list - only rendered after initial data load
+    private var eventsList: some View {
+        List {
+            if !eventStore.eventTypes.isEmpty {
+                filterSection
+            }
+
+            // Use cached data for empty check to avoid expensive recalculation
+            if cachedSortedDates.isEmpty {
+                if eventStore.isLoading && !eventStore.hasLoadedOnce {
+                    // Initial loading - show loading indicator
+                    ProgressView("Loading...")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 50)
+                        .listRowBackground(Color.clear)
+                } else if eventStore.hasLoadedOnce {
+                    // Truly empty after loading completed
+                    emptyStateView
+                } else {
+                    // Cache not yet populated - show brief loading
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 50)
+                        .listRowBackground(Color.clear)
+                }
+            } else {
+                ForEach(sortedDates, id: \.self) { date in
+                    Section {
+                        ForEach(groupedEvents[date] ?? []) { event in
+                            EventRowView(event: event)
+                        }
+                        .onDelete { indexSet in
+                            deleteEvents(at: indexSet, for: date)
+                        }
+                    } header: {
+                        Text(date, format: .dateTime.weekday().month().day().year())
+                            .font(.headline)
+                    }
+                }
+            }
+        }
+    }
+
     /// Start periodic refresh of sync state during active operations
     private func startSyncStateRefreshTimer(interval: TimeInterval = 1.0) {
         stopSyncStateRefreshTimer()
@@ -161,10 +186,11 @@ struct EventListView: View {
         syncStateRefreshTimer = nil
     }
 
-    /// Updates cached grouped events and sorted dates
-    /// Called only when underlying data changes, not on every render
-    /// Performs expensive grouping on background thread to keep UI responsive
-    private func updateCachedData() {
+    /// Updates cached grouped events and sorted dates asynchronously.
+    /// Always runs the expensive grouping on a background thread to avoid blocking the main thread.
+    /// This is critical for preventing hangs when switching to the Events tab.
+    @MainActor
+    private func updateCachedDataAsync() async {
         let events = filteredEvents
         let newHash = events.count  // Simple hash based on count
 
@@ -175,25 +201,35 @@ struct EventListView: View {
 
         lastEventsHash = newHash
 
-        // For small datasets, compute synchronously
-        if events.count < 100 {
-            cachedGroupedEvents = Dictionary(grouping: events) { event in
+        // Always compute on background thread to keep UI responsive
+        // Even for small datasets, the cumulative work can add up during tab switches
+        let eventsCopy = events
+        let (grouped, sorted) = await Task.detached(priority: .userInitiated) {
+            let grouped = Dictionary(grouping: eventsCopy) { event in
                 Calendar.current.startOfDay(for: event.timestamp)
             }
-            cachedSortedDates = cachedGroupedEvents.keys.sorted(by: >)
-        } else {
-            // For large datasets, compute on background thread
-            let eventsCopy = events
-            Task.detached(priority: .userInitiated) {
-                let grouped = Dictionary(grouping: eventsCopy) { event in
-                    Calendar.current.startOfDay(for: event.timestamp)
-                }
-                let sorted = grouped.keys.sorted(by: >)
-                await MainActor.run {
-                    cachedGroupedEvents = grouped
-                    cachedSortedDates = sorted
-                }
-            }
+            let sorted = grouped.keys.sorted(by: >)
+            return (grouped, sorted)
+        }.value
+
+        cachedGroupedEvents = grouped
+        cachedSortedDates = sorted
+    }
+
+    /// Synchronous cache update for immediate needs (called from onAppear when returning to tab).
+    /// Uses cached results if available, otherwise triggers async update.
+    private func updateCachedData() {
+        let events = filteredEvents
+        let newHash = events.count
+
+        // Skip if data hasn't meaningfully changed
+        if newHash == lastEventsHash && !cachedSortedDates.isEmpty {
+            return
+        }
+
+        // For synchronous path, we can't do async work, so schedule it
+        Task {
+            await updateCachedDataAsync()
         }
     }
     

@@ -14,10 +14,24 @@ import WidgetKit
 @Observable
 @MainActor
 class EventStore {
-    private(set) var events: [Event] = []
+    private(set) var events: [Event] = [] {
+        didSet {
+            rebuildEventsByDateCache()
+        }
+    }
     private(set) var eventTypes: [EventType] = []
     var isLoading = false
     var errorMessage: String?
+
+    // MARK: - Events by Date Cache (Performance Optimization)
+
+    /// Cached dictionary for O(1) date lookups instead of O(N) filtering.
+    /// Key: Start of day (midnight) for the date
+    /// Value: Array of events on that date (including multi-day events)
+    private var eventsByDateCache: [Date: [Event]] = [:]
+
+    /// Calendar instance cached for performance (avoid repeated Calendar.current calls)
+    private let cachedCalendar = Calendar.current
 
     /// Indicates whether data has been loaded at least once (for distinguishing initial load vs refresh)
     private(set) var hasLoadedOnce = false
@@ -1035,25 +1049,53 @@ class EventStore {
         events.filter { $0.eventType?.id == eventType.id }
     }
 
+    /// Returns events on a specific date using O(1) dictionary lookup.
+    /// Results are sorted with all-day events first, then by timestamp.
     func events(on date: Date) -> [Event] {
-        let calendar = Calendar.current
-        return events.filter { event in
-            if event.isAllDay {
-                if let endDate = event.endDate {
-                    return date >= calendar.startOfDay(for: event.timestamp) &&
-                           date <= calendar.startOfDay(for: endDate)
-                } else {
-                    return calendar.isDate(event.timestamp, inSameDayAs: date)
-                }
-            } else {
-                return calendar.isDate(event.timestamp, inSameDayAs: date)
-            }
-        }.sorted { first, second in
+        let dayStart = cachedCalendar.startOfDay(for: date)
+
+        // O(1) lookup from cache
+        guard let cachedEvents = eventsByDateCache[dayStart] else {
+            return []
+        }
+
+        // Sort: all-day events first, then by timestamp
+        return cachedEvents.sorted { first, second in
             if first.isAllDay != second.isAllDay {
                 return first.isAllDay
             }
             return first.timestamp < second.timestamp
         }
+    }
+
+    /// Rebuilds the eventsByDateCache dictionary from the events array.
+    /// This is called automatically when the events array changes.
+    /// Handles multi-day all-day events by adding them to each day in the range.
+    private func rebuildEventsByDateCache() {
+        var newCache: [Date: [Event]] = [:]
+
+        for event in events {
+            if event.isAllDay, let endDate = event.endDate {
+                // Multi-day all-day event: add to each day in the range
+                let startDay = cachedCalendar.startOfDay(for: event.timestamp)
+                let endDay = cachedCalendar.startOfDay(for: endDate)
+
+                var currentDay = startDay
+                while currentDay <= endDay {
+                    newCache[currentDay, default: []].append(event)
+                    guard let nextDay = cachedCalendar.date(byAdding: .day, value: 1, to: currentDay) else {
+                        break
+                    }
+                    currentDay = nextDay
+                }
+            } else {
+                // Single-day event: add to its day only
+                let dayStart = cachedCalendar.startOfDay(for: event.timestamp)
+                newCache[dayStart, default: []].append(event)
+            }
+        }
+
+        eventsByDateCache = newCache
     }
 
     // MARK: - Geofence CRUD
