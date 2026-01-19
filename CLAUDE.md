@@ -526,9 +526,11 @@ apps/ios/trendy/
 | `Event.eventType.id` | `events.event_type_id` | UUID → string |
 | `Event.isAllDay` | `events.is_all_day` | Boolean |
 | `Event.endDate` | `events.end_date` | Optional Date → ISO8601 |
-| `Event.sourceType` | `events.source_type` | Enum → string ("manual"/"imported") |
+| `Event.sourceType` | `events.source_type` | Enum → string ("manual"/"imported"/"healthkit") |
 | `Event.externalId` | `events.external_id` | Optional string |
 | `Event.originalTitle` | `events.original_title` | Optional string |
+| `Event.healthKitSampleId` | `events.healthkit_sample_id` | HealthKit UUID for deduplication |
+| `Event.healthKitCategory` | `events.healthkit_category` | HealthKit category (workout/steps/sleep/etc) |
 | `Event.calendarEventId` | NOT SYNCED | iOS-only, local storage |
 | `EventType.id` | `event_types.id` | UUID → string |
 | `EventType.name` | `event_types.name` | String |
