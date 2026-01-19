@@ -1,8 +1,10 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Validation errors not aggregated - POST with multiple invalid fields returns only first parsing error"
 created: 2026-01-17T00:00:00Z
-updated: 2026-01-17T00:00:00Z
+updated: 2026-01-18T00:00:00Z
+resolved: 2026-01-18T00:00:00Z
+resolution_type: documented_limitation
 symptoms_prefilled: true
 goal: find_root_cause_only
 ---
@@ -50,5 +52,6 @@ started: Current behavior (apierror package exists but aggregation not used)
 
 root_cause: Two-phase limitation - Gin's ShouldBindJSON uses json.Unmarshal first (fails on first type error like bad timestamp), then runs validator (fails on first binding constraint). Neither phase aggregates errors. The apierror.NewValidationError exists for aggregation but handler never uses it.
 fix: Requires custom approach - use json.RawMessage for fields that need aggregated validation, decode each manually, collect all errors
-verification:
+decision: DOCUMENTED AS KNOWN LIMITATION - The fix requires significant refactoring of all handlers. Current behavior (first-error-only) is acceptable for MVP. Can revisit if user feedback indicates this is a pain point.
+verification: N/A - Not fixing, documenting as known limitation
 files_changed: []

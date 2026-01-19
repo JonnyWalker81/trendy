@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Auth middleware not using RFC 9457 error format"
 created: 2026-01-17T12:00:00Z
-updated: 2026-01-17T12:01:00Z
+updated: 2026-01-18T00:00:00Z
+resolved: 2026-01-18T00:00:00Z
 symptoms_prefilled: true
 goal: find_root_cause_only
 ---
@@ -47,5 +48,6 @@ started: Since auth middleware was created (before apierror package existed)
 
 root_cause: Auth middleware uses legacy c.JSON(http.StatusUnauthorized, gin.H{"error": ...}) instead of apierror.WriteProblem(c, apierror.NewUnauthorizedError(requestID))
 fix: Replace 3 c.JSON() calls in auth.go with apierror.WriteProblem() using NewUnauthorizedError()
-verification:
-files_changed: []
+verification: ✅ Verified - auth.go now uses apierror.WriteProblem() for all 3 error paths
+files_changed:
+  - apps/backend/internal/middleware/auth.go
