@@ -15,6 +15,8 @@ struct OnboardingContainerView: View {
     @Environment(\.apiClient) private var apiClient
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncHistoryStore.self) private var syncHistoryStore
+    @Environment(AppRouter.self) private var appRouter
+    @Environment(OnboardingStatusService.self) private var onboardingStatusService
 
     @State private var viewModel: OnboardingViewModel?
     @State private var eventStore: EventStore?
@@ -48,16 +50,17 @@ struct OnboardingContainerView: View {
         let store = EventStore(apiClient: apiClient)
         store.setModelContext(modelContext, syncHistoryStore: syncHistoryStore)
 
-        // Connect event store to view model
+        // Connect dependencies to view model
         vm.setEventStore(store)
+        vm.setAppRouter(appRouter)
+        vm.setOnboardingStatusService(onboardingStatusService)
 
         // Determine initial state
         await vm.determineInitialState()
 
-        // If onboarding is already complete, don't show onboarding UI
-        // The parent view should handle routing
+        // If onboarding is already complete, transition to main app
         if vm.isComplete {
-            NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
+            appRouter.transitionToAuthenticated()
             return
         }
 
@@ -103,12 +106,8 @@ struct OnboardingNavigationView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
-        .onChange(of: viewModel.isComplete) { _, isComplete in
-            if isComplete {
-                // Onboarding finished, notify parent
-                NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
-            }
-        }
+        // NOTE: viewModel.completeOnboarding() now calls appRouter.handleOnboardingComplete() directly
+        // No need to observe isComplete here anymore
     }
 }
 
@@ -139,10 +138,14 @@ private struct OnboardingLoadingView: View {
     let previewAPIConfig = APIConfiguration(baseURL: "http://127.0.0.1:8080/api/v1")
     let previewSupabase = SupabaseService(configuration: previewSupabaseConfig)
     let previewAPIClient = APIClient(configuration: previewAPIConfig, supabaseService: previewSupabase)
+    let previewOnboardingService = OnboardingStatusService(apiClient: previewAPIClient, supabaseService: previewSupabase)
+    let previewAppRouter = AppRouter(supabaseService: previewSupabase, onboardingService: previewOnboardingService)
 
     OnboardingContainerView()
         .modelContainer(for: [Event.self, EventType.self], inMemory: true)
         .environment(\.supabaseService, previewSupabase)
         .environment(\.apiClient, previewAPIClient)
+        .environment(previewAppRouter)
+        .environment(previewOnboardingService)
         .preferredColorScheme(.dark)
 }
