@@ -55,6 +55,13 @@ Plans:
 - STATE-08: Replace NotificationCenter routing with shared Observable
 - STATE-09: Sync onboarding status from backend on login (updates local cache)
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — API models, OnboardingCache, OnboardingStatusService (data layer foundation)
+- [ ] 09-02-PLAN.md — AppRouter Observable and RootView (routing state machine)
+- [ ] 09-03-PLAN.md — Remove NotificationCenter routing, wire AppRouter to existing views
+
 **Success Criteria:**
 1. Returning authenticated user launches app and sees main app immediately (no loading screen, no onboarding flash)
 2. Returning unauthenticated user launches app and sees login screen immediately (not onboarding)
@@ -114,7 +121,7 @@ Plans:
 | Phase | Name | Status | Requirements | Success |
 |-------|------|--------|--------------|---------|
 | 8 | Backend Onboarding Status | Complete | 2/2 | 4/4 |
-| 9 | iOS State Architecture | Pending | 7/7 | 0/5 |
+| 9 | iOS State Architecture | Planned | 7/7 | 0/5 |
 | 10 | Visual Design & Flow | Pending | 10/10 | 0/5 |
 | 11 | Accessibility | Pending | 2/2 | 0/4 |
 
@@ -153,4 +160,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 — Phase 8 complete*
+*Last updated: 2026-01-20 — Phase 9 planned*
