@@ -195,7 +195,7 @@ struct MainTabView: View {
         .environment(notificationManager)
         .environment(geofenceManager)
         .environment(healthKitService)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .overlay(alignment: .bottom) {
             if showIndicator {
                 SyncIndicatorView(
                     displayState: syncStatusViewModel.displayState,
@@ -203,6 +203,7 @@ struct MainTabView: View {
                         await eventStore?.fetchData()
                     }
                 )
+                .padding(.bottom, 52) // Position above tab bar (49pt height + margin)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
