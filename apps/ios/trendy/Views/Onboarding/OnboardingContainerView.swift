@@ -86,26 +86,36 @@ struct OnboardingNavigationView: View {
             switch viewModel.currentStep {
             case .welcome:
                 WelcomeView(viewModel: viewModel)
+                    .id(OnboardingStep.welcome)
 
             case .auth:
                 OnboardingAuthView(viewModel: viewModel)
+                    .id(OnboardingStep.auth)
 
             case .createEventType:
                 CreateEventTypeView(viewModel: viewModel)
                     .environment(eventStore)
+                    .id(OnboardingStep.createEventType)
 
             case .logFirstEvent:
                 LogFirstEventView(viewModel: viewModel)
                     .environment(eventStore)
+                    .id(OnboardingStep.logFirstEvent)
 
             case .permissions:
                 PermissionsView(viewModel: viewModel)
+                    .id(OnboardingStep.permissions)
 
             case .finish:
                 OnboardingFinishView(viewModel: viewModel)
+                    .id(OnboardingStep.finish)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
+        .transition(.asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        ))
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.currentStep)
         // NOTE: viewModel.completeOnboarding() now calls appRouter.handleOnboardingComplete() directly
         // No need to observe isComplete here anymore
     }
@@ -114,18 +124,21 @@ struct OnboardingNavigationView: View {
 // MARK: - Onboarding Loading View
 
 private struct OnboardingLoadingView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .scaleEffect(1.5)
+    @State private var isPulsing = false
 
-            Text("Loading...")
-                .font(.subheadline)
-                .foregroundStyle(Color.dsMutedForeground)
+    var body: some View {
+        ZStack {
+            Color.dsBackground
+                .ignoresSafeArea()
+
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 60))
+                .foregroundStyle(Color.dsPrimary)
+                .shadow(color: Color.dsPrimary.opacity(0.5), radius: isPulsing ? 20 : 10)
+                .scaleEffect(isPulsing ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
+                .onAppear { isPulsing = true }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.dsBackground)
     }
 }
 
