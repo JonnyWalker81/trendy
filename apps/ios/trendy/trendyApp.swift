@@ -38,6 +38,12 @@ struct trendyApp: App {
     /// Foundation Model service for AI insights
     private let foundationModelService: FoundationModelService
 
+    /// Onboarding status service
+    private let onboardingStatusService: OnboardingStatusService
+
+    /// App router for navigation state
+    private let appRouter: AppRouter
+
     // MARK: - View Models
 
     @State private var authViewModel: AuthViewModel
@@ -345,6 +351,23 @@ struct trendyApp: App {
         // Initialize Foundation Model service for AI insights
         self.foundationModelService = FoundationModelService()
 
+        // Initialize onboarding status service
+        self.onboardingStatusService = OnboardingStatusService(
+            apiClient: apiClient,
+            supabaseService: supabaseService
+        )
+
+        // Initialize app router
+        self.appRouter = AppRouter(
+            supabaseService: supabaseService,
+            onboardingService: onboardingStatusService
+        )
+
+        // Determine initial route SYNCHRONOUSLY before body renders
+        // This is the key to preventing loading flash
+        // Uses CACHE-FIRST strategy - does not wait for session restore
+        appRouter.determineInitialRoute()
+
         // Initialize AuthViewModel with Supabase service
         _authViewModel = State(initialValue: AuthViewModel(supabaseService: supabaseService))
 
@@ -414,7 +437,9 @@ struct trendyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appRouter)
+                .environment(onboardingStatusService)
                 .environment(authViewModel)
                 .environment(themeManager)
                 .environment(insightsViewModel)
