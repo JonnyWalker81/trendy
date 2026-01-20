@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 ## Current Position
 
 Phase: 9 of 4 (iOS State Architecture)
-Plan: 2 of 7 complete
+Plan: 3 of 7 complete
 Status: In progress
-Last activity: 2026-01-20 — Completed 09-02-PLAN.md (AppRouter Implementation)
+Last activity: 2026-01-20 — Completed 09-03-PLAN.md (Wire Views to AppRouter)
 
 Progress: [██______] 1/4 phases complete
 
@@ -27,7 +27,7 @@ Progress: [██______] 1/4 phases complete
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
 | 8 | Backend Onboarding Status | 2 | Complete |
-| 9 | iOS State Architecture | 7 | In Progress (2/7) |
+| 9 | iOS State Architecture | 7 | In Progress (3/7) |
 | 10 | Visual Design & Flow | 10 | Pending |
 | 11 | Accessibility | 2 | Pending |
 
@@ -61,6 +61,12 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Background session verification after initial routing
 - Fresh install vs returning user distinguished via hasAnyUserCompletedOnboarding()
 
+**Phase 9 decisions (09-03):**
+- Setter methods (setAppRouter/setOnboardingStatusService) for dependency injection in view models
+- onChange observer pattern in LoginView since AuthViewModel.signIn() doesn't return success
+- isLoggingIn flag prevents spurious handleLogin calls during session restore
+- ContentView retained for DEBUG screenshot mode only
+
 ### Pending Todos
 
 None
@@ -71,19 +77,20 @@ None
 
 ## Next Action
 
-**Phase 9 Plan 2 Complete - Continue to Plan 3**
+**Phase 9 Plan 3 Complete - Continue to Plan 4**
 
-Phase 9 Plan 2 deliverables complete:
-- AppRouter Observable with synchronous route determination
-- RootView switching on router.currentRoute
-- trendyApp wiring with environment injection
-- Cache-first strategy eliminating loading flash
+Phase 9 Plan 3 deliverables complete:
+- OnboardingViewModel uses AppRouter.handleOnboardingComplete()
+- OnboardingContainerView uses AppRouter.transitionToAuthenticated()
+- LoginView wired to AppRouter.handleLogin() via onChange
+- ContentView simplified to screenshot-mode only
+- No NotificationCenter.post(.onboardingCompleted) calls remain
 
-Next: Execute 09-03-PLAN.md
+Next: Execute 09-04-PLAN.md
 
 ## Session Continuity
 
-Last session: 2026-01-20T19:48:02Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-01-20T19:54:34Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None
-Next: Execute 09-03-PLAN.md
+Next: Execute 09-04-PLAN.md
