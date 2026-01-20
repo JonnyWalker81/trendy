@@ -6,15 +6,22 @@
 //
 
 import SwiftUI
+import ConfettiSwiftUI
 
 struct OnboardingFinishView: View {
     @Bindable var viewModel: OnboardingViewModel
 
     @State private var showCheckmark = false
     @State private var showContent = false
+    @State private var confettiTrigger = 0
 
     var body: some View {
         VStack(spacing: 32) {
+            // Progress bar at top showing 100% complete
+            OnboardingProgressBar(progress: 1.0)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
             Spacer()
 
             // Success Animation
@@ -94,6 +101,14 @@ struct OnboardingFinishView: View {
             Spacer(minLength: 40)
         }
         .background(Color.dsBackground)
+        .confettiCannon(
+            trigger: $confettiTrigger,
+            num: 50,
+            colors: [.dsChart1, .dsChart2, .dsChart3, .dsChart4, .dsChart5, .dsPrimary],
+            confettiSize: 10,
+            radius: 300,
+            hapticFeedback: true
+        )
         .onAppear {
             // Trigger animations
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -101,6 +116,10 @@ struct OnboardingFinishView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showContent = true
+            }
+            // Trigger confetti after checkmark animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                confettiTrigger += 1
             }
         }
     }
