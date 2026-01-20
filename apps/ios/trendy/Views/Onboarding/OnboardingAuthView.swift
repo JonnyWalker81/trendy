@@ -31,32 +31,44 @@ struct OnboardingAuthView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Progress bar at top
-            OnboardingProgressBar(progress: currentProgress)
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+            // Hero area with progress bar overlaid
+            ZStack(alignment: .top) {
+                // Hero area (shorter than welcome to leave room for form)
+                OnboardingHeroView(
+                    symbolName: isSignIn ? "person.crop.circle.fill" : "person.crop.circle.fill.badge.plus",
+                    gradientColors: [Color.dsPrimary.opacity(0.8), Color.dsAccent]
+                )
+                .frame(height: 200)
 
-            // Hero area (shorter than welcome to leave room for form)
-            OnboardingHeroView(
-                symbolName: isSignIn ? "person.crop.circle.fill" : "person.crop.circle.fill.badge.plus",
-                gradientColors: [Color.dsPrimary.opacity(0.8), Color.dsAccent]
-            )
-            .frame(height: 200)
+                // Progress bar with contrasting background
+                OnboardingProgressBar(progress: currentProgress)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(0.2))
+                            .padding(.horizontal, 16)
+                    )
+                    .padding(.top, 8)
+            }
 
             // Scrollable form content
             ScrollView {
                 VStack(spacing: 24) {
-                    // Header
+                    // Header - center aligned
                     VStack(spacing: 8) {
                         Text(isSignIn ? "Welcome Back" : "Create Account")
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.dsForeground)
+                            .multilineTextAlignment(.center)
 
                         Text(isSignIn ? "Sign in to continue" : "Start tracking your life")
                             .font(.subheadline)
                             .foregroundStyle(Color.dsMutedForeground)
+                            .multilineTextAlignment(.center)
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 24)
 
                     // Google Sign-In Button
@@ -185,17 +197,27 @@ struct OnboardingAuthView: View {
                     .padding(.top, 8)
 
                     // Back Button
-                    if !isSignIn {
-                        Button {
-                            viewModel.goBack()
-                        } label: {
-                            HStack {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
-                            }
-                            .foregroundStyle(Color.dsMutedForeground)
+                    Button {
+                        viewModel.goBack()
+                    } label: {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
                         }
+                        .foregroundStyle(Color.dsMutedForeground)
                     }
+
+                    // Sign out option (subtle link for wrong account scenario)
+                    Button {
+                        Task {
+                            await viewModel.handleSignOut()
+                        }
+                    } label: {
+                        Text("Wrong account? Sign out")
+                            .font(.caption)
+                            .foregroundStyle(Color.dsMutedForeground)
+                    }
+                    .padding(.top, 8)
 
                     // Bottom padding to avoid keyboard overlap
                     Spacer(minLength: 40)

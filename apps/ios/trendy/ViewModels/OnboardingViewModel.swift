@@ -681,8 +681,15 @@ class OnboardingViewModel {
 
     // MARK: - Sign Out
 
-    /// Handle sign out - resets onboarding state
-    func handleSignOut() {
+    /// Handle sign out - signs out from Supabase and resets onboarding state
+    func handleSignOut() async {
+        // Sign out from Supabase
+        do {
+            try await supabaseService.signOut()
+        } catch {
+            Log.auth.error("Failed to sign out from Supabase", error: error)
+        }
+
         // Clear local onboarding state
         UserDefaults.standard.removeObject(forKey: Self.localStepKey)
         UserDefaults.standard.removeObject(forKey: Self.localStartTimeKey)
