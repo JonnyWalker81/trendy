@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** v1.1 Onboarding Overhaul — Phase 8 in progress
+**Current focus:** v1.1 Onboarding Overhaul — Phase 8 complete
 
 ## Current Position
 
 Phase: 8 of 4 (Backend Onboarding Status)
-Plan: 1 of 2 complete
-Status: In progress
-Last activity: 2026-01-20 — Completed 08-01-PLAN.md (database schema)
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-01-20 — Completed 08-02-PLAN.md (API endpoints)
 
-Progress: [________] 1/8 plans (Phase 8: 1/2)
+Progress: [==______] 2/8 plans (Phase 8: complete)
 
 ## Milestone History
 
@@ -26,7 +26,7 @@ Progress: [________] 1/8 plans (Phase 8: 1/2)
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 8 | Backend Onboarding Status | 2 | In Progress (1/2 plans) |
+| 8 | Backend Onboarding Status | 2 | Complete |
 | 9 | iOS State Architecture | 7 | Pending |
 | 10 | Visual Design & Flow | 10 | Pending |
 | 11 | Accessibility | 2 | Pending |
@@ -44,6 +44,9 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - user_id is PRIMARY KEY for onboarding_status (one record per user)
 - Permission status validated via CHECK constraints (database-level)
 - All four RLS policies for user-scoped access
+- GET returns 200 with defaults for new users (not 404) via GetOrCreate upsert
+- DELETE returns 200 with reset state (not 204) so iOS sees new state immediately
+- UpdateWhere used since primary key is user_id, not id
 
 ### Pending Todos
 
@@ -55,17 +58,17 @@ None
 
 ## Next Action
 
-**Execute Plan 08-02**
+**Phase 8 Complete - Ready for Phase 9**
 
-Run `/gsd:execute-phase` to execute 08-02-PLAN.md (API endpoints).
+Phase 8 deliverables complete:
+- Database schema with RLS (08-01)
+- API endpoints with validation (08-02)
 
-Remaining Phase 8 deliverables:
-- GET/PATCH endpoints for onboarding status
-- Authentication enforcement on endpoints
+Next: Plan and execute Phase 9 (iOS State Architecture)
 
 ## Session Continuity
 
 Last session: 2026-01-20
-Stopped at: Completed 08-01-PLAN.md
+Stopped at: Completed 08-02-PLAN.md (Phase 8 complete)
 Resume file: None
-Next: Execute 08-02-PLAN.md (API endpoints)
+Next: Plan Phase 9 (iOS State Architecture)
