@@ -11,9 +11,13 @@ import FullDisclosureSDK
 struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(\.supabaseService) private var supabaseService
+    @Environment(AppRouter.self) private var appRouter
     @State private var showingAddEventType = false
     @State private var editingEventTypeID: String?
     @State private var showingCalendarImport = false
+    @State private var showingSignOutConfirmation = false
+    @State private var userEmail: String?
 
     var body: some View {
         NavigationStack {
@@ -130,6 +134,33 @@ struct EventTypeSettingsView: View {
                 .accessibilityIdentifier("actionsSection")
 
                 Section {
+                    // Display user email if available
+                    if let email = userEmail {
+                        HStack {
+                            Text("Signed in as")
+                            Spacer()
+                            Text(email)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+
+                    Button(role: .destructive) {
+                        showingSignOutConfirmation = true
+                    } label: {
+                        HStack {
+                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                            Spacer()
+                        }
+                    }
+                    .accessibilityIdentifier("signOutButton")
+                } header: {
+                    Text("Account")
+                }
+                .accessibilityIdentifier("accountSection")
+
+                Section {
                     Button {
                         FullDisclosure.shared.showFeedbackDialog()
                     } label: {
@@ -173,7 +204,24 @@ struct EventTypeSettingsView: View {
             .sheet(isPresented: $showingCalendarImport) {
                 CalendarImportView()
             }
+            .confirmationDialog(
+                "Sign Out?",
+                isPresented: $showingSignOutConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        await performSignOut()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You will be signed out of your account. Your data will remain on the server and sync when you sign back in.")
+            }
             .task {
+                // Load user email for display
+                await loadUserEmail()
+
                 // Only fetch if data hasn't been loaded yet
                 // MainTabView handles initial load; this is a fallback for edge cases
                 if !eventStore.hasLoadedOnce {
@@ -191,6 +239,27 @@ struct EventTypeSettingsView: View {
                 await eventStore.deleteEventType(eventType)
             }
         }
+    }
+
+    private func loadUserEmail() async {
+        guard let supabase = supabaseService else { return }
+        userEmail = supabase.currentSession?.user.email
+    }
+
+    private func performSignOut() async {
+        guard let supabase = supabaseService else { return }
+
+        // Sign out from Supabase
+        do {
+            try await supabase.signOut()
+            Log.auth.info("User signed out from Settings")
+        } catch {
+            Log.auth.error("Failed to sign out", error: error)
+            // Continue anyway - we still want to navigate to login
+        }
+
+        // Transition to login screen via AppRouter
+        appRouter.handleLogout()
     }
 }
 
