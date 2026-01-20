@@ -39,8 +39,7 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 
 ### Pending Todos
 
-1 pending todo in `.planning/todos/pending/`:
-- Move sync widget above tab bar (ui)
+None
 
 ### Blockers/Concerns
 
