@@ -3,6 +3,7 @@
 //  trendy
 //
 //  Welcome screen for onboarding - value proposition and CTAs
+//  Redesigned with hero layout pattern per CONTEXT.md
 //
 
 import SwiftUI
@@ -10,26 +11,35 @@ import SwiftUI
 struct WelcomeView: View {
     @Bindable var viewModel: OnboardingViewModel
 
+    /// Trigger for haptic feedback on primary button tap
+    @State private var stepAdvanced = 0
+
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 0) {
+            // Progress bar at top (step 1 of flow, 0% progress)
+            OnboardingProgressBar(progress: 0.0)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
+            // Hero area with gradient and SF Symbol
+            OnboardingHeroView(
+                symbolName: "chart.line.uptrend.xyaxis",
+                gradientColors: [Color.dsPrimary, Color.dsAccent]
+            )
+
             Spacer()
 
-            // App Icon / Logo
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 80))
-                .foregroundStyle(Color.dsPrimary)
-                .padding(.bottom, 8)
-
-            // Title and Subtitle
+            // Content area - minimal text density per CONTEXT.md
             VStack(spacing: 12) {
                 Text("Track anything.")
                     .font(.largeTitle)
                     .fontWeight(.bold)
+                    .foregroundStyle(Color.dsForeground)
 
                 Text("See patterns.")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                    .foregroundStyle(Color.dsPrimary)
+                    .foregroundStyle(Color.dsAccent)
 
                 Text("Log events, discover insights, and understand your habits over time.")
                     .font(.body)
@@ -38,10 +48,11 @@ struct WelcomeView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
             }
+            .padding(.horizontal, 32)
 
             Spacer()
 
-            // Feature highlights
+            // Feature highlights - simplified to 2 rows per CONTEXT.md
             VStack(spacing: 20) {
                 FeatureHighlightRow(
                     icon: "hand.tap.fill",
@@ -54,20 +65,15 @@ struct WelcomeView: View {
                     title: "Smart Insights",
                     description: "Discover patterns in your data"
                 )
-
-                FeatureHighlightRow(
-                    icon: "bell.fill",
-                    title: "Reminders",
-                    description: "Never miss what matters to you"
-                )
             }
             .padding(.horizontal, 32)
 
             Spacer()
 
-            // CTA Buttons
+            // Action buttons pinned at bottom
             VStack(spacing: 12) {
                 Button {
+                    stepAdvanced += 1
                     Task {
                         await viewModel.advanceToNextStep()
                     }
@@ -80,6 +86,7 @@ struct WelcomeView: View {
                         .foregroundStyle(Color.dsPrimaryForeground)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .sensoryFeedback(.impact(weight: .medium), trigger: stepAdvanced)
 
                 Button {
                     viewModel.isSignInMode = true
