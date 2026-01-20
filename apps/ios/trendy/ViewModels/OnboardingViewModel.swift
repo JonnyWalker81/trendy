@@ -356,25 +356,42 @@ class OnboardingViewModel {
 
             trackEvent(.onboardingAuthSucceeded, properties: ["method": OnboardingAuthMethod.emailSignin.rawValue])
 
-            // Check if returning user with complete onboarding
-            Log.auth.debug("OnboardingViewModel.signIn: Calling determineInitialState...")
-            await determineInitialState()
+            // Sync onboarding status from backend to check if user completed onboarding
+            // This uses the onboarding_status table which is the source of truth
+            Log.auth.debug("OnboardingViewModel.signIn: Syncing onboarding status from backend...")
+            let status = await onboardingStatusService?.syncFromBackend(timeout: 3.0)
 
-            // If onboarding is complete, transition directly via AppRouter
-            if isComplete {
-                Log.auth.debug("OnboardingViewModel.signIn: Onboarding complete, transitioning via AppRouter")
+            Log.auth.debug("OnboardingViewModel.signIn: Backend status", context: .with { ctx in
+                ctx.add("completed", String(status?.completed ?? false))
+                ctx.add("currentStep", status?.currentStep ?? "nil")
+            })
+
+            // If backend says onboarding is complete, transition to main app
+            if let status = status, status.completed {
+                Log.auth.debug("OnboardingViewModel.signIn: Onboarding complete per backend, transitioning via AppRouter")
+                isComplete = true
                 appRouter?.transitionToAuthenticated()
+                isLoading = false
                 return
             }
 
-            // If we're still on auth step after sign-in, advance past it
-            // (auth step is complete since we just signed in successfully)
-            if currentStep == .auth {
-                Log.auth.debug("OnboardingViewModel.signIn: Auth complete, advancing past auth step")
-                await advanceToNextStep()
+            // Determine which step to continue from based on backend status
+            if let status = status, let stepRaw = status.currentStep,
+               let step = OnboardingStep(rawValue: stepRaw) {
+                Log.auth.debug("OnboardingViewModel.signIn: Continuing from backend step", context: .with { ctx in
+                    ctx.add("step", stepRaw)
+                })
+                currentStep = step
+            } else {
+                // Default: after auth, go to createEventType (first post-auth step)
+                Log.auth.debug("OnboardingViewModel.signIn: No backend step, defaulting to createEventType")
+                currentStep = .createEventType
             }
 
-            Log.auth.debug("OnboardingViewModel.signIn: determineInitialState complete", context: .with { ctx in
+            // Check if user already has event types (skip createEventType if so)
+            await checkExistingEventTypes()
+
+            Log.auth.debug("OnboardingViewModel.signIn: Complete", context: .with { ctx in
                 ctx.add("isComplete", String(isComplete))
                 ctx.add("currentStep", currentStep.rawValue)
             })
@@ -409,14 +426,45 @@ class OnboardingViewModel {
                 UserDefaults.standard.set(startTime!.timeIntervalSince1970, forKey: Self.localStartTimeKey)
             }
 
-            // Check profile status (might be returning user)
-            await determineInitialState()
+            // Sync onboarding status from backend to check if user completed onboarding
+            // This uses the onboarding_status table which is the source of truth
+            Log.auth.debug("OnboardingViewModel.signInWithGoogle: Syncing onboarding status from backend...")
+            let status = await onboardingStatusService?.syncFromBackend(timeout: 3.0)
 
-            // If onboarding is complete, transition directly via AppRouter
-            if isComplete {
-                Log.auth.debug("OnboardingViewModel.signInWithGoogle: Onboarding complete, transitioning via AppRouter")
+            Log.auth.debug("OnboardingViewModel.signInWithGoogle: Backend status", context: .with { ctx in
+                ctx.add("completed", String(status?.completed ?? false))
+                ctx.add("currentStep", status?.currentStep ?? "nil")
+            })
+
+            // If backend says onboarding is complete, transition to main app
+            if let status = status, status.completed {
+                Log.auth.debug("OnboardingViewModel.signInWithGoogle: Onboarding complete per backend, transitioning via AppRouter")
+                isComplete = true
                 appRouter?.transitionToAuthenticated()
+                isLoading = false
+                return
             }
+
+            // Determine which step to continue from based on backend status
+            if let status = status, let stepRaw = status.currentStep,
+               let step = OnboardingStep(rawValue: stepRaw) {
+                Log.auth.debug("OnboardingViewModel.signInWithGoogle: Continuing from backend step", context: .with { ctx in
+                    ctx.add("step", stepRaw)
+                })
+                currentStep = step
+            } else {
+                // Default: after auth, go to createEventType (first post-auth step)
+                Log.auth.debug("OnboardingViewModel.signInWithGoogle: No backend step, defaulting to createEventType")
+                currentStep = .createEventType
+            }
+
+            // Check if user already has event types (skip createEventType if so)
+            await checkExistingEventTypes()
+
+            Log.auth.debug("OnboardingViewModel.signInWithGoogle: Complete", context: .with { ctx in
+                ctx.add("isComplete", String(isComplete))
+                ctx.add("currentStep", currentStep.rawValue)
+            })
         } catch let error as GoogleSignInError {
             if error.isUserCancellation {
                 // User cancelled - don't show error
