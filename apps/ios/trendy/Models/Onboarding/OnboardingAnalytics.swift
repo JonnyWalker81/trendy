@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 /// Analytics event names for PostHog tracking during onboarding
 enum OnboardingAnalyticsEvent: String {
@@ -87,6 +88,54 @@ enum OnboardingPermissionType: String, CaseIterable {
         case .notifications: return "Enable Notifications"
         case .location: return "Enable Location"
         case .healthkit: return "Connect HealthKit"
+        }
+    }
+
+    /// Brief explanation shown when user taps Skip
+    var skipExplanation: String {
+        switch self {
+        case .notifications:
+            return "You won't receive reminders to log events"
+        case .location:
+            return "Auto-logging for locations like gym or home won't work"
+        case .healthkit:
+            return "Workout and health data won't sync automatically"
+        }
+    }
+
+    /// Bullet points for the priming screen (more detailed than promptDescription)
+    var benefitBullets: [String] {
+        switch self {
+        case .notifications:
+            return [
+                "Get reminded to log daily habits",
+                "See streak notifications",
+                "Weekly summary reports"
+            ]
+        case .location:
+            return [
+                "Auto-log when you arrive at gym",
+                "Track commute patterns",
+                "No manual logging needed"
+            ]
+        case .healthkit:
+            return [
+                "Import workouts from Apple Watch",
+                "Track steps automatically",
+                "See health trends in one place"
+            ]
+        }
+    }
+
+    /// Gradient colors for the permission's hero view
+    var gradientColors: [Color] {
+        switch self {
+        case .notifications:
+            return [Color.orange, Color.red]
+        case .location:
+            return [Color.blue, Color.purple]
+        case .healthkit:
+            return [Color.pink, Color.red]
         }
     }
 }
