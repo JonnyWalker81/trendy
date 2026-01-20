@@ -9,8 +9,8 @@ Requirements for the onboarding overhaul. Each maps to roadmap phases.
 
 ### State Management
 
-- [ ] **STATE-01**: Onboarding completion status stored in backend database (source of truth)
-- [ ] **STATE-02**: Backend endpoint to get/set user's onboarding status
+- [x] **STATE-01**: Onboarding completion status stored in backend database (source of truth)
+- [x] **STATE-02**: Backend endpoint to get/set user's onboarding status
 - [ ] **STATE-03**: Local cache of onboarding status for fast app launches
 - [ ] **STATE-04**: App determines launch state from local cache before any UI renders (no flash)
 - [ ] **STATE-05**: Single enum-based route state (`loading`, `onboarding`, `authenticated`)
@@ -68,8 +68,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STATE-01 | Phase 8 | Pending |
-| STATE-02 | Phase 8 | Pending |
+| STATE-01 | Phase 8 | Complete |
+| STATE-02 | Phase 8 | Complete |
 | STATE-03 | Phase 9 | Pending |
 | STATE-04 | Phase 9 | Pending |
 | STATE-05 | Phase 9 | Pending |
@@ -97,4 +97,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 after roadmap creation*
+*Last updated: 2026-01-20 after Phase 8 completion*

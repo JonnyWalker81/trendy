@@ -14,7 +14,7 @@ Phases are ordered by dependency: backend foundation enables iOS state managemen
 
 ## Phases
 
-### Phase 8: Backend Onboarding Status
+### Phase 8: Backend Onboarding Status ✓
 
 **Goal:** Backend stores and serves onboarding completion status per user.
 
@@ -27,14 +27,16 @@ Phases are ordered by dependency: backend foundation enables iOS state managemen
 **Plans:** 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Database schema and migration for onboarding_status table
-- [ ] 08-02-PLAN.md — Go API layer (handler/service/repository) with GET/PATCH/DELETE endpoints
+- [x] 08-01-PLAN.md — Database schema and migration for onboarding_status table
+- [x] 08-02-PLAN.md — Go API layer (handler/service/repository) with GET/PATCH/DELETE endpoints
 
 **Success Criteria:**
-1. Backend has database table/column storing onboarding completion status per user
-2. GET /api/v1/users/onboarding returns current user's onboarding status
-3. PATCH /api/v1/users/onboarding updates current user's onboarding status
-4. Unauthenticated requests return 401
+1. ✓ Backend has database table/column storing onboarding completion status per user
+2. ✓ GET /api/v1/users/onboarding returns current user's onboarding status
+3. ✓ PATCH /api/v1/users/onboarding updates current user's onboarding status
+4. ✓ Unauthenticated requests return 401
+
+**Completed:** 2026-01-20
 
 ---
 
@@ -111,12 +113,12 @@ Plans:
 
 | Phase | Name | Status | Requirements | Success |
 |-------|------|--------|--------------|---------|
-| 8 | Backend Onboarding Status | Planned | 2/2 | 0/4 |
+| 8 | Backend Onboarding Status | Complete | 2/2 | 4/4 |
 | 9 | iOS State Architecture | Pending | 7/7 | 0/5 |
 | 10 | Visual Design & Flow | Pending | 10/10 | 0/5 |
 | 11 | Accessibility | Pending | 2/2 | 0/4 |
 
-**Total:** 21 requirements mapped, 0 complete
+**Total:** 21 requirements mapped, 2 complete
 
 ## Coverage Verification
 
@@ -151,4 +153,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20*
+*Last updated: 2026-01-20 — Phase 8 complete*
