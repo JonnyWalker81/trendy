@@ -571,6 +571,23 @@ class APIClient {
     func refreshInsights() async throws {
         try await requestWithoutResponse("POST", endpoint: "/insights/refresh")
     }
+
+    // MARK: - Onboarding Status Endpoints
+
+    /// Get current user's onboarding status (returns defaults for new users)
+    func getOnboardingStatus() async throws -> APIOnboardingStatus {
+        return try await request("GET", endpoint: "/users/onboarding")
+    }
+
+    /// Update current user's onboarding status
+    func updateOnboardingStatus(_ request: UpdateOnboardingStatusRequest) async throws -> APIOnboardingStatus {
+        return try await self.request("PATCH", endpoint: "/users/onboarding", body: request)
+    }
+
+    /// Reset onboarding status (soft reset - clears step timestamps, preserves permissions)
+    func resetOnboardingStatus() async throws -> APIOnboardingStatus {
+        return try await request("DELETE", endpoint: "/users/onboarding")
+    }
 }
 
 // MARK: - Error Types
