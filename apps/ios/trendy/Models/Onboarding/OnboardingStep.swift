@@ -87,4 +87,13 @@ enum OnboardingStep: String, Codable, CaseIterable {
         default: return true
         }
     }
+
+    /// Progress value for OnboardingProgressBar (0.0 to 1.0)
+    /// Evenly distributes steps across the progress bar
+    var progress: Double {
+        let allSteps = OnboardingStep.allCases
+        guard let index = allSteps.firstIndex(of: self) else { return 0 }
+        // Returns: welcome=0.0, auth=0.2, createEventType=0.4, logFirstEvent=0.6, permissions=0.8, finish=1.0
+        return Double(index) / Double(allSteps.count - 1)
+    }
 }

@@ -86,7 +86,7 @@ Plans:
 - DESIGN-04: PhaseAnimator/KeyframeAnimator for polished step transitions
 - DESIGN-05: Progress indicator showing steps remaining
 - DESIGN-06: Celebration animation on onboarding completion
-- FLOW-01: Flow order is Welcome -> Auth -> Permissions
+- FLOW-01: Flow order is Welcome -> Auth -> CreateEventType -> LogFirstEvent -> Permissions -> Finish
 - FLOW-02: Pre-permission priming screens explain value before system dialog
 - FLOW-03: Skip option available with explanation of what user will miss
 - FLOW-04: Each permission request has contextual benefit messaging
