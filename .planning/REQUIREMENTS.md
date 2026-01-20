@@ -30,7 +30,7 @@ Requirements for the onboarding overhaul. Each maps to roadmap phases.
 
 ### Flow & UX
 
-- [ ] **FLOW-01**: Flow order is Welcome → Auth → Permissions
+- [ ] **FLOW-01**: Flow order is Welcome -> Auth -> Permissions
 - [ ] **FLOW-02**: Pre-permission priming screens explain value before system dialog
 - [ ] **FLOW-03**: Skip option available with explanation of what user will miss
 - [ ] **FLOW-04**: Each permission request has contextual benefit messaging
@@ -68,33 +68,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STATE-01 | TBD | Pending |
-| STATE-02 | TBD | Pending |
-| STATE-03 | TBD | Pending |
-| STATE-04 | TBD | Pending |
-| STATE-05 | TBD | Pending |
-| STATE-06 | TBD | Pending |
-| STATE-07 | TBD | Pending |
-| STATE-08 | TBD | Pending |
-| STATE-09 | TBD | Pending |
-| DESIGN-01 | TBD | Pending |
-| DESIGN-02 | TBD | Pending |
-| DESIGN-03 | TBD | Pending |
-| DESIGN-04 | TBD | Pending |
-| DESIGN-05 | TBD | Pending |
-| DESIGN-06 | TBD | Pending |
-| FLOW-01 | TBD | Pending |
-| FLOW-02 | TBD | Pending |
-| FLOW-03 | TBD | Pending |
-| FLOW-04 | TBD | Pending |
-| A11Y-01 | TBD | Pending |
-| A11Y-02 | TBD | Pending |
+| STATE-01 | Phase 8 | Pending |
+| STATE-02 | Phase 8 | Pending |
+| STATE-03 | Phase 9 | Pending |
+| STATE-04 | Phase 9 | Pending |
+| STATE-05 | Phase 9 | Pending |
+| STATE-06 | Phase 9 | Pending |
+| STATE-07 | Phase 9 | Pending |
+| STATE-08 | Phase 9 | Pending |
+| STATE-09 | Phase 9 | Pending |
+| DESIGN-01 | Phase 10 | Pending |
+| DESIGN-02 | Phase 10 | Pending |
+| DESIGN-03 | Phase 10 | Pending |
+| DESIGN-04 | Phase 10 | Pending |
+| DESIGN-05 | Phase 10 | Pending |
+| DESIGN-06 | Phase 10 | Pending |
+| FLOW-01 | Phase 10 | Pending |
+| FLOW-02 | Phase 10 | Pending |
+| FLOW-03 | Phase 10 | Pending |
+| FLOW-04 | Phase 10 | Pending |
+| A11Y-01 | Phase 11 | Pending |
+| A11Y-02 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21 (pending roadmap)
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-19 after initial definition*
+*Last updated: 2026-01-19 after roadmap creation*
