@@ -9,9 +9,11 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AppRouter.self) private var appRouter
     @State private var email = ""
     @State private var password = ""
     @State private var showingSignup = false
+    @State private var isLoggingIn = false
 
     var body: some View {
         NavigationStack {
@@ -59,6 +61,7 @@ struct LoginView: View {
 
                     // Login Button
                     Button {
+                        isLoggingIn = true
                         Task {
                             await authViewModel.signIn(email: email, password: password)
                         }
@@ -104,6 +107,21 @@ struct LoginView: View {
             .onAppear {
                 authViewModel.clearError()
             }
+            .onChange(of: authViewModel.isAuthenticated) { wasAuthenticated, isAuthenticated in
+                // Only react if we initiated login AND auth succeeded
+                if isLoggingIn && isAuthenticated && !wasAuthenticated {
+                    isLoggingIn = false
+                    Task {
+                        await appRouter.handleLogin()
+                    }
+                }
+            }
+            .onChange(of: authViewModel.errorMessage) { _, errorMessage in
+                // Reset login flag on error so user can try again
+                if errorMessage != nil {
+                    isLoggingIn = false
+                }
+            }
         }
     }
 }
@@ -113,9 +131,14 @@ struct LoginView: View {
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
     )
+    let previewAPIConfig = APIConfiguration(baseURL: "http://127.0.0.1:8080/api/v1")
     let previewSupabase = SupabaseService(configuration: previewConfig)
+    let previewAPIClient = APIClient(configuration: previewAPIConfig, supabaseService: previewSupabase)
     let previewAuthViewModel = AuthViewModel(supabaseService: previewSupabase)
+    let previewOnboardingService = OnboardingStatusService(apiClient: previewAPIClient, supabaseService: previewSupabase)
+    let previewAppRouter = AppRouter(supabaseService: previewSupabase, onboardingService: previewOnboardingService)
 
     return LoginView()
         .environment(previewAuthViewModel)
+        .environment(previewAppRouter)
 }
