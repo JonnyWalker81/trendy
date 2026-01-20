@@ -292,12 +292,13 @@ extension HealthKitService {
                 continue
             }
 
-            // Skip if already in processedSampleIds (prevents infinite loop)
+            // Skip if already in processedSampleIds
+            // After bootstrap, processedSampleIds is populated from database events.
+            // If a sample is already processed (in the set), we should skip it.
+            // Note: The old code removed from processedSampleIds but didn't skip,
+            // which caused duplicates when reconciliation ran after bootstrap.
             if processedSampleIds.contains(sampleId) {
-                // But wait - if it's in processedSampleIds but NOT in local storage,
-                // that means it was deleted. Remove from processedSampleIds to allow re-import.
-                processedSampleIds.remove(sampleId)
-                saveProcessedSampleIds()
+                continue
             }
 
             // Process this sample (will create event if not a duplicate)
