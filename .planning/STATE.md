@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** v1.1 Onboarding Overhaul — Phase 8 complete
+**Current focus:** v1.1 Onboarding Overhaul — Phase 9 in progress
 
 ## Current Position
 
-Phase: 8 of 4 (Backend Onboarding Status)
-Plan: 2 of 2 complete
-Status: Phase verified and complete
-Last activity: 2026-01-20 — Phase 8 verified (10/10 must-haves passed)
+Phase: 9 of 4 (iOS State Architecture)
+Plan: 1 of 7 complete
+Status: In progress
+Last activity: 2026-01-20 — Completed 09-01-PLAN.md (Onboarding Data Layer)
 
 Progress: [██______] 1/4 phases complete
 
@@ -27,7 +27,7 @@ Progress: [██______] 1/4 phases complete
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
 | 8 | Backend Onboarding Status | 2 | Complete |
-| 9 | iOS State Architecture | 7 | Pending |
+| 9 | iOS State Architecture | 7 | In Progress (1/7) |
 | 10 | Visual Design & Flow | 10 | Pending |
 | 11 | Accessibility | 2 | Pending |
 
@@ -48,6 +48,13 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - DELETE returns 200 with reset state (not 204) so iOS sees new state immediately
 - UpdateWhere used since primary key is user_id, not id
 
+**Phase 9 decisions (09-01):**
+- UserDefaults for onboarding cache (fast synchronous access, survives reinstall)
+- Per-user keying with userId prefix prevents status leakage between accounts
+- createEventType and logFirstEvent tracked locally only (not in backend schema)
+- Cache preserved on logout so returning users skip re-onboarding
+- Fire-and-forget backend push with cache-first updates for instant UX
+
 ### Pending Todos
 
 None
@@ -58,18 +65,19 @@ None
 
 ## Next Action
 
-**Phase 8 Verified - Ready for Phase 9**
+**Phase 9 Plan 1 Complete - Continue to Plan 2**
 
-Phase 8 deliverables complete and verified:
-- Database schema with RLS (08-01) ✓
-- API endpoints with validation (08-02) ✓
-- Verification: 10/10 must-haves passed
+Phase 9 Plan 1 deliverables complete:
+- APIOnboardingStatus model with CodingKeys
+- OnboardingCache with synchronous per-user reads
+- OnboardingStatusService combining API and cache
+- APIClient endpoints for onboarding status
 
-Next: `/gsd:discuss-phase 9` or `/gsd:plan-phase 9`
+Next: Execute 09-02-PLAN.md (AppRouter implementation)
 
 ## Session Continuity
 
-Last session: 2026-01-20
-Stopped at: Completed 08-02-PLAN.md (Phase 8 complete)
+Last session: 2026-01-20T19:39:28Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None
-Next: Plan Phase 9 (iOS State Architecture)
+Next: Execute 09-02-PLAN.md
