@@ -15,7 +15,14 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfreePredicate =
+            pkg:
+            builtins.elem (nixpkgs.lib.getName pkg) [
+              "copilot-language-server"
+            ];
+        };
       in
       {
         devShells.default = pkgs.mkShell {
@@ -45,6 +52,9 @@
             git
             curl
             jq
+
+            # Emacs Copilot support
+            copilot-language-server
 
             # Optional: iOS development (if on macOS)
             # xcode-install would go here but it's macOS specific
