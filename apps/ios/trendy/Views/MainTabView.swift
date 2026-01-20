@@ -199,10 +199,6 @@ struct MainTabView: View {
             if showIndicator {
                 SyncIndicatorView(
                     displayState: syncStatusViewModel.displayState,
-                    onTap: {
-                        // Navigate to sync settings by switching to settings tab
-                        selectedTab = 4
-                    },
                     onRetry: {
                         await eventStore?.fetchData()
                     }

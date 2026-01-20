@@ -17,9 +17,6 @@ struct SyncIndicatorView: View {
     /// The current display state
     let displayState: SyncIndicatorDisplayState
 
-    /// Action when the indicator is tapped (for details/navigation)
-    let onTap: () -> Void
-
     /// Action to retry failed sync operations
     let onRetry: () async -> Void
 
@@ -29,20 +26,58 @@ struct SyncIndicatorView: View {
     // MARK: - Body
 
     var body: some View {
-        HStack(spacing: 12) {
-            statusIcon
-            statusContent
-            Spacer()
-            actionButton
+        // Use ZStack to layer passthrough visual content with interactive button overlay
+        ZStack(alignment: .trailing) {
+            // Visual pill - fully passthrough, does not intercept taps
+            HStack(spacing: 12) {
+                statusIcon
+                statusContent
+                Spacer()
+                // Reserve space for action button but don't render it here
+                actionButtonPlaceholder
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(backgroundColor.opacity(0.95))
+            .clipShape(Capsule())
+            .shadow(color: Color.black.opacity(0.1), radius: 8, y: 4)
+            .allowsHitTesting(false) // Entire pill is passthrough
+
+            // Action button overlay - interactive, positioned over the placeholder
+            HStack {
+                Spacer()
+                actionButton
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(backgroundColor.opacity(0.95))
-        .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(0.1), radius: 8, y: 4)
-        .padding(.horizontal, 16)
         .padding(.bottom, 8)
-        .onTapGesture(perform: onTap)
+    }
+
+    // MARK: - Action Button Placeholder
+
+    /// Invisible placeholder to reserve space for action button in the passthrough layer
+    @ViewBuilder
+    private var actionButtonPlaceholder: some View {
+        switch displayState {
+        case .error(_, let canRetry) where canRetry:
+            Text("Retry")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .opacity(0) // Invisible, just for layout
+
+        case .offline(let pending) where pending > 0:
+            Text("Sync Now")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .opacity(0) // Invisible, just for layout
+
+        default:
+            EmptyView()
+        }
     }
 
     // MARK: - Background Color
@@ -176,7 +211,6 @@ struct SyncIndicatorView: View {
     VStack {
         SyncIndicatorView(
             displayState: .hidden,
-            onTap: {},
             onRetry: {}
         )
         Spacer()
@@ -188,7 +222,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .success,
-            onTap: {},
             onRetry: {}
         )
     }
@@ -199,7 +232,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .offline(pending: 5),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -210,7 +242,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .offline(pending: 0),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -221,7 +252,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .syncing(current: 3, total: 5),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -232,7 +262,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .syncing(current: 0, total: 0),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -243,7 +272,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .error(message: "Connection failed", canRetry: true),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -254,7 +282,6 @@ struct SyncIndicatorView: View {
         Spacer()
         SyncIndicatorView(
             displayState: .error(message: "Session expired - sign in again", canRetry: false),
-            onTap: {},
             onRetry: {}
         )
     }
@@ -264,22 +291,18 @@ struct SyncIndicatorView: View {
     VStack(spacing: 16) {
         SyncIndicatorView(
             displayState: .success,
-            onTap: {},
             onRetry: {}
         )
         SyncIndicatorView(
             displayState: .offline(pending: 3),
-            onTap: {},
             onRetry: {}
         )
         SyncIndicatorView(
             displayState: .syncing(current: 2, total: 5),
-            onTap: {},
             onRetry: {}
         )
         SyncIndicatorView(
             displayState: .error(message: "Network error", canRetry: true),
-            onTap: {},
             onRetry: {}
         )
     }
