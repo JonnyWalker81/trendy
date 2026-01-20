@@ -119,15 +119,56 @@ extension HealthKitService {
         do {
             let context = useFreshContext ? ModelContext(modelContainer) : modelContext
             let events = try context.fetch(descriptor)
-            return events.contains { event in
-                let startMatches = abs(event.timestamp.timeIntervalSince(startDate)) < tolerance
+
+            // DIAGNOSTIC: Log search parameters and candidate count
+            Log.healthKit.debug("[DEDUP-TIMESTAMP] Checking for workout duplicate", context: .with { ctx in
+                ctx.add("startDate", startDate.ISO8601Format())
+                ctx.add("endDate", endDate?.ISO8601Format() ?? "nil")
+                ctx.add("tolerance", tolerance)
+                ctx.add("useFreshContext", useFreshContext)
+                ctx.add("candidateCount", events.count)
+            })
+
+            let match = events.first { event in
+                let startDiff = abs(event.timestamp.timeIntervalSince(startDate))
+                let startMatches = startDiff <= tolerance
                 let endMatches: Bool
+                let endDiff: TimeInterval?
                 if let eventEnd = event.endDate, let newEnd = endDate {
-                    endMatches = abs(eventEnd.timeIntervalSince(newEnd)) < tolerance
+                    endDiff = abs(eventEnd.timeIntervalSince(newEnd))
+                    endMatches = endDiff! <= tolerance
                 } else {
+                    endDiff = nil
                     endMatches = (event.endDate == nil && endDate == nil)
                 }
+
+                // DIAGNOSTIC: Log close matches (within 5 seconds) for debugging
+                if startDiff < 5.0 {
+                    Log.healthKit.debug("[DEDUP-TIMESTAMP] Close match found", context: .with { ctx in
+                        ctx.add("eventId", event.id)
+                        ctx.add("eventTimestamp", event.timestamp.ISO8601Format())
+                        ctx.add("eventEndDate", event.endDate?.ISO8601Format() ?? "nil")
+                        ctx.add("eventSampleId", event.healthKitSampleId ?? "nil")
+                        ctx.add("startDiff", String(format: "%.3f", startDiff))
+                        ctx.add("endDiff", endDiff.map { String(format: "%.3f", $0) } ?? "N/A")
+                        ctx.add("startMatches", startMatches)
+                        ctx.add("endMatches", endMatches)
+                        ctx.add("isMatch", startMatches && endMatches)
+                    })
+                }
+
                 return startMatches && endMatches
+            }
+
+            if let matchedEvent = match {
+                Log.healthKit.info("[DEDUP-TIMESTAMP] Found matching workout", context: .with { ctx in
+                    ctx.add("matchedEventId", matchedEvent.id)
+                    ctx.add("matchedSampleId", matchedEvent.healthKitSampleId ?? "nil")
+                })
+                return true
+            } else {
+                Log.healthKit.debug("[DEDUP-TIMESTAMP] No matching workout found")
+                return false
             }
         } catch {
             Log.data.error("Error checking for duplicate workout by timestamp", error: error)
@@ -171,7 +212,7 @@ extension HealthKitService {
             // Check for content match: eventTypeId + timestamp (within tolerance)
             let match = events.contains { event in
                 guard event.eventType?.id == eventTypeId else { return false }
-                return abs(event.timestamp.timeIntervalSince(timestamp)) < tolerance
+                return abs(event.timestamp.timeIntervalSince(timestamp)) <= tolerance
             }
 
             if match {
