@@ -40,7 +40,7 @@ Plans:
 
 ---
 
-### Phase 9: iOS State Architecture
+### Phase 9: iOS State Architecture ✓
 
 **Goal:** Returning users never see onboarding screens flash on app launch.
 
@@ -58,16 +58,18 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — API models, OnboardingCache, OnboardingStatusService (data layer foundation)
-- [ ] 09-02-PLAN.md — AppRouter Observable and RootView (routing state machine)
-- [ ] 09-03-PLAN.md — Remove NotificationCenter routing, wire AppRouter to existing views
+- [x] 09-01-PLAN.md — API models, OnboardingCache, OnboardingStatusService (data layer foundation)
+- [x] 09-02-PLAN.md — AppRouter Observable and RootView (routing state machine)
+- [x] 09-03-PLAN.md — Remove NotificationCenter routing, wire AppRouter to existing views
 
 **Success Criteria:**
-1. Returning authenticated user launches app and sees main app immediately (no loading screen, no onboarding flash)
-2. Returning unauthenticated user launches app and sees login screen immediately (not onboarding)
-3. New user completes onboarding, force quits, relaunches - goes to main app (status persisted)
-4. User signs out on device A, signs in on device B with completed onboarding - goes to main app (backend sync)
-5. No NotificationCenter posts for routing decisions (Observable only)
+1. ✓ Returning authenticated user launches app and sees main app immediately (no loading screen, no onboarding flash)
+2. ✓ Returning unauthenticated user launches app and sees login screen immediately (not onboarding)
+3. ✓ New user completes onboarding, force quits, relaunches - goes to main app (status persisted)
+4. ✓ User signs out on device A, signs in on device B with completed onboarding - goes to main app (backend sync)
+5. ✓ No NotificationCenter posts for routing decisions (Observable only)
+
+**Completed:** 2026-01-20
 
 ---
 
@@ -121,11 +123,11 @@ Plans:
 | Phase | Name | Status | Requirements | Success |
 |-------|------|--------|--------------|---------|
 | 8 | Backend Onboarding Status | Complete | 2/2 | 4/4 |
-| 9 | iOS State Architecture | Planned | 7/7 | 0/5 |
+| 9 | iOS State Architecture | Complete | 7/7 | 5/5 |
 | 10 | Visual Design & Flow | Pending | 10/10 | 0/5 |
 | 11 | Accessibility | Pending | 2/2 | 0/4 |
 
-**Total:** 21 requirements mapped, 2 complete
+**Total:** 21 requirements mapped, 9 complete
 
 ## Coverage Verification
 
@@ -160,4 +162,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 — Phase 9 planned*
+*Last updated: 2026-01-20 — Phase 9 complete*

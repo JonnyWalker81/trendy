@@ -11,13 +11,13 @@ Requirements for the onboarding overhaul. Each maps to roadmap phases.
 
 - [x] **STATE-01**: Onboarding completion status stored in backend database (source of truth)
 - [x] **STATE-02**: Backend endpoint to get/set user's onboarding status
-- [ ] **STATE-03**: Local cache of onboarding status for fast app launches
-- [ ] **STATE-04**: App determines launch state from local cache before any UI renders (no flash)
-- [ ] **STATE-05**: Single enum-based route state (`loading`, `onboarding`, `authenticated`)
-- [ ] **STATE-06**: Returning users never see onboarding screens
-- [ ] **STATE-07**: Unauthenticated returning users go directly to login
-- [ ] **STATE-08**: Replace NotificationCenter routing with shared Observable
-- [ ] **STATE-09**: Sync onboarding status from backend on login (updates local cache)
+- [x] **STATE-03**: Local cache of onboarding status for fast app launches
+- [x] **STATE-04**: App determines launch state from local cache before any UI renders (no flash)
+- [x] **STATE-05**: Single enum-based route state (`loading`, `onboarding`, `authenticated`)
+- [x] **STATE-06**: Returning users never see onboarding screens
+- [x] **STATE-07**: Unauthenticated returning users go directly to login
+- [x] **STATE-08**: Replace NotificationCenter routing with shared Observable
+- [x] **STATE-09**: Sync onboarding status from backend on login (updates local cache)
 
 ### Visual Design
 
@@ -70,13 +70,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | STATE-01 | Phase 8 | Complete |
 | STATE-02 | Phase 8 | Complete |
-| STATE-03 | Phase 9 | Pending |
-| STATE-04 | Phase 9 | Pending |
-| STATE-05 | Phase 9 | Pending |
-| STATE-06 | Phase 9 | Pending |
-| STATE-07 | Phase 9 | Pending |
-| STATE-08 | Phase 9 | Pending |
-| STATE-09 | Phase 9 | Pending |
+| STATE-03 | Phase 9 | Complete |
+| STATE-04 | Phase 9 | Complete |
+| STATE-05 | Phase 9 | Complete |
+| STATE-06 | Phase 9 | Complete |
+| STATE-07 | Phase 9 | Complete |
+| STATE-08 | Phase 9 | Complete |
+| STATE-09 | Phase 9 | Complete |
 | DESIGN-01 | Phase 10 | Pending |
 | DESIGN-02 | Phase 10 | Pending |
 | DESIGN-03 | Phase 10 | Pending |
@@ -97,4 +97,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-20 after Phase 8 completion*
+*Last updated: 2026-01-20 after Phase 9 completion*
