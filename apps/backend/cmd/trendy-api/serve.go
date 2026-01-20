@@ -73,6 +73,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	streakRepo := repository.NewStreakRepository(supabaseClient)
 	changeLogRepo := repository.NewChangeLogRepository(supabaseClient)
 	idempotencyRepo := repository.NewIdempotencyRepository(supabaseClient)
+	onboardingRepo := repository.NewOnboardingStatusRepository(supabaseClient)
 
 	// Initialize services
 	eventService := service.NewEventService(eventRepo, eventTypeRepo, changeLogRepo)
@@ -83,6 +84,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	geofenceService := service.NewGeofenceService(geofenceRepo, changeLogRepo)
 	intelligenceService := service.NewIntelligenceService(eventRepo, eventTypeRepo, insightRepo, aggregateRepo, streakRepo)
 	syncService := service.NewSyncService(eventRepo, eventTypeRepo, changeLogRepo)
+	onboardingService := service.NewOnboardingService(onboardingRepo)
 
 	// Initialize handlers
 	eventHandler := handlers.NewEventHandler(eventService)
@@ -94,6 +96,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	insightsHandler := handlers.NewInsightsHandler(intelligenceService)
 	changesHandler := handlers.NewChangesHandler(changeLogRepo)
 	syncHandler := handlers.NewSyncHandler(syncService)
+	onboardingHandler := handlers.NewOnboardingHandler(onboardingService)
 
 	// Set Gin mode based on environment
 	if cfg.Server.Env == "production" {
@@ -182,6 +185,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 			protected.GET("/insights/streaks", insightsHandler.GetStreaks)
 			protected.GET("/insights/weekly-summary", insightsHandler.GetWeeklySummary)
 			protected.POST("/insights/refresh", insightsHandler.RefreshInsights)
+
+			// Onboarding status routes
+			protected.GET("/users/onboarding", onboardingHandler.GetOnboardingStatus)
+			protected.PATCH("/users/onboarding", onboardingHandler.UpdateOnboardingStatus)
+			protected.DELETE("/users/onboarding", onboardingHandler.ResetOnboardingStatus)
 		}
 	}
 
