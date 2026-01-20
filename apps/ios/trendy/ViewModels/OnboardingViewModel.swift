@@ -19,6 +19,8 @@ class OnboardingViewModel {
     private let profileService: ProfileService
     private let googleSignInService: GoogleSignInService
     private var eventStore: EventStore?
+    private var appRouter: AppRouter?
+    private var onboardingStatusService: OnboardingStatusService?
 
     // MARK: - Published State
 
@@ -72,6 +74,16 @@ class OnboardingViewModel {
     /// Set the EventStore for event type/event creation
     func setEventStore(_ store: EventStore) {
         self.eventStore = store
+    }
+
+    /// Set the AppRouter for navigation transitions
+    func setAppRouter(_ router: AppRouter) {
+        self.appRouter = router
+    }
+
+    /// Set the OnboardingStatusService for step tracking
+    func setOnboardingStatusService(_ service: OnboardingStatusService) {
+        self.onboardingStatusService = service
     }
 
     // MARK: - Initial State Determination
@@ -240,7 +252,12 @@ class OnboardingViewModel {
         // Always save locally (immediate)
         UserDefaults.standard.set(step.rawValue, forKey: Self.localStepKey)
 
-        // Save to backend if authenticated (async, fire-and-forget)
+        // Mark step completed in OnboardingStatusService (handles cache + backend sync)
+        if let onboardingStatusService = onboardingStatusService {
+            await onboardingStatusService.markStepCompleted(step)
+        }
+
+        // Save to backend via ProfileService if authenticated (async, fire-and-forget)
         if supabaseService.isAuthenticated {
             Task {
                 do {
@@ -343,9 +360,16 @@ class OnboardingViewModel {
             Log.auth.debug("OnboardingViewModel.signIn: Calling determineInitialState...")
             await determineInitialState()
 
+            // If onboarding is complete, transition directly via AppRouter
+            if isComplete {
+                Log.auth.debug("OnboardingViewModel.signIn: Onboarding complete, transitioning via AppRouter")
+                appRouter?.transitionToAuthenticated()
+                return
+            }
+
             // If we're still on auth step after sign-in, advance past it
             // (auth step is complete since we just signed in successfully)
-            if currentStep == .auth && !isComplete {
+            if currentStep == .auth {
                 Log.auth.debug("OnboardingViewModel.signIn: Auth complete, advancing past auth step")
                 await advanceToNextStep()
             }
@@ -387,6 +411,12 @@ class OnboardingViewModel {
 
             // Check profile status (might be returning user)
             await determineInitialState()
+
+            // If onboarding is complete, transition directly via AppRouter
+            if isComplete {
+                Log.auth.debug("OnboardingViewModel.signInWithGoogle: Onboarding complete, transitioning via AppRouter")
+                appRouter?.transitionToAuthenticated()
+            }
         } catch let error as GoogleSignInError {
             if error.isUserCancellation {
                 // User cancelled - don't show error
@@ -643,8 +673,10 @@ class OnboardingViewModel {
 
         isComplete = true
 
-        // Post notification for app to transition
-        NotificationCenter.default.post(name: .onboardingCompleted, object: nil)
+        // Transition to main app via AppRouter
+        Task { @MainActor in
+            await appRouter?.handleOnboardingComplete()
+        }
     }
 
     // MARK: - Sign Out
