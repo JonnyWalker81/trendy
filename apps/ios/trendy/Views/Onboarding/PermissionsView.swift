@@ -3,6 +3,7 @@
 //  trendy
 //
 //  Permission pre-prompts screen for onboarding
+//  Displays individual full-screen priming views for each permission
 //
 
 import SwiftUI
@@ -15,138 +16,72 @@ struct PermissionsView: View {
     @State private var currentPermissionIndex = 0
     @State private var permissionResults: [OnboardingPermissionType: Bool] = [:]
 
+    /// Ordered list of permissions to request
     private let permissions: [OnboardingPermissionType] = [
         .notifications,
         .location,
         .healthkit
     ]
 
+    /// Current permission being displayed (nil when all handled)
     private var currentPermission: OnboardingPermissionType? {
         guard currentPermissionIndex < permissions.count else { return nil }
         return permissions[currentPermissionIndex]
     }
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Header
-            VStack(spacing: 8) {
-                Text("Enhance Your Experience")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.dsForeground)
-
-                Text("These permissions are optional but helpful")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.dsMutedForeground)
-            }
-
-            // Progress Indicator
-            ProgressIndicatorView(currentStep: 4, totalSteps: 4)
-
-            Spacer()
-
-            // Current Permission Card
-            if let permission = currentPermission {
-                PermissionCard(
-                    permission: permission,
-                    onEnable: {
-                        await requestPermission(permission)
-                    },
-                    onSkip: {
-                        skipCurrentPermission()
-                    }
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-                .id(permission)
-            } else {
-                // All permissions handled
-                allPermissionsHandledView
-            }
-
-            Spacer()
-
-            // Skip all remaining
-            if currentPermission != nil {
-                Button {
-                    Task {
-                        await viewModel.skipCurrentStep()
-                    }
-                } label: {
-                    Text("Skip all and continue")
-                        .foregroundStyle(Color.dsMutedForeground)
-                }
-            }
-
-            Spacer(minLength: 40)
-        }
-        .background(Color.dsBackground)
-        .animation(.easeInOut(duration: 0.3), value: currentPermissionIndex)
+    /// Calculate progress: interpolate between permissions step and finish step
+    /// This gives smooth progress advancement as user moves through permissions
+    private var progress: Double {
+        let baseProgress = OnboardingStep.permissions.progress
+        let finishProgress = OnboardingStep.finish.progress
+        let permissionProgress = Double(currentPermissionIndex) / Double(permissions.count)
+        return baseProgress + (finishProgress - baseProgress) * permissionProgress
     }
 
-    // MARK: - All Permissions Handled View
-
-    private var allPermissionsHandledView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(Color.dsSuccess)
-
-            Text("Permissions Set")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.dsForeground)
-
-            // Summary of results
-            VStack(spacing: 12) {
-                ForEach(permissions, id: \.self) { permission in
-                    HStack {
-                        Image(systemName: permission.iconName)
-                            .foregroundStyle(Color.dsPrimary)
-                            .frame(width: 24)
-
-                        Text(permission.displayName)
-                            .foregroundStyle(Color.dsForeground)
-
-                        Spacer()
-
-                        if let enabled = permissionResults[permission] {
-                            Image(systemName: enabled ? "checkmark.circle.fill" : "minus.circle.fill")
-                                .foregroundStyle(enabled ? Color.dsSuccess : Color.dsMutedForeground)
-                        } else {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(Color.dsMutedForeground)
-                        }
+    var body: some View {
+        Group {
+            if let permission = currentPermission {
+                permissionPrimingView(for: permission)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+                    .id(permission)
+            } else {
+                // All permissions handled - advance to next step
+                Color.clear.onAppear {
+                    Task {
+                        await viewModel.advanceToNextStep()
                     }
                 }
             }
-            .padding()
-            .background(Color.dsCard)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 32)
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPermissionIndex)
+    }
 
-            Text("You can change these anytime in Settings")
-                .font(.caption)
-                .foregroundStyle(Color.dsMutedForeground)
+    // MARK: - Permission Priming Views
 
-            Button {
-                Task {
-                    await viewModel.advanceToNextStep()
-                }
-            } label: {
-                Text("Continue")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.dsPrimary)
-                    .foregroundStyle(Color.dsPrimaryForeground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding(.horizontal, 32)
+    @ViewBuilder
+    private func permissionPrimingView(for permission: OnboardingPermissionType) -> some View {
+        switch permission {
+        case .notifications:
+            NotificationPrimingScreen(
+                progress: progress,
+                onEnable: { await requestPermission(permission) },
+                onSkip: { skipPermission(permission) }
+            )
+        case .location:
+            LocationPrimingScreen(
+                progress: progress,
+                onEnable: { await requestPermission(permission) },
+                onSkip: { skipPermission(permission) }
+            )
+        case .healthkit:
+            HealthKitPrimingScreen(
+                progress: progress,
+                onEnable: { await requestPermission(permission) },
+                onSkip: { skipPermission(permission) }
+            )
         }
     }
 
@@ -172,10 +107,8 @@ struct PermissionsView: View {
         advanceToNextPermission()
     }
 
-    private func skipCurrentPermission() {
-        if let permission = currentPermission {
-            permissionResults[permission] = false
-        }
+    private func skipPermission(_ permission: OnboardingPermissionType) {
+        permissionResults[permission] = false
         advanceToNextPermission()
     }
 
@@ -183,84 +116,6 @@ struct PermissionsView: View {
         withAnimation {
             currentPermissionIndex += 1
         }
-    }
-}
-
-// MARK: - Permission Card
-
-private struct PermissionCard: View {
-    let permission: OnboardingPermissionType
-    let onEnable: () async -> Void
-    let onSkip: () -> Void
-
-    @State private var isLoading = false
-
-    var body: some View {
-        VStack(spacing: 24) {
-            // Icon
-            Image(systemName: permission.iconName)
-                .font(.system(size: 48))
-                .foregroundStyle(.white)
-                .frame(width: 100, height: 100)
-                .background(Color.dsPrimary)
-                .clipShape(Circle())
-
-            // Title and Description
-            VStack(spacing: 8) {
-                Text(permission.promptTitle)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.dsForeground)
-
-                Text(permission.promptDescription)
-                    .font(.body)
-                    .foregroundStyle(Color.dsMutedForeground)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-
-            // Buttons
-            VStack(spacing: 12) {
-                Button {
-                    isLoading = true
-                    Task {
-                        await onEnable()
-                        isLoading = false
-                    }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(Color.dsPrimaryForeground)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                    } else {
-                        Text(permission.enableButtonText)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                    }
-                }
-                .background(Color.dsPrimary)
-                .foregroundStyle(Color.dsPrimaryForeground)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .disabled(isLoading)
-
-                Button(action: onSkip) {
-                    Text("Not Now")
-                        .foregroundStyle(Color.dsLink)
-                }
-                .disabled(isLoading)
-            }
-        }
-        .padding(32)
-        .background(Color.dsCard)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.dsBorder, lineWidth: 1)
-        )
-        .padding(.horizontal, 24)
     }
 }
 
