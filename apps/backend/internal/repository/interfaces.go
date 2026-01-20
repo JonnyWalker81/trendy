@@ -131,3 +131,13 @@ type StreakRepository interface {
 	DeleteByUserID(ctx context.Context, userID string) error
 	DeleteByEventType(ctx context.Context, userID, eventTypeID string) error
 }
+
+// OnboardingStatusRepository defines the interface for onboarding status data access
+type OnboardingStatusRepository interface {
+	// GetOrCreate returns the user's onboarding status, creating a default record if none exists
+	GetOrCreate(ctx context.Context, userID string) (*models.OnboardingStatus, error)
+	// Update updates the user's onboarding status
+	Update(ctx context.Context, userID string, status *models.OnboardingStatus) (*models.OnboardingStatus, error)
+	// SoftReset clears step completion but preserves permission data
+	SoftReset(ctx context.Context, userID string) (*models.OnboardingStatus, error)
+}

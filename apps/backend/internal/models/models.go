@@ -288,3 +288,35 @@ type UpdateGeofenceRequest struct {
 	NotifyOnExit        *bool    `json:"notify_on_exit"`
 	IOSRegionIdentifier *string  `json:"ios_region_identifier"`
 }
+
+// OnboardingStatus represents a user's onboarding completion state
+type OnboardingStatus struct {
+	UserID                   string     `json:"user_id"`
+	Completed                bool       `json:"completed"`
+	WelcomeCompletedAt       *time.Time `json:"welcome_completed_at,omitempty"`
+	AuthCompletedAt          *time.Time `json:"auth_completed_at,omitempty"`
+	PermissionsCompletedAt   *time.Time `json:"permissions_completed_at,omitempty"`
+	NotificationsStatus      *string    `json:"notifications_status,omitempty"`
+	NotificationsCompletedAt *time.Time `json:"notifications_completed_at,omitempty"`
+	HealthkitStatus          *string    `json:"healthkit_status,omitempty"`
+	HealthkitCompletedAt     *time.Time `json:"healthkit_completed_at,omitempty"`
+	LocationStatus           *string    `json:"location_status,omitempty"`
+	LocationCompletedAt      *time.Time `json:"location_completed_at,omitempty"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+}
+
+// UpdateOnboardingStatusRequest represents the request to update onboarding status.
+// All fields are required (full object replacement, not partial update).
+type UpdateOnboardingStatusRequest struct {
+	Completed                bool       `json:"completed"`
+	WelcomeCompletedAt       *time.Time `json:"welcome_completed_at"`
+	AuthCompletedAt          *time.Time `json:"auth_completed_at"`
+	PermissionsCompletedAt   *time.Time `json:"permissions_completed_at"`
+	NotificationsStatus      *string    `json:"notifications_status"`
+	NotificationsCompletedAt *time.Time `json:"notifications_completed_at"`
+	HealthkitStatus          *string    `json:"healthkit_status"`
+	HealthkitCompletedAt     *time.Time `json:"healthkit_completed_at"`
+	LocationStatus           *string    `json:"location_status"`
+	LocationCompletedAt      *time.Time `json:"location_completed_at"`
+}

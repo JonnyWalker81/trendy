@@ -76,3 +76,10 @@ type IntelligenceService interface {
 type SyncService interface {
 	GetSyncStatus(ctx context.Context, userID string) (*SyncStatus, error)
 }
+
+// OnboardingService defines the interface for onboarding business logic
+type OnboardingService interface {
+	GetOnboardingStatus(ctx context.Context, userID string) (*models.OnboardingStatus, error)
+	UpdateOnboardingStatus(ctx context.Context, userID string, req *models.UpdateOnboardingStatusRequest) (*models.OnboardingStatus, error)
+	ResetOnboardingStatus(ctx context.Context, userID string) (*models.OnboardingStatus, error)
+}
