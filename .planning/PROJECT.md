@@ -1,12 +1,26 @@
-# Trendy iOS Data Infrastructure Overhaul
+# Trendy
 
 ## What This Is
 
-A complete rebuild of Trendy's iOS background data systems — HealthKit integration, geofence monitoring, and sync engine. The app now has reliable, offline-first data capture that works seamlessly in the background without user intervention.
+A cross-platform event tracking app for iOS and web. Users track life events — workouts, sleep, location-based triggers, and custom events — with reliable background data capture and offline-first sync. The iOS app now has solid data infrastructure (v1.0) and needs a polished first-run experience.
 
 ## Core Value
 
-**Data capture must be reliable.** When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not. Users should never have to manually refresh or wonder if their data was captured.
+**Effortless tracking.** Users should be able to set up tracking once and forget about it. Data capture happens automatically in the background, sync happens invisibly, and the app stays out of the way while reliably recording what matters.
+
+## Current Milestone: v1.1 Onboarding Overhaul
+
+**Goal:** Fix the confusing onboarding experience — returning users should never see onboarding screens, and new users should have a polished, well-ordered first-run flow.
+
+**Problems to solve:**
+- Returning users see onboarding screens flash on app launch (state management bug)
+- Flow order is wrong for new users
+- Visual design is dated/rough
+
+**Target features:**
+- Proper state detection — returning users go straight to login or main app
+- Correct flow order: Welcome → Auth → Permissions
+- Full visual redesign with modern layouts and animations
 
 ## Current State (v1.0 shipped 2026-01-18)
 
@@ -85,7 +99,21 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 
 <!-- Current scope for next milestone -->
 
-(None — next milestone not yet planned)
+**Onboarding State Management (v1.1):**
+- [ ] OB-STATE-01: Returning users never see onboarding screens
+- [ ] OB-STATE-02: App detects onboarding completion status before rendering
+- [ ] OB-STATE-03: Unauthenticated returning users go to login, not onboarding
+
+**Onboarding Flow (v1.1):**
+- [ ] OB-FLOW-01: Welcome screens show app value proposition
+- [ ] OB-FLOW-02: Auth flow (login/signup) comes after welcome
+- [ ] OB-FLOW-03: Permission requests come after auth with context
+- [ ] OB-FLOW-04: Flow order is Welcome → Auth → Permissions
+
+**Onboarding Design (v1.1):**
+- [ ] OB-DESIGN-01: Modern visual design with new layouts
+- [ ] OB-DESIGN-02: Smooth animations and transitions
+- [ ] OB-DESIGN-03: Consistent design language throughout flow
 
 ### Out of Scope
 
@@ -141,4 +169,4 @@ A complete rebuild of Trendy's iOS background data systems — HealthKit integra
 | Error persistence until dismissed | Errors don't auto-dismiss; user must dismiss or sync must succeed | ✓ Good — no silent failures |
 
 ---
-*Last updated: 2026-01-18 after v1.0 milestone*
+*Last updated: 2026-01-19 after v1.1 milestone started*

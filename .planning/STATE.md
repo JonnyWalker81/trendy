@@ -2,33 +2,25 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-18)
+See: .planning/PROJECT.md (updated 2026-01-19)
 
-**Core value:** Data capture must be reliable. When a workout ends or a geofence triggers, that event must be recorded — whether online or offline, whether the app is open or not.
-**Current focus:** v1.0 shipped — planning next milestone
+**Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
+**Current focus:** v1.1 Onboarding Overhaul — defining requirements
 
 ## Current Position
 
-Phase: v1.0 complete
-Plan: N/A
-Status: Milestone shipped, ready for next milestone
-Last activity: 2026-01-18 — v1.0 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-19 — Milestone v1.1 started
 
-Progress: v1.0 SHIPPED (7 phases, 27 plans)
+Progress: Initializing milestone
 
 ## Milestone History
 
 - v1.0 iOS Data Infrastructure Overhaul — SHIPPED 2026-01-18
   - 7 phases, 27 plans, 25 requirements
   - Archive: .planning/milestones/v1.0-*.md
-
-## Performance Metrics
-
-**v1.0 Velocity:**
-- Total plans completed: 27
-- Average duration: 8.2 min
-- Total execution time: ~221 minutes
-- Timeline: 3 days (2026-01-15 → 2026-01-18)
 
 ## Accumulated Context
 
@@ -43,23 +35,17 @@ None
 
 ### Blockers/Concerns
 
-None — ready for next milestone
+None
 
 ## Next Action
 
-**Start Next Milestone**
+**Define Requirements**
 
-Run `/gsd:new-milestone` to:
-- Define next milestone goals
-- Research → Requirements → Roadmap cycle
-- Create fresh REQUIREMENTS.md
-- Create new ROADMAP.md
-
-Recommended: `/clear` first for fresh context window
+Currently gathering requirements for v1.1 Onboarding Overhaul.
 
 ## Session Continuity
 
-Last session: 2026-01-18
-Stopped at: v1.0 milestone complete
+Last session: 2026-01-19
+Stopped at: Defining requirements
 Resume file: None
-Next: /gsd:new-milestone
+Next: Complete requirements → roadmap
