@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 ## Current Position
 
 Phase: 10 of 4 (Visual Design & Flow)
-Plan: 2 of 5 complete
+Plan: 3 of 5 complete
 Status: In progress
-Last activity: 2026-01-20 — Completed 10-02-PLAN.md (Container + Navigation)
+Last activity: 2026-01-20 — Completed 10-03-PLAN.md (Permission Priming Screens)
 
-Progress: [██████__] 2/5 plans in current phase
+Progress: [███████_] 3/5 plans in current phase
 
 ## Milestone History
 
@@ -28,7 +28,7 @@ Progress: [██████__] 2/5 plans in current phase
 |-------|------|--------------|--------|
 | 8 | Backend Onboarding Status | 2 | Complete |
 | 9 | iOS State Architecture | 7 | Complete |
-| 10 | Visual Design & Flow | 10 | In Progress (2/5 plans) |
+| 10 | Visual Design & Flow | 10 | In Progress (3/5 plans) |
 | 11 | Accessibility | 2 | Pending |
 
 **Total requirements:** 21
@@ -71,6 +71,9 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Hero height for OnboardingAuthView: 200pt (reduced to accommodate form)
 - Feature highlights reduced from 3 to 2 rows for minimal text density
 - Haptic feedback on WelcomeView primary button using sensoryFeedback modifier
+- Skip delay: 1.5s between showing explanation and proceeding
+- Gradient colors per permission: orange-red (notifications), blue-purple (location), pink-red (healthkit)
+- Skip link styled as subtle text (not prominent button) per CONTEXT.md
 
 ### Pending Todos
 
@@ -82,17 +85,19 @@ None
 
 ## Next Action
 
-**Phase 10 Plan 02 Complete - Ready for Plan 03**
+**Phase 10 Plan 03 Complete - Ready for Plan 04**
 
-Container + Navigation delivered:
-- WelcomeView: Hero layout with progress bar, haptic feedback on primary button
-- OnboardingAuthView: Hero layout with dynamic icon, computed progress
+Permission Priming Screens delivered:
+- NotificationPrimingScreen: Hero + benefit bullets + skip flow
+- LocationPrimingScreen: Hero + benefit bullets + skip flow
+- HealthKitPrimingScreen: Hero + benefit bullets + skip flow
+- OnboardingPermissionType: Enhanced with skipExplanation, benefitBullets, gradientColors
 
-Next: Execute 10-03-PLAN.md (Permission Priming Screens)
+Next: Execute 10-04-PLAN.md (Flow Integration)
 
 ## Session Continuity
 
-Last session: 2026-01-20T21:51:45Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-01-20T21:52:00Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
-Next: Execute 10-03-PLAN.md
+Next: Execute 10-04-PLAN.md
