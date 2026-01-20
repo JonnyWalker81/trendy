@@ -261,11 +261,11 @@ extension HealthKitService {
             }
         case .mindfulness:
             if let categorySample = sample as? HKCategorySample {
-                await processMindfulnessSample(categorySample, isBulkImport: isBulkImport)
+                await processMindfulnessSample(categorySample, isBulkImport: isBulkImport, useFreshContext: useFreshContext)
             }
         case .water:
             if let quantitySample = sample as? HKQuantitySample {
-                await processWaterSample(quantitySample, isBulkImport: isBulkImport)
+                await processWaterSample(quantitySample, isBulkImport: isBulkImport, useFreshContext: useFreshContext)
             }
         }
     }
@@ -276,8 +276,12 @@ extension HealthKitService {
 extension HealthKitService {
 
     /// Process a mindfulness sample
+    /// - Parameters:
+    ///   - sample: The HKCategorySample to process
+    ///   - isBulkImport: If true, skips notifications and immediate sync
+    ///   - useFreshContext: If true, uses a fresh ModelContext for dedup checks
     @MainActor
-    func processMindfulnessSample(_ sample: HKCategorySample, isBulkImport: Bool = false) async {
+    func processMindfulnessSample(_ sample: HKCategorySample, isBulkImport: Bool = false, useFreshContext: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
         // In-memory duplicate check with early claim to prevent race condition.
@@ -286,8 +290,8 @@ extension HealthKitService {
         // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
         processedSampleIds.insert(sampleId)
 
-        // Database-level duplicate check (handles app restarts where in-memory set is reset)
-        if await eventExistsWithHealthKitSampleId(sampleId) {
+        // Database-level duplicate check by sample ID (handles app restarts where in-memory set is reset)
+        if await eventExistsWithHealthKitSampleId(sampleId, useFreshContext: useFreshContext) {
             Log.data.debug("Mindfulness session already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
             })
@@ -298,6 +302,22 @@ extension HealthKitService {
         Log.healthKit.debug("Processing mindfulness session")
 
         guard let eventType = await ensureEventType(for: .mindfulness) else { return }
+
+        // Content-based duplicate check (handles HealthKit sample ID changes after restore/migration)
+        // Matches backend deduplication logic: (eventTypeId, timestamp, healthKitCategory)
+        if await eventExistsWithMatchingHealthKitContent(
+            eventTypeId: eventType.id,
+            timestamp: sample.startDate,
+            healthKitCategory: HealthDataCategory.mindfulness.rawValue,
+            useFreshContext: useFreshContext
+        ) {
+            Log.data.debug("Mindfulness session with matching content already exists, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("timestamp", sample.startDate.ISO8601Format())
+            })
+            saveProcessedSampleIds() // Persist the claim
+            return
+        }
 
         let duration = sample.endDate.timeIntervalSince(sample.startDate)
 
@@ -330,8 +350,12 @@ extension HealthKitService {
 extension HealthKitService {
 
     /// Process a water intake sample
+    /// - Parameters:
+    ///   - sample: The HKQuantitySample to process
+    ///   - isBulkImport: If true, skips notifications and immediate sync
+    ///   - useFreshContext: If true, uses a fresh ModelContext for dedup checks
     @MainActor
-    func processWaterSample(_ sample: HKQuantitySample, isBulkImport: Bool = false) async {
+    func processWaterSample(_ sample: HKQuantitySample, isBulkImport: Bool = false, useFreshContext: Bool = false) async {
         let sampleId = sample.uuid.uuidString
 
         // In-memory duplicate check with early claim to prevent race condition.
@@ -340,8 +364,8 @@ extension HealthKitService {
         // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
         processedSampleIds.insert(sampleId)
 
-        // Database-level duplicate check (handles app restarts where in-memory set is reset)
-        if await eventExistsWithHealthKitSampleId(sampleId) {
+        // Database-level duplicate check by sample ID (handles app restarts where in-memory set is reset)
+        if await eventExistsWithHealthKitSampleId(sampleId, useFreshContext: useFreshContext) {
             Log.data.debug("Water intake already in database, skipping", context: .with { ctx in
                 ctx.add("sampleId", sampleId)
             })
@@ -356,6 +380,23 @@ extension HealthKitService {
         })
 
         guard let eventType = await ensureEventType(for: .water) else { return }
+
+        // Content-based duplicate check (handles HealthKit sample ID changes after restore/migration)
+        // Matches backend deduplication logic: (eventTypeId, timestamp, healthKitCategory)
+        if await eventExistsWithMatchingHealthKitContent(
+            eventTypeId: eventType.id,
+            timestamp: sample.startDate,
+            healthKitCategory: HealthDataCategory.water.rawValue,
+            useFreshContext: useFreshContext
+        ) {
+            Log.data.debug("Water intake with matching content already exists, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("timestamp", sample.startDate.ISO8601Format())
+                ctx.add("milliliters", Int(milliliters))
+            })
+            saveProcessedSampleIds() // Persist the claim
+            return
+        }
 
         let properties: [String: PropertyValue] = [
             "Amount (ml)": PropertyValue(type: .number, value: milliliters),

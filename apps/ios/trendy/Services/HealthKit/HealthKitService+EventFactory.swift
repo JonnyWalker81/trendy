@@ -135,6 +135,63 @@ extension HealthKitService {
         }
     }
 
+    /// Check if a HealthKit event with matching content already exists
+    /// This handles the case where HealthKit sample IDs change (e.g., after iOS restore,
+    /// device migration, or HealthKit database reset) but the actual event content is identical.
+    ///
+    /// Matches the backend's content-based deduplication logic in repository/event.go:
+    /// - Key: (eventTypeId, timestamp truncated to seconds, healthKitCategory)
+    ///
+    /// - Parameters:
+    ///   - eventTypeId: The event type ID (UUID string)
+    ///   - timestamp: The event timestamp
+    ///   - healthKitCategory: The HealthKit category (e.g., "water", "mindfulness")
+    ///   - tolerance: Maximum time difference in seconds to consider a match (default 1.0)
+    ///   - useFreshContext: If true, creates a fresh ModelContext to see the latest persisted data.
+    @MainActor
+    func eventExistsWithMatchingHealthKitContent(
+        eventTypeId: String,
+        timestamp: Date,
+        healthKitCategory: String,
+        tolerance: TimeInterval = 1.0,
+        useFreshContext: Bool = false
+    ) async -> Bool {
+        // Query events with matching healthKitCategory
+        let category = healthKitCategory
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.healthKitCategory == category
+            }
+        )
+
+        do {
+            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            let events = try context.fetch(descriptor)
+
+            // Check for content match: eventTypeId + timestamp (within tolerance)
+            let match = events.contains { event in
+                guard event.eventType?.id == eventTypeId else { return false }
+                return abs(event.timestamp.timeIntervalSince(timestamp)) < tolerance
+            }
+
+            if match {
+                Log.healthKit.debug("Content-based duplicate found", context: .with { ctx in
+                    ctx.add("eventTypeId", eventTypeId)
+                    ctx.add("timestamp", timestamp.ISO8601Format())
+                    ctx.add("category", healthKitCategory)
+                })
+            }
+
+            return match
+        } catch {
+            Log.healthKit.error("Error checking for content-based duplicate", error: error, context: .with { ctx in
+                ctx.add("category", healthKitCategory)
+            })
+            // In case of error, assume it doesn't exist to avoid blocking new events
+            return false
+        }
+    }
+
     /// Find an event by its HealthKit sample ID
     /// Returns the actual Event object for updates, not just existence check
     @MainActor
