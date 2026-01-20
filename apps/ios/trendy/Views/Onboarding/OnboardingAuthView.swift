@@ -3,6 +3,7 @@
 //  trendy
 //
 //  Authentication screen for onboarding - email/password + Google Sign-In
+//  Redesigned with hero layout pattern per CONTEXT.md
 //
 
 import SwiftUI
@@ -20,81 +21,74 @@ struct OnboardingAuthView: View {
         viewModel.isSignInMode
     }
 
+    /// Computed progress for the progress bar (step 2 of flow)
+    /// Welcome = 0.0, Auth = 0.167 (1/6 of flow)
+    private var currentProgress: Double {
+        // Auth is step 2 of 6 total steps in the current flow
+        // (welcome, auth, createEventType, logFirstEvent, permissions, finish)
+        return 1.0 / Double(OnboardingStep.allCases.count)
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: isSignIn ? "person.crop.circle.fill" : "person.crop.circle.fill.badge.plus")
-                        .font(.system(size: 60))
-                        .foregroundStyle(Color.dsPrimary)
+        VStack(spacing: 0) {
+            // Progress bar at top
+            OnboardingProgressBar(progress: currentProgress)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
 
-                    Text(isSignIn ? "Welcome Back" : "Create Account")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.dsForeground)
+            // Hero area (shorter than welcome to leave room for form)
+            OnboardingHeroView(
+                symbolName: isSignIn ? "person.crop.circle.fill" : "person.crop.circle.fill.badge.plus",
+                gradientColors: [Color.dsPrimary.opacity(0.8), Color.dsAccent]
+            )
+            .frame(height: 200)
 
-                    Text(isSignIn ? "Sign in to continue" : "Start tracking your life")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.dsMutedForeground)
-                }
-                .padding(.top, 40)
+            // Scrollable form content
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text(isSignIn ? "Welcome Back" : "Create Account")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundStyle(Color.dsForeground)
 
-                // Google Sign-In Button
-                if viewModel.isGoogleSignInAvailable {
-                    GoogleSignInButton {
-                        await signInWithGoogle()
-                    }
-                    .padding(.horizontal, 32)
-
-                    // Divider
-                    HStack {
-                        Rectangle()
-                            .fill(Color.dsBorder)
-                            .frame(height: 1)
-                        Text("or")
-                            .font(.caption)
+                        Text(isSignIn ? "Sign in to continue" : "Start tracking your life")
+                            .font(.subheadline)
                             .foregroundStyle(Color.dsMutedForeground)
-                        Rectangle()
-                            .fill(Color.dsBorder)
-                            .frame(height: 1)
                     }
-                    .padding(.horizontal, 32)
-                }
+                    .padding(.top, 24)
 
-                // Email/Password Form
-                VStack(spacing: 16) {
-                    // Email Field
-                    TextField("Email", text: $email)
-                        .textContentType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        .autocorrectionDisabled()
-                        .padding()
-                        .background(Color.dsCard)
-                        .foregroundStyle(Color.dsForeground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.dsBorder, lineWidth: 1)
-                        )
+                    // Google Sign-In Button
+                    if viewModel.isGoogleSignInAvailable {
+                        GoogleSignInButton {
+                            await signInWithGoogle()
+                        }
+                        .padding(.horizontal, 32)
 
-                    // Password Field
-                    SecureField("Password", text: $password)
-                        .textContentType(isSignIn ? .password : .newPassword)
-                        .padding()
-                        .background(Color.dsCard)
-                        .foregroundStyle(Color.dsForeground)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.dsBorder, lineWidth: 1)
-                        )
+                        // Divider
+                        HStack {
+                            Rectangle()
+                                .fill(Color.dsBorder)
+                                .frame(height: 1)
+                            Text("or")
+                                .font(.caption)
+                                .foregroundStyle(Color.dsMutedForeground)
+                            Rectangle()
+                                .fill(Color.dsBorder)
+                                .frame(height: 1)
+                        }
+                        .padding(.horizontal, 32)
+                    }
 
-                    // Confirm Password (sign up only)
-                    if !isSignIn {
-                        SecureField("Confirm Password", text: $confirmPassword)
-                            .textContentType(.newPassword)
+                    // Email/Password Form
+                    VStack(spacing: 16) {
+                        // Email Field
+                        TextField("Email", text: $email)
+                            .textContentType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                            .autocorrectionDisabled()
                             .padding()
                             .background(Color.dsCard)
                             .foregroundStyle(Color.dsForeground)
@@ -104,81 +98,108 @@ struct OnboardingAuthView: View {
                                     .stroke(Color.dsBorder, lineWidth: 1)
                             )
 
-                        Text("Password must be at least 6 characters")
+                        // Password Field
+                        SecureField("Password", text: $password)
+                            .textContentType(isSignIn ? .password : .newPassword)
+                            .padding()
+                            .background(Color.dsCard)
+                            .foregroundStyle(Color.dsForeground)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.dsBorder, lineWidth: 1)
+                            )
+
+                        // Confirm Password (sign up only)
+                        if !isSignIn {
+                            SecureField("Confirm Password", text: $confirmPassword)
+                                .textContentType(.newPassword)
+                                .padding()
+                                .background(Color.dsCard)
+                                .foregroundStyle(Color.dsForeground)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.dsBorder, lineWidth: 1)
+                                )
+
+                            Text("Password must be at least 6 characters")
+                                .font(.caption)
+                                .foregroundStyle(Color.dsMutedForeground)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        // Error Message
+                        if let error = localError ?? viewModel.errorMessage {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text(error)
+                            }
                             .font(.caption)
-                            .foregroundStyle(Color.dsMutedForeground)
+                            .foregroundStyle(Color.dsDestructive)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    // Error Message
-                    if let error = localError ?? viewModel.errorMessage {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text(error)
                         }
-                        .font(.caption)
-                        .foregroundStyle(Color.dsDestructive)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
 
-                    // Submit Button
+                        // Submit Button - primary action
+                        Button {
+                            Task {
+                                await submitForm()
+                            }
+                        } label: {
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .tint(Color.dsPrimaryForeground)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            } else {
+                                Text(isSignIn ? "Sign In" : "Create Account")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                            }
+                        }
+                        .background(isFormValid ? Color.dsPrimary : Color.dsSecondary)
+                        .foregroundStyle(isFormValid ? Color.dsPrimaryForeground : Color.dsSecondaryForeground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .disabled(viewModel.isLoading || !isFormValid)
+                    }
+                    .padding(.horizontal, 32)
+
+                    // Toggle Sign Up / Sign In
                     Button {
-                        Task {
-                            await submitForm()
+                        withAnimation {
+                            viewModel.isSignInMode.toggle()
+                            localError = nil
+                            viewModel.errorMessage = nil
                         }
                     } label: {
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(Color.dsPrimaryForeground)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else {
-                            Text(isSignIn ? "Sign In" : "Create Account")
+                        HStack(spacing: 4) {
+                            Text(isSignIn ? "Don't have an account?" : "Already have an account?")
+                                .foregroundStyle(Color.dsMutedForeground)
+                            Text(isSignIn ? "Sign Up" : "Sign In")
                                 .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding()
+                                .foregroundStyle(Color.dsLink)
                         }
                     }
-                    .background(isFormValid ? Color.dsPrimary : Color.dsSecondary)
-                    .foregroundStyle(isFormValid ? Color.dsPrimaryForeground : Color.dsSecondaryForeground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .disabled(viewModel.isLoading || !isFormValid)
-                }
-                .padding(.horizontal, 32)
+                    .padding(.top, 8)
 
-                // Toggle Sign Up / Sign In
-                Button {
-                    withAnimation {
-                        viewModel.isSignInMode.toggle()
-                        localError = nil
-                        viewModel.errorMessage = nil
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(isSignIn ? "Don't have an account?" : "Already have an account?")
+                    // Back Button
+                    if !isSignIn {
+                        Button {
+                            viewModel.goBack()
+                        } label: {
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                Text("Back")
+                            }
                             .foregroundStyle(Color.dsMutedForeground)
-                        Text(isSignIn ? "Sign Up" : "Sign In")
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.dsLink)
-                    }
-                }
-                .padding(.top, 8)
-
-                // Back Button
-                if !isSignIn {
-                    Button {
-                        viewModel.goBack()
-                    } label: {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
                         }
-                        .foregroundStyle(Color.dsMutedForeground)
                     }
-                }
 
-                Spacer(minLength: 40)
+                    // Bottom padding to avoid keyboard overlap
+                    Spacer(minLength: 40)
+                }
             }
         }
         .background(Color.dsBackground)
