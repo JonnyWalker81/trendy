@@ -24,10 +24,16 @@ Phases are ordered by dependency: backend foundation enables iOS state managemen
 - STATE-01: Onboarding completion status stored in backend database (source of truth)
 - STATE-02: Backend endpoint to get/set user's onboarding status
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Database schema and migration for onboarding_status table
+- [ ] 08-02-PLAN.md — Go API layer (handler/service/repository) with GET/PATCH/DELETE endpoints
+
 **Success Criteria:**
 1. Backend has database table/column storing onboarding completion status per user
 2. GET /api/v1/users/onboarding returns current user's onboarding status
-3. POST /api/v1/users/onboarding updates current user's onboarding status
+3. PATCH /api/v1/users/onboarding updates current user's onboarding status
 4. Unauthenticated requests return 401
 
 ---
@@ -105,7 +111,7 @@ Phases are ordered by dependency: backend foundation enables iOS state managemen
 
 | Phase | Name | Status | Requirements | Success |
 |-------|------|--------|--------------|---------|
-| 8 | Backend Onboarding Status | Pending | 2/2 | 0/4 |
+| 8 | Backend Onboarding Status | Planned | 2/2 | 0/4 |
 | 9 | iOS State Architecture | Pending | 7/7 | 0/5 |
 | 10 | Visual Design & Flow | Pending | 10/10 | 0/5 |
 | 11 | Accessibility | Pending | 2/2 | 0/4 |
@@ -145,4 +151,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-19*
+*Last updated: 2026-01-20*
