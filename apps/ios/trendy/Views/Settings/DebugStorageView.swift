@@ -65,6 +65,10 @@ struct DebugStorageView: View {
     @State private var deduplicationResult: EventStore.DeduplicationResult?
     @State private var duplicateAnalysis: EventStore.DeduplicationResult?
 
+    // Onboarding reset
+    @State private var showingResetOnboardingConfirmation = false
+    @State private var showingResetOnboardingSuccess = false
+
     var body: some View {
         List {
             mainContent
@@ -123,6 +127,11 @@ struct DebugStorageView: View {
             deduplicationResult: deduplicationResult,
             performDeduplication: performDeduplication,
             loadSwiftDataCounts: loadSwiftDataCounts
+        ))
+        .modifier(ResetOnboardingDialogs(
+            showingResetOnboardingConfirmation: $showingResetOnboardingConfirmation,
+            showingResetOnboardingSuccess: $showingResetOnboardingSuccess,
+            resetOnboarding: resetOnboarding
         ))
     }
 
@@ -507,10 +516,19 @@ struct DebugStorageView: View {
                     Text("Log Out & Clear All Data")
                 }
             }
+
+            Button(role: .destructive) {
+                showingResetOnboardingConfirmation = true
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                    Text("Reset Onboarding (Debug)")
+                }
+            }
         } header: {
             Text("Danger Zone")
         } footer: {
-            Text("'Log Out & Clear All Data' will sign you out and delete all local data. The app will start fresh without syncing from the server.")
+            Text("'Log Out & Clear All Data' will sign you out and delete all local data. 'Reset Onboarding' clears onboarding state to test the flow again.")
         }
     }
 
@@ -757,6 +775,33 @@ struct DebugStorageView: View {
         print("✅ Set flag to clear container on next launch")
 
         showingClearSuccess = true
+    }
+
+    private func resetOnboarding() async {
+        // Clear OnboardingCache (all users)
+        OnboardingCache.clearAll()
+        print("✅ Cleared OnboardingCache")
+
+        // Clear onboarding-related UserDefaults keys
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "onboarding_current_step")
+        defaults.removeObject(forKey: "onboarding_start_time")
+        defaults.removeObject(forKey: "onboarding_complete")
+        defaults.synchronize()
+        print("✅ Cleared onboarding UserDefaults keys")
+
+        // Sign out from Supabase
+        if let supabase = supabaseService {
+            do {
+                try await supabase.signOut()
+                print("✅ Signed out from Supabase")
+            } catch {
+                print("⚠️ Error signing out: \(error)")
+                // Continue anyway - we still want to reset onboarding
+            }
+        }
+
+        showingResetOnboardingSuccess = true
     }
 }
 
@@ -1078,6 +1123,37 @@ private struct DeduplicationDialogs: ViewModifier {
                 } else {
                     Text("Deduplication completed.")
                 }
+            }
+    }
+}
+
+private struct ResetOnboardingDialogs: ViewModifier {
+    @Binding var showingResetOnboardingConfirmation: Bool
+    @Binding var showingResetOnboardingSuccess: Bool
+    let resetOnboarding: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "Reset Onboarding?",
+                isPresented: $showingResetOnboardingConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Reset Onboarding", role: .destructive) {
+                    Task {
+                        await resetOnboarding()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will clear all onboarding progress and sign you out. The app will close so you can restart and go through onboarding again.")
+            }
+            .alert("Onboarding Reset", isPresented: $showingResetOnboardingSuccess) {
+                Button("OK") {
+                    exit(0)
+                }
+            } message: {
+                Text("Onboarding has been reset. The app will now close. Reopen to start onboarding fresh.")
             }
     }
 }
