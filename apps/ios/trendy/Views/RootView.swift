@@ -41,25 +41,22 @@ struct RootView: View {
 
 /// Loading view matching launch screen aesthetic
 /// Per CONTEXT.md: "Loading screen matches Launch Screen aesthetic (seamless transition)"
+/// Uses pulsing icon animation instead of spinner for polished feel
 private struct LaunchLoadingView: View {
+    @State private var isPulsing = false
+
     var body: some View {
         ZStack {
-            // Match launch screen background
             Color.dsBackground
                 .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                // App icon or logo placeholder
-                // Could add actual app icon here for seamless transition
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 60))
-                    .foregroundStyle(Color.dsPrimary)
-
-                // Subtle loading indicator
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(Color.dsMutedForeground)
-            }
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 60))
+                .foregroundStyle(Color.dsPrimary)
+                .shadow(color: Color.dsPrimary.opacity(0.5), radius: isPulsing ? 20 : 10)
+                .scaleEffect(isPulsing ? 1.05 : 1.0)
+                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
+                .onAppear { isPulsing = true }
         }
     }
 }

@@ -20,6 +20,11 @@ struct LogFirstEventView: View {
 
     var body: some View {
         VStack(spacing: 24) {
+            // Progress Bar at top
+            OnboardingProgressBar(progress: OnboardingStep.logFirstEvent.progress)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
             Spacer()
 
             if showSuccess {
@@ -66,9 +71,6 @@ struct LogFirstEventView: View {
                         .foregroundStyle(Color.dsMutedForeground)
                 }
             }
-
-            // Progress Indicator
-            ProgressIndicatorView(currentStep: 3, totalSteps: 4)
 
             // Event Type Display
             if let eventType = eventType {
