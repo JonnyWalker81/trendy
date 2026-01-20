@@ -91,6 +91,15 @@ Plans:
 - FLOW-03: Skip option available with explanation of what user will miss
 - FLOW-04: Each permission request has contextual benefit messaging
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — ConfettiSwiftUI package, OnboardingProgressBar, OnboardingHeroView components
+- [ ] 10-02-PLAN.md — WelcomeView and OnboardingAuthView hero layout redesign
+- [ ] 10-03-PLAN.md — Permission priming screens (Notification, Location, HealthKit)
+- [ ] 10-04-PLAN.md — Container navigation with spring animations, LaunchLoadingView polish
+- [ ] 10-05-PLAN.md — OnboardingFinishView confetti celebration, visual verification
+
 **Success Criteria:**
 1. New user sees Welcome screens before being asked to authenticate
 2. New user sees custom priming screen before each system permission dialog
@@ -124,7 +133,7 @@ Plans:
 |-------|------|--------|--------------|---------|
 | 8 | Backend Onboarding Status | Complete | 2/2 | 4/4 |
 | 9 | iOS State Architecture | Complete | 7/7 | 5/5 |
-| 10 | Visual Design & Flow | Pending | 10/10 | 0/5 |
+| 10 | Visual Design & Flow | Planned | 10/10 | 0/5 |
 | 11 | Accessibility | Pending | 2/2 | 0/4 |
 
 **Total:** 21 requirements mapped, 9 complete
@@ -162,4 +171,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 — Phase 9 complete*
+*Last updated: 2026-01-20 — Phase 10 planned*
