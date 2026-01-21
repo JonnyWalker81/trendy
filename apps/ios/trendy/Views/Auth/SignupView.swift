@@ -10,6 +10,7 @@ import SwiftUI
 struct SignupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthViewModel.self) private var authViewModel
+    @Environment(AppRouter.self) private var appRouter
 
     @State private var email = ""
     @State private var password = ""
@@ -131,11 +132,10 @@ struct SignupView: View {
         Task {
             await authViewModel.signUp(email: email, password: password)
 
-            // Dismiss on success
-            if authViewModel.isAuthenticated {
-                await MainActor.run {
-                    dismiss()
-                }
+            // On success, dismiss and handle login (which routes to onboarding or main app)
+            if authViewModel.isAuthenticated && authViewModel.errorMessage == nil {
+                dismiss()
+                await appRouter.handleLogin()
             }
         }
     }
@@ -146,9 +146,14 @@ struct SignupView: View {
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
     )
+    let previewAPIConfig = APIConfiguration(baseURL: "http://127.0.0.1:8080/api/v1")
     let previewSupabase = SupabaseService(configuration: previewConfig)
+    let previewAPIClient = APIClient(configuration: previewAPIConfig, supabaseService: previewSupabase)
     let previewAuthViewModel = AuthViewModel(supabaseService: previewSupabase)
+    let previewOnboardingService = OnboardingStatusService(apiClient: previewAPIClient, supabaseService: previewSupabase)
+    let previewAppRouter = AppRouter(supabaseService: previewSupabase, onboardingService: previewOnboardingService)
 
     return SignupView()
         .environment(previewAuthViewModel)
+        .environment(previewAppRouter)
 }

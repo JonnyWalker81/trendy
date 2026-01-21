@@ -107,19 +107,22 @@ struct LoginView: View {
             .onAppear {
                 authViewModel.clearError()
             }
-            .onChange(of: authViewModel.isAuthenticated) { wasAuthenticated, isAuthenticated in
-                // Only react if we initiated login AND auth succeeded
-                if isLoggingIn && isAuthenticated && !wasAuthenticated {
-                    isLoggingIn = false
-                    Task {
-                        await appRouter.handleLogin()
+            .onChange(of: authViewModel.isLoading) { wasLoading, isLoading in
+                // Detect when signIn() completes (isLoading transitions from true to false)
+                // We check isLoggingIn to ensure we initiated this login attempt
+                if isLoggingIn && wasLoading && !isLoading {
+                    // Sign in attempt completed - check if it succeeded
+                    if authViewModel.isAuthenticated && authViewModel.errorMessage == nil {
+                        isLoggingIn = false
+                        Task {
+                            await appRouter.handleLogin()
+                        }
+                    } else if authViewModel.errorMessage != nil {
+                        // Error occurred, allow user to try again
+                        isLoggingIn = false
                     }
-                }
-            }
-            .onChange(of: authViewModel.errorMessage) { _, errorMessage in
-                // Reset login flag on error so user can try again
-                if errorMessage != nil {
-                    isLoggingIn = false
+                    // If neither authenticated nor error, something unexpected happened
+                    // Leave isLoggingIn true so user sees spinner until state resolves
                 }
             }
         }
