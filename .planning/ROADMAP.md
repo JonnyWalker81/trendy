@@ -121,6 +121,12 @@ Plans:
 - A11Y-01: All onboarding screens support VoiceOver
 - A11Y-02: Animations respect `accessibilityReduceMotion` preference
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — Shared components accessibility (ProgressBar, HeroView) + navigation focus management
+- [ ] 11-02-PLAN.md — Screen-by-screen VoiceOver labels, hints, and Reduce Motion handling
+
 **Success Criteria:**
 1. VoiceOver user can complete entire onboarding flow using only screen reader
 2. All interactive elements have accessibility labels and hints
@@ -173,4 +179,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 — Phase 10 complete*
+*Last updated: 2026-01-20 — Phase 11 planned*
