@@ -269,12 +269,15 @@ actor SyncEngine {
                     })
                 } catch {
                     // Fallback: if we can't get the latest cursor, use a high value
-                    // This may skip some legitimate changes, but prevents stale data recreation
-                    lastSyncCursor = 1_000_000_000
+                    // Use Int64.max / 2 to avoid any theoretical overflow concerns
+                    // This value (~4.6 quintillion) is far enough in the future
+                    let previousCursor = lastSyncCursor
+                    lastSyncCursor = Int64.max / 2
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
                     UserDefaults.standard.synchronize() // Force immediate persistence
                     Log.sync.warning("Could not get latest cursor, using fallback", context: .with { ctx in
-                        ctx.add("fallback_cursor", Int(lastSyncCursor))
+                        ctx.add("before", Int(previousCursor))
+                        ctx.add("after", Int(lastSyncCursor))
                         ctx.add("error", error.localizedDescription)
                     })
                 }
@@ -1457,7 +1460,20 @@ actor SyncEngine {
                         propDef.label = label
                     }
                     if let propertyType = data.propertyType {
-                        propDef.propertyType = PropertyType(rawValue: propertyType) ?? .text
+                        if let parsedType = PropertyType(rawValue: propertyType) {
+                            propDef.propertyType = parsedType
+                        } else {
+                            Log.sync.warning("Unknown property type, using fallback", context: .with { ctx in
+                                ctx.add("raw_value", propertyType)
+                                ctx.add("fallback", PropertyType.text.rawValue)
+                                ctx.add("property_key", propDef.key)
+                            })
+                            #if DEBUG
+                            // Developer indicator for silent failures
+                            assertionFailure("Unknown PropertyType: \(propertyType)")
+                            #endif
+                            propDef.propertyType = .text
+                        }
                     }
                     if let displayOrder = data.displayOrder {
                         propDef.displayOrder = displayOrder
@@ -1677,7 +1693,20 @@ actor SyncEngine {
                     try localStore.upsertPropertyDefinition(id: apiPropDef.id, eventTypeId: apiEventType.id) { propDef in
                         propDef.key = apiPropDef.key
                         propDef.label = apiPropDef.label
-                        propDef.propertyType = PropertyType(rawValue: apiPropDef.propertyType) ?? .text
+                        if let parsedType = PropertyType(rawValue: apiPropDef.propertyType) {
+                            propDef.propertyType = parsedType
+                        } else {
+                            Log.sync.warning("Unknown property type, using fallback", context: .with { ctx in
+                                ctx.add("raw_value", apiPropDef.propertyType)
+                                ctx.add("fallback", PropertyType.text.rawValue)
+                                ctx.add("property_key", propDef.key)
+                            })
+                            #if DEBUG
+                            // Developer indicator for silent failures
+                            assertionFailure("Unknown PropertyType: \(apiPropDef.propertyType)")
+                            #endif
+                            propDef.propertyType = .text
+                        }
                         propDef.displayOrder = apiPropDef.displayOrder
                         propDef.options = apiPropDef.options ?? []
                     }
@@ -1807,7 +1836,21 @@ actor SyncEngine {
     private static func convertAPIProperties(_ apiProperties: [String: APIPropertyValue]) -> [String: PropertyValue] {
         var localProperties: [String: PropertyValue] = [:]
         for (key, apiValue) in apiProperties {
-            let propertyType = PropertyType(rawValue: apiValue.type) ?? .text
+            let propertyType: PropertyType
+            if let parsedType = PropertyType(rawValue: apiValue.type) {
+                propertyType = parsedType
+            } else {
+                Log.sync.warning("Unknown property type, using fallback", context: .with { ctx in
+                    ctx.add("raw_value", apiValue.type)
+                    ctx.add("fallback", PropertyType.text.rawValue)
+                    ctx.add("property_key", key)
+                })
+                #if DEBUG
+                // Developer indicator for silent failures
+                assertionFailure("Unknown PropertyType: \(apiValue.type)")
+                #endif
+                propertyType = .text
+            }
             localProperties[key] = PropertyValue(type: propertyType, value: apiValue.value.value)
         }
         return localProperties
