@@ -72,7 +72,7 @@ struct trendyApp: App {
                                ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] == "1"
 
         if isScreenshotMode {
-            print("📸 Screenshot mode: Using in-memory database (no persistence)")
+            Log.general.debug("📸 Screenshot mode: Using in-memory database (no persistence)")
             let inMemoryConfig = ModelConfiguration(
                 schema: schema,
                 isStoredInMemoryOnly: true,
@@ -80,7 +80,7 @@ struct trendyApp: App {
             )
             do {
                 let container = try ModelContainer(for: schema, configurations: [inMemoryConfig])
-                print("📸 In-memory ModelContainer created successfully")
+                Log.general.debug("📸 In-memory ModelContainer created successfully")
                 return container
             } catch {
                 fatalError("📸 Could not create in-memory ModelContainer for screenshots: \(error)")
@@ -93,11 +93,11 @@ struct trendyApp: App {
 
         // Check if we need to clear container data (set by DebugStorageView)
         if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
-            print("🗑️ Debug: Clearing App Group container on launch...")
+            Log.data.info("🗑️ Debug: Clearing App Group container on launch...")
             UserDefaults.standard.removeObject(forKey: "debug_clear_container_on_launch")
             UserDefaults.standard.synchronize()
             clearDatabaseFiles()
-            print("🗑️ Debug: Container cleared")
+            Log.data.info("🗑️ Debug: Container cleared")
         }
 
         // Use App Group container for widget sharing
@@ -116,11 +116,11 @@ struct trendyApp: App {
         var container: ModelContainer
         do {
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("📦 ModelContainer created successfully")
+            Log.data.info("📦 ModelContainer created successfully")
         } catch {
-            print("⚠️ Failed to create ModelContainer: \(error)")
-            print("⚠️ This likely means schema changed (V1→V2 migration)")
-            print("⚠️ Clearing database and will resync from backend...")
+            Log.data.warning("⚠️ Failed to create ModelContainer", error: error)
+            Log.data.warning("⚠️ This likely means schema changed (V1→V2 migration)")
+            Log.data.warning("⚠️ Clearing database and will resync from backend...")
 
             // Clear database and resync from backend
             clearDatabaseFiles()
@@ -129,8 +129,8 @@ struct trendyApp: App {
             // Try again with a fresh database
             do {
                 container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                print("   ✅ Created fresh V2 database successfully")
-                print("   ⚠️ User will need to resync from backend")
+                Log.data.info("✅ Created fresh V2 database successfully")
+                Log.data.warning("⚠️ User will need to resync from backend")
             } catch {
                 fatalError("Could not create ModelContainer even after reset: \(error)")
             }
@@ -148,7 +148,10 @@ struct trendyApp: App {
                 let count = try context.fetchCount(FetchDescriptor<T>())
                 modelCounts[name] = count
             } catch {
-                print("⚠️ Schema check failed for \(name): \(error)")
+                Log.data.warning("⚠️ Schema check failed", context: .with { ctx in
+                    ctx.add("model", name)
+                    ctx.add(error: error)
+                })
                 failedModels.append(name)
             }
         }
@@ -165,28 +168,31 @@ struct trendyApp: App {
 
         if schemaValid {
             // DIAGNOSTIC: Log counts on app launch
-            print("🔧 Schema validation passed - existing data:")
-            print("   EventTypes: \(modelCounts["EventType"] ?? 0)")
-            print("   Events: \(modelCounts["Event"] ?? 0)")
-            print("   Geofences: \(modelCounts["Geofence"] ?? 0)")
-            print("   PropertyDefinitions: \(modelCounts["PropertyDefinition"] ?? 0)")
-            print("   HealthKitConfigs: \(modelCounts["HealthKitConfiguration"] ?? 0)")
-            print("   PendingMutations: \(modelCounts["PendingMutation"] ?? 0)")
+            Log.data.debug("🔧 Schema validation passed - existing data", context: .with { ctx in
+                ctx.add("event_types", modelCounts["EventType"] ?? 0)
+                ctx.add("events", modelCounts["Event"] ?? 0)
+                ctx.add("geofences", modelCounts["Geofence"] ?? 0)
+                ctx.add("property_definitions", modelCounts["PropertyDefinition"] ?? 0)
+                ctx.add("healthkit_configs", modelCounts["HealthKitConfiguration"] ?? 0)
+                ctx.add("pending_mutations", modelCounts["PendingMutation"] ?? 0)
+            })
 
             // Force a save to ensure the database file is created on disk
             // This prevents "No such file or directory" errors during later saves
             do {
                 try context.save()
-                print("📦 Database file initialized on disk")
+                Log.data.debug("📦 Database file initialized on disk")
             } catch {
-                print("⚠️ Failed to initialize database file: \(error)")
+                Log.data.warning("⚠️ Failed to initialize database file", error: error)
             }
         } else {
-            print("⚠️ Schema validation failed for: \(failedModels.joined(separator: ", "))")
+            Log.data.warning("⚠️ Schema validation failed", context: .with { ctx in
+                ctx.add("failed_models", failedModels.joined(separator: ", "))
+            })
         }
 
         if !schemaValid {
-            print("⚠️ Database schema is incomplete. Resetting database...")
+            Log.data.warning("⚠️ Database schema is incomplete. Resetting database...")
             clearDatabaseFiles()
             markForPostMigrationResync()
 
@@ -197,12 +203,12 @@ struct trendyApp: App {
                     migrationPlan: TrendySchemaMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
-                print("   ✅ Created fresh database with complete schema")
+                Log.data.info("✅ Created fresh database with complete schema")
 
                 // Force a save to ensure the database file is created on disk
                 let freshContext = container.mainContext
                 try freshContext.save()
-                print("   📦 Database file initialized on disk")
+                Log.data.debug("📦 Database file initialized on disk")
             } catch {
                 fatalError("Could not create ModelContainer after schema reset: \(error)")
             }
@@ -210,8 +216,10 @@ struct trendyApp: App {
 
         // Log SwiftData container location
         #if DEBUG
-        print("📦 SwiftData using App Group: \(appGroupIdentifier)")
-        print("📦 Schema version: V2 (UUIDv7 String IDs)")
+        Log.data.debug("📦 SwiftData using App Group", context: .with { ctx in
+            ctx.add("app_group", appGroupIdentifier)
+            ctx.add("schema_version", "V2 (UUIDv7 String IDs)")
+        })
         #endif
 
         return container
@@ -220,7 +228,7 @@ struct trendyApp: App {
     /// Ensure the App Group container directories exist before SwiftData tries to use them
     private static func ensureAppGroupDirectoriesExist() {
         guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            print("⚠️ Could not get App Group container URL")
+            Log.data.warning("⚠️ Could not get App Group container URL")
             return
         }
 
@@ -232,9 +240,9 @@ struct trendyApp: App {
         if !fileManager.fileExists(atPath: applicationSupportURL.path) {
             do {
                 try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
-                print("📁 Created App Group directory: Library/Application Support")
+                Log.data.debug("📁 Created App Group directory: Library/Application Support")
             } catch {
-                print("⚠️ Failed to create App Group directories: \(error)")
+                Log.data.warning("⚠️ Failed to create App Group directories", error: error)
             }
         }
     }
@@ -242,7 +250,7 @@ struct trendyApp: App {
     /// Clear the SwiftData database files from the App Group container
     private static func clearDatabaseFiles() {
         guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            print("⚠️ Could not get App Group container URL")
+            Log.data.warning("⚠️ Could not get App Group container URL")
             return
         }
 
@@ -253,9 +261,14 @@ struct trendyApp: App {
             for item in contents {
                 do {
                     try fileManager.removeItem(at: item)
-                    print("   Deleted: \(item.lastPathComponent)")
+                    Log.data.debug("Deleted file", context: .with { ctx in
+                        ctx.add("file", item.lastPathComponent)
+                    })
                 } catch {
-                    print("   Failed to delete \(item.lastPathComponent): \(error)")
+                    Log.data.warning("Failed to delete file", context: .with { ctx in
+                        ctx.add("file", item.lastPathComponent)
+                        ctx.add(error: error)
+                    })
                 }
             }
         }
@@ -267,9 +280,9 @@ struct trendyApp: App {
 
         do {
             try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
-            print("   ✅ Recreated: Library/Application Support")
+            Log.data.debug("✅ Recreated: Library/Application Support")
         } catch {
-            print("   ⚠️ Failed to recreate Application Support directory: \(error)")
+            Log.data.warning("⚠️ Failed to recreate Application Support directory", error: error)
         }
     }
 
@@ -296,9 +309,10 @@ struct trendyApp: App {
 
         // Print configuration for debugging (in debug builds only)
         #if DEBUG
-        print("=== App Configuration ===")
-        print(appConfiguration.debugDescription)
-        print("========================")
+        let configDebugDesc = appConfiguration.debugDescription
+        Log.general.debug("=== App Configuration ===", context: .with { ctx in
+            ctx.add("config", configDebugDesc)
+        })
         #endif
 
         // Initialize PostHog analytics (TestFlight builds only for now)
@@ -329,7 +343,7 @@ struct trendyApp: App {
 
             posthogConfig.captureApplicationLifecycleEvents = true
             PostHogSDK.shared.setup(posthogConfig)
-            print("📊 PostHog initialized (session replay DISABLED for performance)")
+            Log.general.info("📊 PostHog initialized (session replay DISABLED for performance)")
 
             // Send app launch event to verify setup
             PostHogSDK.shared.capture("app_launched", properties: [
@@ -395,7 +409,10 @@ struct trendyApp: App {
                     if let email = email {
                         userProperties["email"] = email
                     }
-                    print("📊 PostHog identify (session restore): user_id=\(userId), email=\(email ?? "nil")")
+                    Log.general.debug("📊 PostHog identify (session restore)", context: .with { ctx in
+                        ctx.add("user_id", userId)
+                        ctx.add("email", email)
+                    })
                     PostHogSDK.shared.identify(userId, userProperties: userProperties)
                 }
 
@@ -405,9 +422,12 @@ struct trendyApp: App {
                         userId: userId,
                         email: email
                     )
-                    print("📝 FullDisclosure identify (session restore): user_id=\(userId), email=\(email ?? "nil")")
+                    Log.general.debug("📝 FullDisclosure identify (session restore)", context: .with { ctx in
+                        ctx.add("user_id", userId)
+                        ctx.add("email", email)
+                    })
                 } catch {
-                    print("⚠️ FullDisclosure identify failed: \(error)")
+                    Log.general.warning("⚠️ FullDisclosure identify failed", error: error)
                 }
             }
         }
