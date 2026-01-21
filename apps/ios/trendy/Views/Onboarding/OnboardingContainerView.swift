@@ -77,9 +77,23 @@ struct OnboardingContainerView: View {
 }
 
 /// Navigation view that displays the current onboarding step
+/// Handles step transitions with accessibility support including:
+/// - Focus management for VoiceOver users
+/// - Reduce Motion compliant transitions
 struct OnboardingNavigationView: View {
     @Bindable var viewModel: OnboardingViewModel
     let eventStore: EventStore
+
+    /// Focus state enum for VoiceOver focus management
+    enum OnboardingFocusField: Hashable {
+        case welcome, auth, createEvent, logEvent, permissions, finish
+    }
+
+    /// Tracks VoiceOver focus for accessibility
+    @AccessibilityFocusState private var focusedField: OnboardingFocusField?
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -111,13 +125,34 @@ struct OnboardingNavigationView: View {
                     .id(OnboardingStep.finish)
             }
         }
-        .transition(.asymmetric(
+        .transition(reduceMotion ? .opacity : .asymmetric(
             insertion: .move(edge: .trailing).combined(with: .opacity),
             removal: .move(edge: .leading).combined(with: .opacity)
         ))
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: viewModel.currentStep)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7),
+            value: viewModel.currentStep
+        )
+        .onChange(of: viewModel.currentStep) { _, newStep in
+            // Move VoiceOver focus to new step title after animation starts
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusedField = focusField(for: newStep)
+            }
+        }
         // NOTE: viewModel.completeOnboarding() now calls appRouter.handleOnboardingComplete() directly
         // No need to observe isComplete here anymore
+    }
+
+    /// Maps an OnboardingStep to its corresponding focus field
+    private func focusField(for step: OnboardingStep) -> OnboardingFocusField {
+        switch step {
+        case .welcome: return .welcome
+        case .auth: return .auth
+        case .createEventType: return .createEvent
+        case .logFirstEvent: return .logEvent
+        case .permissions: return .permissions
+        case .finish: return .finish
+        }
     }
 }
 
@@ -125,6 +160,9 @@ struct OnboardingNavigationView: View {
 
 private struct OnboardingLoadingView: View {
     @State private var isPulsing = false
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -134,10 +172,18 @@ private struct OnboardingLoadingView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 60))
                 .foregroundStyle(Color.dsPrimary)
-                .shadow(color: Color.dsPrimary.opacity(0.5), radius: isPulsing ? 20 : 10)
-                .scaleEffect(isPulsing ? 1.05 : 1.0)
-                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
-                .onAppear { isPulsing = true }
+                .shadow(color: Color.dsPrimary.opacity(0.5), radius: isPulsing && !reduceMotion ? 20 : 10)
+                .scaleEffect(isPulsing && !reduceMotion ? 1.05 : 1.0)
+                .animation(
+                    reduceMotion ? nil : .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+                .accessibilityHidden(true)
+                .onAppear {
+                    if !reduceMotion {
+                        isPulsing = true
+                    }
+                }
         }
     }
 }
