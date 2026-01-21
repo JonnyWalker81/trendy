@@ -11,6 +11,12 @@ import ConfettiSwiftUI
 struct OnboardingFinishView: View {
     @Bindable var viewModel: OnboardingViewModel
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var showCheckmark = false
     @State private var showContent = false
     @State private var confettiTrigger = 0
@@ -40,17 +46,18 @@ struct OnboardingFinishView: View {
                 Circle()
                     .fill(Color.dsSuccess)
                     .frame(width: 100, height: 100)
-                    .scaleEffect(showCheckmark ? 1.0 : 0.5)
-                    .opacity(showCheckmark ? 1.0 : 0.0)
+                    .scaleEffect(reduceMotion ? 1.0 : (showCheckmark ? 1.0 : 0.5))
+                    .opacity(reduceMotion ? 1.0 : (showCheckmark ? 1.0 : 0.0))
 
                 // Checkmark
                 Image(systemName: "checkmark")
                     .font(.system(size: 50, weight: .bold))
                     .foregroundStyle(.white)
-                    .scaleEffect(showCheckmark ? 1.0 : 0.3)
-                    .opacity(showCheckmark ? 1.0 : 0.0)
+                    .scaleEffect(reduceMotion ? 1.0 : (showCheckmark ? 1.0 : 0.3))
+                    .opacity(reduceMotion ? 1.0 : (showCheckmark ? 1.0 : 0.0))
             }
-            .animation(.spring(response: 0.6, dampingFraction: 0.7), value: showCheckmark)
+            .animation(reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.7), value: showCheckmark)
+            .accessibilityLabel("Success checkmark")
 
             // Content
             VStack(spacing: 16) {
@@ -58,6 +65,8 @@ struct OnboardingFinishView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(Color.dsForeground)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusedField, equals: .finish)
 
                 Text("Start tracking and discover patterns in your daily life.")
                     .font(.body)
@@ -65,18 +74,18 @@ struct OnboardingFinishView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
-            .opacity(showContent ? 1.0 : 0.0)
-            .offset(y: showContent ? 0 : 20)
-            .animation(.easeOut(duration: 0.5).delay(0.3), value: showContent)
+            .opacity(reduceMotion ? 1.0 : (showContent ? 1.0 : 0.0))
+            .offset(y: reduceMotion ? 0 : (showContent ? 0 : 20))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.3), value: showContent)
 
             Spacer()
 
             // Summary Card
             if let eventType = viewModel.createdEventType {
                 SummaryCard(eventType: eventType)
-                    .opacity(showContent ? 1.0 : 0.0)
-                    .offset(y: showContent ? 0 : 20)
-                    .animation(.easeOut(duration: 0.5).delay(0.4), value: showContent)
+                    .opacity(reduceMotion ? 1.0 : (showContent ? 1.0 : 0.0))
+                    .offset(y: reduceMotion ? 0 : (showContent ? 0 : 20))
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.4), value: showContent)
             }
 
             Spacer()
@@ -100,31 +109,39 @@ struct OnboardingFinishView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .padding(.horizontal, 32)
-            .opacity(showContent ? 1.0 : 0.0)
-            .animation(.easeOut(duration: 0.5).delay(0.5), value: showContent)
+            .opacity(reduceMotion ? 1.0 : (showContent ? 1.0 : 0.0))
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.5).delay(0.5), value: showContent)
+            .accessibilityLabel("Go to dashboard")
+            .accessibilityHint("Completes setup and opens the main app")
 
             Spacer(minLength: 40)
         }
         .background(Color.dsBackground)
         .confettiCannon(
             trigger: $confettiTrigger,
-            num: 50,
+            num: reduceMotion ? 0 : 50,
             colors: [.dsChart1, .dsChart2, .dsChart3, .dsChart4, .dsChart5, .dsPrimary],
             confettiSize: 10,
             radius: 300,
-            hapticFeedback: true
+            hapticFeedback: !reduceMotion
         )
         .onAppear {
-            // Trigger animations
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if reduceMotion {
+                // Instant appearance for Reduce Motion
                 showCheckmark = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showContent = true
-            }
-            // Trigger confetti after checkmark animation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                confettiTrigger += 1
+            } else {
+                // Trigger animations
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showCheckmark = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showContent = true
+                }
+                // Trigger confetti after checkmark animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    confettiTrigger += 1
+                }
             }
         }
     }
@@ -148,6 +165,7 @@ private struct SummaryCard: View {
                     .frame(width: 56, height: 56)
                     .background(eventType.color)
                     .clipShape(Circle())
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(eventType.name)
@@ -164,6 +182,7 @@ private struct SummaryCard: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title2)
                     .foregroundStyle(Color.dsSuccess)
+                    .accessibilityHidden(true)
             }
         }
         .padding()
@@ -174,10 +193,14 @@ private struct SummaryCard: View {
                 .stroke(Color.dsBorder, lineWidth: 1)
         )
         .padding(.horizontal, 32)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Ready to track \(eventType.name)")
     }
 }
 
 #Preview {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     let previewConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -185,6 +208,6 @@ private struct SummaryCard: View {
     let previewSupabase = SupabaseService(configuration: previewConfig)
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
 
-    return OnboardingFinishView(viewModel: viewModel)
+    return OnboardingFinishView(viewModel: viewModel, focusedField: $focusedField)
         .preferredColorScheme(.dark)
 }

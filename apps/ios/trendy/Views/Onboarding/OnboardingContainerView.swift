@@ -117,11 +117,11 @@ struct OnboardingNavigationView: View {
                     .id(OnboardingStep.logFirstEvent)
 
             case .permissions:
-                PermissionsView(viewModel: viewModel)
+                PermissionsView(viewModel: viewModel, focusedField: $focusedField)
                     .id(OnboardingStep.permissions)
 
             case .finish:
-                OnboardingFinishView(viewModel: viewModel)
+                OnboardingFinishView(viewModel: viewModel, focusedField: $focusedField)
                     .id(OnboardingStep.finish)
             }
         }

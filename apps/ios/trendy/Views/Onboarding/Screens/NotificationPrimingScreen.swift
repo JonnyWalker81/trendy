@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// A full-screen priming view that explains the benefits of notification permissions
 /// before triggering the system permission dialog.
@@ -16,11 +17,17 @@ struct NotificationPrimingScreen: View {
     /// Current progress through the onboarding flow (0.0 to 1.0)
     let progress: Double
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     /// Callback when user taps Enable button (requests actual permission)
     let onEnable: () async -> Void
 
     /// Callback when user taps Skip
     let onSkip: () -> Void
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Whether the enable action is in progress
     @State private var isLoading = false
@@ -30,6 +37,11 @@ struct NotificationPrimingScreen: View {
 
     /// Permission type for this screen
     private let permissionType = OnboardingPermissionType.notifications
+
+    /// Delay for skip explanation (longer for VoiceOver users)
+    private var skipDelay: Double {
+        UIAccessibility.isVoiceOverRunning ? 3.0 : 1.5
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +71,8 @@ struct NotificationPrimingScreen: View {
                     .fontWeight(.bold)
                     .foregroundStyle(Color.dsForeground)
                     .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusedField, equals: .permissions)
 
                 // Benefit bullets
                 VStack(alignment: .leading, spacing: 12) {
@@ -67,10 +81,12 @@ struct NotificationPrimingScreen: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.body)
                                 .foregroundStyle(Color.dsSuccess)
+                                .accessibilityHidden(true)
                             Text(bullet)
                                 .font(.body)
                                 .foregroundStyle(Color.dsMutedForeground)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
@@ -105,11 +121,13 @@ struct NotificationPrimingScreen: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .disabled(isLoading)
+                .accessibilityLabel("Enable notifications")
+                .accessibilityHint("Shows iOS permission dialog. Allows reminders to track your events.")
 
                 // Skip link
                 Button {
                     showSkipExplanation = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + skipDelay) {
                         onSkip()
                     }
                 } label: {
@@ -118,6 +136,8 @@ struct NotificationPrimingScreen: View {
                         .foregroundStyle(Color.dsMutedForeground)
                 }
                 .disabled(isLoading || showSkipExplanation)
+                .accessibilityLabel("Skip notification setup")
+                .accessibilityHint("You can enable notifications later in Settings.")
 
                 // Skip explanation (appears after skip tapped)
                 if showSkipExplanation {
@@ -125,12 +145,12 @@ struct NotificationPrimingScreen: View {
                         .font(.caption)
                         .foregroundStyle(Color.dsMutedForeground)
                         .multilineTextAlignment(.center)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
                 }
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 40)
-            .animation(.easeInOut(duration: 0.3), value: showSkipExplanation)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: showSkipExplanation)
         }
         .background(Color.dsBackground)
     }
@@ -139,8 +159,11 @@ struct NotificationPrimingScreen: View {
 // MARK: - Preview
 
 #Preview("Notification Priming") {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     NotificationPrimingScreen(
         progress: 0.5,
+        focusedField: $focusedField,
         onEnable: {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         },
@@ -149,8 +172,11 @@ struct NotificationPrimingScreen: View {
 }
 
 #Preview("Dark Mode") {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     NotificationPrimingScreen(
         progress: 0.5,
+        focusedField: $focusedField,
         onEnable: {},
         onSkip: {}
     )

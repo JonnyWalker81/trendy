@@ -13,6 +13,12 @@ struct PermissionsView: View {
     @Environment(\.geofenceManager) private var geofenceManager
     @Environment(\.healthKitService) private var healthKitService
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var currentPermissionIndex = 0
     @State private var permissionResults: [OnboardingPermissionType: Bool] = [:]
 
@@ -42,7 +48,7 @@ struct PermissionsView: View {
         Group {
             if let permission = currentPermission {
                 permissionPrimingView(for: permission)
-                    .transition(.asymmetric(
+                    .transition(reduceMotion ? .opacity : .asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)
                     ))
@@ -56,7 +62,7 @@ struct PermissionsView: View {
                 }
             }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPermissionIndex)
+        .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.7), value: currentPermissionIndex)
     }
 
     // MARK: - Permission Priming Views
@@ -67,18 +73,21 @@ struct PermissionsView: View {
         case .notifications:
             NotificationPrimingScreen(
                 progress: progress,
+                focusedField: $focusedField,
                 onEnable: { await requestPermission(permission) },
                 onSkip: { skipPermission(permission) }
             )
         case .location:
             LocationPrimingScreen(
                 progress: progress,
+                focusedField: $focusedField,
                 onEnable: { await requestPermission(permission) },
                 onSkip: { skipPermission(permission) }
             )
         case .healthkit:
             HealthKitPrimingScreen(
                 progress: progress,
+                focusedField: $focusedField,
                 onEnable: { await requestPermission(permission) },
                 onSkip: { skipPermission(permission) }
             )
@@ -142,6 +151,8 @@ extension EnvironmentValues {
 }
 
 #Preview {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     let previewConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -149,6 +160,6 @@ extension EnvironmentValues {
     let previewSupabase = SupabaseService(configuration: previewConfig)
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
 
-    return PermissionsView(viewModel: viewModel)
+    PermissionsView(viewModel: viewModel, focusedField: $focusedField)
         .preferredColorScheme(.dark)
 }
