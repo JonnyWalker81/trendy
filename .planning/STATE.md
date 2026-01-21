@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** v1.1 Onboarding Overhaul — Phase 10 complete, ready for Phase 11
+**Current focus:** v1.1 Onboarding Overhaul — Phase 11 Plan 01 complete
 
 ## Current Position
 
-Phase: 10 of 4 (Visual Design & Flow) - COMPLETE
-Plan: 5 of 5 complete
-Status: Phase complete
-Last activity: 2026-01-20 — Completed 10-05-PLAN.md (Confetti Celebration)
+Phase: 11 of 4 (Accessibility)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-01-20 — Completed 11-01-PLAN.md (Foundation Accessibility)
 
-Progress: [██████████] 5/5 plans in current phase
+Progress: [█████░░░░░] 1/2 plans in current phase
 
 ## Milestone History
 
@@ -29,7 +29,7 @@ Progress: [██████████] 5/5 plans in current phase
 | 8 | Backend Onboarding Status | 2 | Complete |
 | 9 | iOS State Architecture | 7 | Complete |
 | 10 | Visual Design & Flow | 10 | Complete |
-| 11 | Accessibility | 2 | Pending |
+| 11 | Accessibility | 2 | In Progress |
 
 **Total requirements:** 21
 
@@ -85,6 +85,14 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Reset onboarding debug option clears local cache, server status, and signs out
 - Post-sign-in routing checks server status and continues onboarding if incomplete
 
+**Phase 11 decisions:**
+- Progress bar announces "stepName, step N of M" format for VoiceOver
+- Hero views hidden from VoiceOver (decorative content)
+- Reduce Motion: use opacity-only transitions instead of slide animations
+- Reduce Motion: disable pulse animations entirely rather than slowing them
+- Focus management via enum-based @AccessibilityFocusState
+- Loading view icon marked as accessibilityHidden
+
 ### Pending Todos
 
 None
@@ -95,24 +103,23 @@ None
 
 ## Next Action
 
-**Phase 10 Complete - Ready for Phase 11 (Accessibility)**
+**Phase 11 Plan 01 Complete - Continue with Plan 02**
 
-Phase 10 delivered complete visual redesign of onboarding:
-- Hero layouts on welcome, auth, and permission screens
-- Progress bar with smooth advancement across all steps
-- Spring-animated transitions between steps
-- Full-screen permission priming screens with benefit bullets
-- Confetti celebration with haptic feedback on finish screen
-- Auth screen polish and sign out options
-- Debug reset functionality for testing
+Plan 01 delivered foundation accessibility infrastructure:
+- VoiceOver step announcements on progress bar (stepName, step N of M)
+- Reduce Motion compliance for all animations (hero pulse, transitions, loading)
+- Focus management infrastructure ready for individual views
+- All hero views and loading icons hidden from VoiceOver
 
-All 10 requirements addressed (DESIGN-01 through DESIGN-06, FLOW-01 through FLOW-04).
-
-Next: Plan Phase 11 (Accessibility - 2 requirements)
+Next: Plan 02 will add accessibility to individual onboarding views:
+- Contextual button labels with hints
+- Focus binding on view titles
+- Confetti Reduce Motion handling
+- Feature highlight grouping for VoiceOver
 
 ## Session Continuity
 
-Last session: 2026-01-20T23:05:00Z
-Stopped at: Completed 10-05-PLAN.md (Phase 10 complete)
+Last session: 2026-01-20T23:22:00Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
-Next: Plan Phase 11 Accessibility
+Next: Execute 11-02-PLAN.md
