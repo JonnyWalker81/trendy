@@ -7,6 +7,10 @@
 
 import Foundation
 import SwiftData
+import os
+
+/// Private logger for Event model (avoids dependency on shared Log enum for widget compatibility)
+private let eventLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.trendy.app", category: "data")
 
 enum EventSourceType: String, Codable, CaseIterable {
     case manual = "manual"
@@ -69,7 +73,7 @@ final class Event {
                 return try JSONDecoder().decode([String: PropertyValue].self, from: data)
             } catch {
                 #if DEBUG
-                print("❌ Event.properties GET: Failed to decode - \(error)")
+                eventLogger.warning("Event.properties GET: Failed to decode [error=\(error.localizedDescription, privacy: .public)]")
                 #endif
                 return [:]
             }
@@ -82,7 +86,7 @@ final class Event {
                 propertiesData = encoded
             } catch {
                 #if DEBUG
-                print("❌ Event.properties SET: Failed to encode \(newValue.count) properties - \(error)")
+                eventLogger.warning("Event.properties SET: Failed to encode [property_count=\(newValue.count), error=\(error.localizedDescription, privacy: .public)]")
                 #endif
                 propertiesData = nil
             }
@@ -133,7 +137,7 @@ final class Event {
             self.propertiesData = try JSONEncoder().encode(properties)
         } catch {
             #if DEBUG
-            print("❌ Event.init() failed to encode \(properties.count) properties: \(error)")
+            eventLogger.warning("Event.init() failed to encode properties [property_count=\(properties.count), error=\(error.localizedDescription, privacy: .public)]")
             #endif
             self.propertiesData = nil
         }
