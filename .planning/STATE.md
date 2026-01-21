@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** Planning next milestone
+**Current focus:** v1.2 SyncEngine Quality — defining requirements
 
 ## Current Position
 
-Phase: N/A (between milestones)
-Plan: N/A
-Status: Ready to plan next milestone
-Last activity: 2026-01-21 — v1.1 Onboarding Overhaul complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-21 — Milestone v1.2 started
 
-Progress: [██████████] v1.1 SHIPPED
+Progress: [░░░░░░░░░░] 0%
 
 ## Milestone History
 
@@ -44,21 +44,20 @@ None
 
 ## Next Action
 
-**v1.1 Milestone Complete**
+**Defining v1.2 Requirements**
 
-The v1.1 Onboarding Overhaul milestone is shipped:
-- Backend onboarding status API for cross-device sync
-- Synchronous cache-first routing (no onboarding flash)
-- Modern visual design with hero layouts and spring animations
-- Permission priming flow with skip explanations
-- Confetti celebration on completion
-- Full accessibility support (VoiceOver, Reduce Motion)
+Source: iOS SyncEngine Code Review (docs/IOS_SYNC_ENGINE_REVIEW.md)
 
-**Next:** Run `/gsd:new-milestone` to define v1.2 goals and requirements.
+Focus areas:
+- Testability (DI protocols, unit tests)
+- Code quality (split large methods)
+- Bug fixes (busy-wait, cursor fallback, logging)
+- Metrics (sync telemetry)
+- Documentation (org-mode + Mermaid diagrams)
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: v1.1 milestone completion
+Stopped at: Milestone initialization
 Resume file: None
-Next: /gsd:new-milestone
+Next: Define requirements

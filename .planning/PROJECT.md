@@ -8,6 +8,18 @@ A cross-platform event tracking app for iOS and web. Users track life events —
 
 **Effortless tracking.** Users should be able to set up tracking once and forget about it. Data capture happens automatically in the background, sync happens invisibly, and the app stays out of the way while reliably recording what matters.
 
+## Current Milestone: v1.2 SyncEngine Quality
+
+**Goal:** Improve SyncEngine testability, code quality, and observability based on code review findings
+
+**Target features:**
+- Dependency injection protocols for APIClient and LocalStore (testability)
+- Unit tests for circuit breaker, resurrection prevention, deduplication
+- Refactored large methods (flushPendingMutations, bootstrapFetch)
+- Bug fixes (busy-wait → continuation, cursor fallback, property logging)
+- Sync metrics (duration distribution, failure rates by error type)
+- Architecture documentation in org-mode with Mermaid diagrams
+
 ## Current State (v1.1 shipped 2026-01-21)
 
 **Tech stack:**
@@ -110,9 +122,32 @@ A cross-platform event tracking app for iOS and web. Users track life events —
 
 ### Active
 
-<!-- Current scope for next milestone — defined with /gsd:new-milestone -->
+<!-- Current scope for v1.2 SyncEngine Quality -->
 
-(No active requirements — run `/gsd:new-milestone` to define next milestone)
+**Testability:**
+- [ ] DI protocols for APIClient and LocalStore
+- [ ] Unit tests for circuit breaker behavior
+- [ ] Unit tests for resurrection prevention
+- [ ] Unit tests for mutation deduplication
+
+**Code Quality:**
+- [ ] Split flushPendingMutations() into smaller functions
+- [ ] Split bootstrapFetch() into entity-specific methods
+
+**Bug Fixes:**
+- [ ] Replace busy-wait polling with continuation-based approach
+- [ ] Use safer cursor fallback (Int64.max/2 instead of 1B)
+- [ ] Add logging for property type fallback
+
+**Metrics:**
+- [ ] Track sync duration distribution
+- [ ] Track failure rates by error type
+- [ ] Track retry patterns
+
+**Documentation:**
+- [ ] Document sync state machine (org-mode + Mermaid)
+- [ ] Document error recovery flows
+- [ ] Add sequence diagrams for data flows
 
 ### Out of Scope
 
@@ -184,4 +219,4 @@ A cross-platform event tracking app for iOS and web. Users track life events —
 | Progress bar announces step context | "stepName, step N of M" format for VoiceOver | ✓ Good — informative |
 
 ---
-*Last updated: 2026-01-21 after v1.1 milestone*
+*Last updated: 2026-01-21 after v1.2 milestone start*
