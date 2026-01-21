@@ -1,186 +1,480 @@
 # Project Research Summary
 
-**Project:** Trendy iOS v1.1 Onboarding Overhaul
-**Domain:** iOS SwiftUI onboarding flow improvement
-**Researched:** 2026-01-19
+**Project:** Trendy v1.2 SyncEngine Quality
+**Domain:** iOS sync engine testing and code quality
+**Researched:** 2026-01-21
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The Trendy iOS onboarding system has three well-defined problems: returning users see onboarding screens flash (a race condition in state management), the flow order creates friction, and the visual design feels dated. Research confirms these are solvable with native SwiftUI patterns requiring no new dependencies.
+The v1.2 milestone addresses critical quality and testability gaps in Trendy's SyncEngine, informed by production code review findings. Research reveals that Swift Testing (already integrated) combined with protocol-based dependency injection provides the cleanest path to comprehensive testing without adding heavyweight dependencies. The core challenge is retrofitting testability into an actor-based architecture while preserving Swift concurrency guarantees.
 
-The recommended approach is a three-phase refactor: First, fix the flash issue by introducing a `LaunchStateCoordinator` that reads cached state synchronously before any view renders, replacing the current scattered async checks and NotificationCenter-based routing. Second, apply modern iOS 17 animation APIs (`PhaseAnimator`, `KeyframeAnimator`) to polish transitions and celebrations. Third, either remove permissions from onboarding entirely (deferring to first feature use) or enhance with proper two-step priming screens.
+The recommended approach uses protocol extraction for existing dependencies (APIClient, LocalStore) with factory patterns for non-Sendable types like ModelContext. This enables unit testing of complex sync behaviors (circuit breaker, resurrection prevention, deduplication) while maintaining production architecture integrity. Migration is incremental and compiler-enforced, minimizing risk of regression.
 
-The primary risk is the state management refactor touching multiple files (ContentView, trendyApp, OnboardingViewModel, OnboardingContainerView). Mitigation: Phase 1 focuses exclusively on the routing architecture without changing onboarding content views. The existing state machine (`OnboardingStep` enum) and authentication flow are solid and should be preserved.
+Key risks center on actor isolation complexity and SwiftData concurrency. Mitigation strategies include strict protocol boundaries, factory-based ModelContext creation per operation, and @unchecked Sendable mocks for test-only code. The codebase already exhibits several testability anti-patterns (45+ print statements, hard-coded dependencies, missing completion handlers) that this milestone will address systematically.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is sound - this is an enhancement exercise, not a rebuild. No new third-party dependencies are needed. The research explicitly recommends against adding Lottie or Rive animation libraries; native SwiftUI iOS 17+ APIs are sufficient for the scope.
+**No new dependencies required.** The project already has Swift Testing framework (Xcode 16) and uses native Apple telemetry infrastructure. Research confirms protocol-based DI and actor-compatible mocking patterns work with existing tooling.
 
 **Core technologies:**
-- **UserDefaults + @AppStorage**: State persistence - UserDefaults for ViewModel writes, @AppStorage for view-level reactivity
-- **PhaseAnimator (iOS 17+)**: Multi-phase sequential animations for step transitions
-- **KeyframeAnimator (iOS 17+)**: Complex keyframe-based animations for celebration effects on finish screen
-- **@Observable**: ViewModel state management - already correctly implemented, no changes needed
-- **Supabase Swift SDK**: Authentication - working well, no changes needed
+- **Swift Testing** (built-in) — Native async/await support, parallel execution, already in use in trendyTests
+- **os.signpost** (built-in) — Development profiling and duration tracking with negligible overhead
+- **MetricKit** (built-in) — Production metrics aggregation for real-world telemetry
+- **Protocol + Init Injection** — Actor-safe DI without frameworks or magic
 
-**What to avoid:**
-- Lottie (adds 2MB, After Effects dependency, overkill)
-- SwiftData for onboarding flags (overkill for boolean state)
-- Keychain for onboarding state (Keychain is for secrets, not app state)
+**Testing pattern:**
+```swift
+// Protocol definitions (new)
+protocol NetworkClientProtocol: Sendable {
+    func createEventWithIdempotency(...) async throws -> APIEvent
+    func getChanges(since: Int64, limit: Int) async throws -> ChangeFeedResponse
+}
+
+protocol DataStoreFactory: Sendable {
+    func makeDataStore(context: ModelContext) -> DataStoreProtocol
+}
+
+// SyncEngine refactored (uses protocols)
+actor SyncEngine {
+    private let networkClient: NetworkClientProtocol
+    private let dataStoreFactory: DataStoreFactory
+
+    init(networkClient: NetworkClientProtocol, dataStoreFactory: DataStoreFactory, ...) {
+        self.networkClient = networkClient
+        self.dataStoreFactory = dataStoreFactory
+    }
+}
+
+// Test usage (mocks injected)
+let mockNetwork = MockNetworkClient()
+let mockFactory = MockDataStoreFactory()
+let syncEngine = SyncEngine(networkClient: mockNetwork, dataStoreFactory: mockFactory, ...)
+
+await syncEngine.performSync()
+#expect(mockNetwork.createEventCallCount == 5)
+```
+
+**Metrics approach:**
+- os.signpost for development (view timing in Instruments)
+- MetricKit for production (aggregated daily reports)
+- Custom counters for sync-specific metrics (success rate, retry count, rate limit hits)
+- PostHog integration for telemetry (already in use)
+
+**Documentation tooling:**
+- Markdown + Mermaid for diagrams (GitHub renders natively)
+- Swift documentation comments (already in use)
+- No org-mode or new tools needed
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Never show onboarding to returning users (current bug - screens flash)
-- Progress indicator showing remaining steps
-- Pre-permission priming screens before system dialogs
-- Skip button on optional steps
-- Smooth transitions between steps
-- Clear CTAs with obvious primary action
+**Must have (table stakes for quality milestone):**
+- **Protocol-based DI for SyncEngine** — Testability without architectural changes
+- **Unit tests for circuit breaker** — Verify rate limit handling trips correctly after 3 failures
+- **Unit tests for resurrection prevention** — Verify deleted items don't reappear during bootstrap
+- **Unit tests for deduplication** — Verify same item not created twice with idempotency keys
+- **Structured logging replacement** — Remove 45+ print statements, use Log.sync consistently
+- **Metrics collection** — Track sync duration, success/failure rates, retry counts
+- **Completion handler verification** — Ensure all HealthKit/background callbacks handled correctly
 
-**Should have (quick wins):**
-- Celebrate first event with animation
-- Better progress indicator (current step grouping is confusing)
-- Skip confirmation explaining what user will miss
-- Enhanced permission cards with benefit messaging
+**Should have (differentiators for maintainability):**
+- **Sync state visibility** — "3 events pending sync" indicator for debugging
+- **Deterministic progress indicators** — "Syncing 3 of 5" instead of spinner
+- **Cursor validation logging** — Track cursor state changes for debugging resurrection bugs
+- **Method refactoring** — Split large methods (flushPendingMutations, bootstrapSync) for readability
+- **Mock actor implementations** — Thread-safe test doubles for APIClient and LocalStore
 
-**Defer (v2+):**
-- Value-first flow (significant architecture change - let users create events before auth)
-- Deep personalization questions
-- Animated mascot/branding
-- Fully contextual permission requests (prompt at feature use, not during onboarding)
+**Defer (out of scope for v1.2):**
+- **Real-time HealthKit updates** — iOS controls timing, best-effort acceptable
+- **Conflict resolution UI** — Current last-write-wins sufficient for v1.2
+- **Bidirectional sync** — Server-to-client changes deferred to future milestone
+- **Background sync optimization** — Focus on correctness before performance
+- **>20 geofence smart rotation** — Complexity not justified by current usage
 
 ### Architecture Approach
 
-The core fix requires introducing a `LaunchStateCoordinator` that determines app routing state synchronously in `init()` by reading cached UserDefaults, before SwiftUI renders any view body. This eliminates the race condition where auth state, onboarding completion, and "has checked" flags update at different times causing the flash.
+**Migration Path: Protocol Extraction from Existing Dependencies**
+
+The SyncEngine actor currently has two hard-coded dependencies (APIClient class, LocalStore struct) that prevent testing. The refactor extracts protocols without changing production behavior, then injects mocks for testing.
 
 **Major components:**
-1. **AppLaunchState enum** - Single source of truth: `.loading`, `.onboarding`, `.authenticated`
-2. **LaunchStateCoordinator** - Reads cached state synchronously in init, verifies async without intermediate view changes
-3. **RootView** - Single point of branching that switches on launch state (replaces scattered checks in ContentView)
-4. **OnboardingViewModel** - Keep as-is for onboarding flow management, add completion callback to coordinator
 
-**Key principles:**
-- Single point of branching (RootView only decides onboarding vs main app)
-- Synchronous fast path for returning users (no loading screen needed)
-- Async verification without state changes unless truly different
-- Replace NotificationCenter routing with shared @Observable state
+1. **Protocol Layer** — NetworkClientProtocol, DataStoreProtocol, DataStoreFactory interfaces
+   - Defines contracts for network and persistence operations
+   - All methods async throws for actor compatibility
+   - Marked Sendable for actor isolation safety
+
+2. **Factory Pattern for ModelContext** — LocalStoreFactory creates DataStore instances per-operation
+   - Handles non-Sendable ModelContext limitation
+   - Prevents SwiftData file locking (fresh context per operation)
+   - Testable via MockDataStoreFactory
+
+3. **Test Doubles** — MockNetworkClient, MockDataStore with spy pattern
+   - Track call counts and arguments for verification
+   - Configure responses for different scenarios (success, error, rate limit)
+   - Use @unchecked Sendable for test-only mutable state
+
+**Dependency flow:**
+
+```
+Before (hard-coded):
+EventStore → SyncEngine(apiClient: APIClient, modelContainer: ModelContainer)
+              └── Uses concrete APIClient and creates LocalStore inline
+
+After (protocol-based):
+EventStore → SyncEngine(networkClient: NetworkClientProtocol, dataStoreFactory: DataStoreFactory)
+              └── Production: APIClient conforms to NetworkClientProtocol
+              └── Tests: MockNetworkClient injected
+```
+
+**Migration strategy (incremental, non-breaking):**
+
+1. Define protocols (no existing code changes)
+2. Add conformance to APIClient and LocalStore
+3. Create LocalStoreFactory implementation
+4. Refactor SyncEngine init and properties
+5. Update EventStore initialization
+6. Add comprehensive unit tests
+
+**Critical constraints:**
+- Actors require Sendable dependencies (protocols must be marked)
+- ModelContext not Sendable (factory pattern required)
+- Protocol methods called within actor-isolated context (not protocol extensions)
+- Tests use @unchecked Sendable for mocks (single-threaded XCTest safe)
 
 ### Critical Pitfalls
 
-1. **Async state check causing UI flash** - Check UserDefaults synchronously in init BEFORE body renders. Never separate auth and onboarding checks into independent state variables. Use atomic state updates.
+**Top 5 from v1.2 perspective:**
 
-2. **Multiple loading states** - Match Launch Screen with initial SwiftUI view visually. Single centralized initialization. No nested loading states in child views.
+1. **Not calling HealthKit completion handlers in all code paths** — HealthKit stops delivering updates after 3 missed callbacks
+   - Prevention: Audit all observer query handlers, add explicit logging
+   - Phase to address: Foundation (before any HealthKit refactor)
 
-3. **task/onAppear running multiple times** - Use `@State` guard for one-time execution or custom `onFirstAppear` modifier. Move initialization to coordinator, not views.
+2. **SwiftData model objects passed across actor boundaries** — Data races and intermittent crashes
+   - Prevention: Pass persistentModelID instead of models, enable strict concurrency checking
+   - Phase to address: DI Integration (verify factory pattern prevents this)
 
-4. **NotificationCenter for view routing** - Replace with shared @Observable state. Notifications can be missed, cause race conditions, and are hard to debug.
+3. **Cursor race conditions in sync engine** — Data disappears or duplicates
+   - Prevention: Single-flight lock (already exists), only advance cursor after persistence
+   - Phase to address: Testing (unit tests verify cursor management correctness)
 
-5. **Permission priming timing** - Never request permissions without context. Use two-step opt-in (custom explanation then system dialog). Consider deferring to first feature use.
+4. **45+ print statements instead of structured logging** — Production debugging impossible
+   - Prevention: Replace with Log.sync, add context (IDs, counts, timestamps)
+   - Phase to address: Foundation (immediate cleanup before testing)
+
+5. **Offline queue operations applied out of order** — EventTypes must sync before Events reference them
+   - Prevention: Sort mutations by entity type, implement dependency-aware flush
+   - Phase to address: Testing (unit tests verify ordering with mocks)
+
+**Secondary concerns for v1.2:**
+
+- Actor + property injection anti-pattern (use constructor injection)
+- Service locator in actor (defeats isolation)
+- Testing while charging only (battery behavior different)
+- MockNetworkClient not thread-safe if used outside tests
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: State Management Foundation
-**Rationale:** The flash issue is the highest priority bug and blocks other improvements. All research sources agree this must be fixed first. Architecture refactor provides foundation for subsequent phases.
-**Delivers:** No flash for returning users. Clean single loading screen. Atomic routing state.
-**Addresses:** Never show to returning users (table stakes), progress indicator foundation
-**Avoids:** Pitfalls 1 (async flash), 2 (multiple loading), 3 (duplicate initialization), 6 (state sync), 7 (NotificationCenter routing)
-**Scope:**
-- Create AppLaunchState enum
-- Create LaunchStateCoordinator with synchronous init
-- Create RootView as single branching point
-- Update trendyApp to wire coordinator
-- Update OnboardingContainerView to remove redundant state checks
-- Connect completion callback from OnboardingViewModel to coordinator
-- Update sign-out flow to use coordinator
+### Phase 1: Foundation & Cleanup
+**Rationale:** Clean up technical debt before adding complexity. Structured logging and completion handler audits are prerequisites for reliable testing.
 
-### Phase 2: Visual Design and Animations
-**Rationale:** With routing fixed, the visual polish can be applied without risk of state bugs. Animation APIs are well-documented and low-risk.
-**Delivers:** Modern transitions, celebration animations, accessibility support
-**Uses:** PhaseAnimator, KeyframeAnimator (from STACK.md)
-**Implements:** Step transition animations, finish screen celebration, permission card enhancements
-**Avoids:** Pitfall 5 (ZStack glitches), Pitfall 8 (missing accessibility)
-**Scope:**
-- Replace basic `.animation()` with PhaseAnimator for step transitions
-- Add KeyframeAnimator celebration on finish screen
-- Use explicit zIndex or NavigationStack for transitions
-- Add VoiceOver labels and hints
-- Respect reduceMotion setting
-- Support Dynamic Type with @ScaledMetric
-- Polish keyboard handling in auth forms
+**Delivers:**
+- All print() statements replaced with Log.sync
+- HealthKit/BGTaskScheduler completion handlers verified
+- Cursor state logging added for debugging
+- Entitlements audit (background delivery, geofencing)
 
-### Phase 3: Permissions Polish
-**Rationale:** Permissions are the lowest-priority improvement. The current flow works, just has suboptimal acceptance rates. This phase can be descoped if needed.
-**Delivers:** Higher permission acceptance rates, better user understanding
-**Addresses:** Pre-permission priming (table stakes), contextual permission timing (differentiator)
-**Avoids:** Pitfall 4 (permission timing mistakes)
-**Scope:**
-- Add two-step priming screens (custom explanation before system dialog)
-- Enhance cards with benefit statements and feature previews
-- Add "Not Now" prominence with skip confirmation
-- Consider: Move HealthKit to first feature use (contextual)
-- Consider: Move Location to first geofence creation
-- Consider: Remove permissions step entirely, use post-onboarding "Setup Checklist"
+**Addresses:**
+- Pitfall 14 (print statements)
+- Pitfall 1 (missing entitlements)
+- Pitfall 12 (BGTask registration)
+
+**Avoids:** Building tests on top of unreliable logging/callbacks
+
+**Estimated effort:** 8-12 hours
+
+**Research flags:** Standard cleanup, no additional research needed
+
+---
+
+### Phase 2: Protocol Definitions
+**Rationale:** Define abstractions before refactoring. Non-breaking change that sets up testing seam.
+
+**Delivers:**
+- NetworkClientProtocol with all SyncEngine-required methods
+- DataStoreProtocol with all persistence operations
+- DataStoreFactory protocol for ModelContext creation
+- Protocol files in Protocols/ directory
+
+**Addresses:**
+- Testability requirement (no mocks possible without protocols)
+- Sendable boundaries defined explicitly
+
+**Avoids:** Pitfall 7 (SwiftData threading) via factory pattern
+
+**Estimated effort:** 2-4 hours
+
+**Research flags:** Standard protocol design, no additional research needed
+
+---
+
+### Phase 3: Implementation Conformance
+**Rationale:** Make existing types conform to protocols without changing behavior. Compiler-enforced correctness.
+
+**Delivers:**
+- APIClient conforms to NetworkClientProtocol
+- LocalStore conforms to DataStoreProtocol
+- LocalStoreFactory implementation
+- All existing tests pass (no behavior changes)
+
+**Uses:** Protocol definitions from Phase 2
+
+**Avoids:** Breaking existing production code
+
+**Estimated effort:** 3-5 hours
+
+**Research flags:** No additional research, straightforward conformance
+
+---
+
+### Phase 4: SyncEngine DI Refactor
+**Rationale:** Update SyncEngine to use protocols. Breaking change but compiler-enforced migration.
+
+**Delivers:**
+- SyncEngine.init accepts NetworkClientProtocol and DataStoreFactory
+- All apiClient usages → networkClient
+- All LocalStore(modelContext:) → dataStoreFactory.makeDataStore(context:)
+- EventStore updated to inject protocols
+
+**Implements:** Actor + protocol injection pattern from ARCHITECTURE.md
+
+**Addresses:**
+- Testing seam now available
+- Pitfall 7 prevention (factory ensures fresh ModelContext)
+
+**Avoids:** Pitfall property injection (uses constructor injection)
+
+**Estimated effort:** 4-6 hours
+
+**Research flags:** No additional research, pattern well-documented
+
+---
+
+### Phase 5: Test Infrastructure
+**Rationale:** Build mock implementations and test utilities before writing test cases.
+
+**Delivers:**
+- MockNetworkClient (spy pattern, configurable responses)
+- MockDataStore (spy pattern, in-memory state)
+- MockDataStoreFactory
+- Test fixtures for APIEvent, ChangeFeedResponse, etc.
+
+**Uses:** Protocol definitions, spy pattern from STACK.md
+
+**Addresses:**
+- Reusable test doubles for all future tests
+- Actor-safe mocks (@unchecked Sendable for test context)
+
+**Avoids:** Test pollution (reset() methods for cleanup)
+
+**Estimated effort:** 6-8 hours
+
+**Research flags:** No additional research, standard mock patterns
+
+---
+
+### Phase 6: Unit Tests - Circuit Breaker
+**Rationale:** Test rate limit handling first (simpler than full sync, validates mock infrastructure).
+
+**Delivers:**
+- Test: Circuit breaker trips after 3 rate limits
+- Test: Circuit breaker resets after backoff expires
+- Test: Sync blocked while rate limited
+- Test: Metrics track rate limit hits
+
+**Addresses:**
+- Pitfall 3 prevention (rate limit handling verified)
+- Mock infrastructure validated
+
+**Estimated effort:** 4-6 hours
+
+**Research flags:** No additional research needed
+
+---
+
+### Phase 7: Unit Tests - Resurrection Prevention
+**Rationale:** Most complex sync bug to test, requires cursor + delete state coordination.
+
+**Delivers:**
+- Test: Deleted items not re-created during bootstrap
+- Test: pendingDeleteIds tracked correctly
+- Test: Cursor advances only after successful delete
+- Test: Bootstrap skips items in pendingDeleteIds
+
+**Addresses:**
+- Pitfall 9 (cursor race conditions)
+- Pitfall 11 (operation ordering)
+
+**Estimated effort:** 8-10 hours (complex scenarios)
+
+**Research flags:** May need deeper research into edge cases during implementation
+
+---
+
+### Phase 8: Unit Tests - Deduplication
+**Rationale:** Verify idempotency keys prevent duplicate creation during retry scenarios.
+
+**Delivers:**
+- Test: Same event not created twice with same idempotency key
+- Test: Retry after network error uses same key
+- Test: Different operations use different keys
+- Test: Server returns 409 Conflict handled correctly
+
+**Addresses:**
+- Duplicate prevention (table stakes feature)
+- Retry logic correctness
+
+**Estimated effort:** 4-6 hours
+
+**Research flags:** No additional research needed
+
+---
+
+### Phase 9: Code Quality - Method Refactoring
+**Rationale:** Split large methods now that tests provide regression safety net.
+
+**Delivers:**
+- flushPendingMutations split into smaller methods
+- bootstrapSync refactored for readability
+- Cyclomatic complexity reduced
+- Tests still pass (no behavior changes)
+
+**Addresses:**
+- Code review findings (large methods)
+- Maintainability improvement
+
+**Estimated effort:** 6-8 hours
+
+**Research flags:** No additional research needed
+
+---
+
+### Phase 10: Metrics & Documentation
+**Rationale:** Add observability last (tests validate correctness first).
+
+**Delivers:**
+- os.signpost instrumentation for sync operations
+- Custom metrics: sync duration, success/failure rates
+- MetricKit subscriber for production telemetry
+- Mermaid state machine diagrams in docs
+- Updated ARCHITECTURE.md with DI patterns
+
+**Uses:** os.signpost, MetricKit from STACK.md
+
+**Addresses:**
+- Observability for production debugging
+- Documentation for future maintainers
+
+**Estimated effort:** 8-10 hours
+
+**Research flags:** No additional research, all patterns documented
+
+---
 
 ### Phase Ordering Rationale
 
-- **Phase 1 first because:** Flash issue is user-facing bug on every app launch. State architecture must be solid before adding animation complexity. All other phases depend on clean state management.
-- **Phase 2 second because:** Visual polish can only be properly tested once routing is stable. Animation code is isolated to individual views, low risk of regression.
-- **Phase 3 last because:** Permissions changes are optional/deferrable. May involve product decisions about feature gating. Current implementation works, just not optimal.
+**Foundation first:** Technical debt (logging, completion handlers) must be cleaned before reliable testing possible. Print statements interfere with test output.
+
+**Protocols before refactor:** Define abstractions incrementally to avoid big-bang changes. Each phase is independently verifiable.
+
+**Tests after infrastructure:** Mock implementations needed before test cases. Circuit breaker tests validate mock infrastructure before tackling complex resurrection scenarios.
+
+**Refactoring after tests:** Large method splits risky without test coverage. Tests act as regression safety net.
+
+**Metrics last:** Observability important but not blocking for correctness. Tests validate behavior first, metrics provide production visibility second.
+
+**Dependencies respected:**
+- Phase 2 → Phase 3 (conformance requires definitions)
+- Phase 3 → Phase 4 (refactor requires conformance)
+- Phase 4 → Phase 5 (mocks require protocols)
+- Phase 5 → Phase 6-8 (tests require mocks)
+- Phase 6-8 → Phase 9 (refactoring requires tests)
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 3:** Product decision needed on whether to keep permissions in onboarding or defer to contextual. May need analytics data on current permission acceptance rates.
+**Phases needing deeper research during planning:**
+- **Phase 7 (Resurrection Tests):** Complex edge cases may emerge during test design. May need to research cursor + delete state interactions more deeply.
+- **Phase 10 (MetricKit):** PostHog integration patterns may need research to avoid double-counting metrics.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1:** Patterns are well-documented (LaunchState enum, synchronous init). Apple WWDC sessions and multiple tutorials confirm approach.
-- **Phase 2:** iOS 17 animation APIs are official and well-documented. Straightforward implementation.
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1 (Foundation):** Standard cleanup, well-understood patterns
+- **Phase 2-5 (DI Migration):** Protocol patterns thoroughly researched, no unknowns
+- **Phase 6, 8 (Circuit Breaker, Deduplication):** Straightforward test scenarios
+- **Phase 9 (Refactoring):** Standard refactoring patterns with test safety net
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Existing implementation is correct, enhancements use native iOS 17 APIs with official Apple documentation |
-| Features | HIGH | Verified across Apple HIG, NN/G, multiple 2025-2026 UX research sources |
-| Architecture | HIGH | LaunchState pattern documented in multiple sources, verified against current codebase |
-| Pitfalls | HIGH | All identified pitfalls map directly to issues in current Trendy codebase |
+| Stack | HIGH | Swift Testing already in use, native frameworks verified available |
+| Features | HIGH | Based on code review findings and production issues |
+| Architecture | HIGH | Protocol + actor patterns verified in Swift 6 docs, factory pattern standard |
+| Pitfalls | HIGH | Many mapped to current Trendy codebase issues, directly actionable |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Permission acceptance analytics:** Current acceptance rates unknown. Would inform whether Phase 3 is necessary or how aggressive to be with contextual deferral.
-- **Session expiry handling:** Phase 1 should include handling for expired tokens routing to re-auth. May need Supabase-specific research during implementation.
-- **Callback vs notification trade-offs:** Phase 1 recommends replacing NotificationCenter, but existing code uses it in multiple places. Exact refactor scope TBD during planning.
+**Actor testing edge cases:** While @unchecked Sendable for mocks is well-documented, need to verify no accidental concurrent access in test setup/teardown. Plan: Add assertions in tests that mock state accessed serially.
+
+**ModelContext lifecycle:** Factory pattern assumes fresh ModelContext per operation is sufficient. Need to validate this prevents SwiftData file locking during heavy test load. Plan: Add stress tests with many concurrent operations.
+
+**Cursor validation logic:** Research covered general cursor management but not specific validation rules (e.g., cursor should never decrease, bootstrap should reset cursor). Plan: Document cursor invariants during Phase 1 logging additions.
+
+**MetricKit daily delay:** MetricKit delivers metrics daily, not real-time. Need fallback strategy for immediate debugging. Plan: Use os.signpost for development, MetricKit for production trend analysis only.
+
+**HealthKit frequency limits:** Documentation ambiguous on which data types support .immediate vs .hourly. Plan: Empirical testing on real device during Phase 2 (out of scope for v1.2 but noted for future).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Apple WWDC23: Wind your way through advanced animations in SwiftUI](https://developer.apple.com/videos/play/wwdc2023/10157/) - PhaseAnimator, KeyframeAnimator patterns
-- [Apple HIG: Onboarding](https://developer.apple.com/design/human-interface-guidelines/onboarding) - Official design guidelines
-- [Apple Documentation: AppStorage](https://developer.apple.com/documentation/swiftui/appstorage) - Property wrapper behavior
-- [Swift by Sundell - Handling loading states](https://www.swiftbysundell.com/articles/handling-loading-states-in-swiftui/) - State management patterns
-- [Fatbobman - Mastering SwiftUI task Modifier](https://fatbobman.com/en/posts/mastering_swiftui_task_modifier/) - Task lifecycle
+
+**Stack Research:**
+- [Swift Testing - Xcode - Apple Developer](https://developer.apple.com/xcode/swift-testing) — Testing framework capabilities
+- [Apple: os.signpost](https://developer.apple.com/documentation/os/logging) — Performance measurement
+- [Apple: MetricKit](https://developer.apple.com/documentation/metrickit) — Production telemetry
+- [Actor-Based Dependency Container in Swift](https://medium.com/@dmitryshlepkin/actor-based-dependency-container-in-swift-e677c105e57b) — Modern actor DI patterns
+- [Swift Actor in Unit Tests](https://medium.com/thumbtack-engineering/swift-actor-in-unit-tests-9dc15498b631) — @unchecked Sendable pattern
+
+**Architecture Research:**
+- [Dependency Injection in Swift (2025)](https://medium.com/@varunbhola1991/dependency-injection-in-swift-2025-clean-architecture-better-testing-7228f971446c) — Latest DI patterns
+- [Managing Dependencies in the Age of SwiftUI](https://lucasvandongen.dev/dependency_injection_swift_swiftui.php) — SwiftUI + actor DI
+- [Exploring Actors and Protocol Extensions](https://lucasvandongen.dev/swift_actors_and_protocol_extensions.php) — Actor isolation caveats
+
+**Pitfalls Research:**
+- Apple Developer Documentation: [HKObserverQuery](https://developer.apple.com/documentation/healthkit/hkobserverquery) — Completion handler requirements
+- [BrightDigit: Using ModelActor in SwiftData](https://brightdigit.com/tutorials/swiftdata-modelactor/) — Actor isolation with SwiftData
+- [Fat Bob Man: Concurrent Programming in SwiftData](https://fatbobman.com/en/posts/concurret-programming-in-swiftdata/) — Threading pitfalls
+- Trendy codebase: HealthKitService.swift, GeofenceManager.swift, SyncEngine.swift — Current implementation analysis
 
 ### Secondary (MEDIUM confidence)
-- [Scott Smith Dev - App Launch States](https://scottsmithdev.com/an-approach-to-handling-app-launch-states-in-swiftui) - LaunchState enum pattern
-- [Rivera Labs - SwiftUI Onboarding iOS 18+](https://www.riveralabs.com/blog/swiftui-onboarding/) - Modern patterns
-- [UserOnboard - Permission Priming](https://www.useronboard.com/onboarding-ux-patterns/permission-priming/) - UX best practices
-- [NN/G - Design Considerations for Mobile Permission Requests](https://www.nngroup.com/articles/permission-requests/) - Research-backed guidance
 
-### Tertiary (verified against codebase)
-- `trendy/ContentView.swift` - Current routing logic with race condition
-- `trendy/trendyApp.swift` - Session restore in detached Task
-- `trendy/ViewModels/OnboardingViewModel.swift` - State management and NotificationCenter usage
-- `trendy/Views/Onboarding/OnboardingContainerView.swift` - Nested loading state
-- `trendy/Models/Onboarding/OnboardingStep.swift` - Flow definition
+**Features Research:**
+- [Radar: Limitations of iOS Geofencing](https://radar.com/blog/limitations-of-ios-geofencing) — 20 region limit patterns
+- [Dev.to: Offline-First iOS Apps](https://dev.to/vijaya_saimunduru_c9579b/architecting-offline-first-ios-apps-with-idle-aware-background-sync-1dhh) — Sync queue patterns
+- [Medium: iOS Background Processing Best Practices](https://uynguyen.github.io/2020/09/26/Best-practice-iOS-background-processing-Background-App-Refresh-Task/) — BGTaskScheduler usage
+
+### Tertiary (needs validation)
+
+**Open Questions:**
+- HealthKit charging requirement (iOS version specific, needs device testing)
+- iOS 15+ geofence reliability (may be resolved in iOS 17+, empirical validation needed)
+- MetricKit signpost integration (documentation sparse, may need experimentation)
 
 ---
-*Research completed: 2026-01-19*
+*Research completed: 2026-01-21*
 *Ready for roadmap: yes*

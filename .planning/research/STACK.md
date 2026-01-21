@@ -1,515 +1,674 @@
-# Stack Research: iOS Background Data Infrastructure
+# Stack Research: SyncEngine Testing & Quality
 
-**Domain:** iOS background data infrastructure (HealthKit, CoreLocation, SwiftData sync, BGTaskScheduler)
-**Researched:** 2026-01-15
-**Confidence:** MEDIUM (patterns from official docs verified, but iOS background behavior is notoriously implementation-dependent)
-
----
+**Project:** Trendy iOS SyncEngine
+**Researched:** 2026-01-21
+**Overall confidence:** HIGH
 
 ## Executive Summary
 
-iOS background processing remains one of the most challenging aspects of iOS development. The system is designed to aggressively preserve battery life and protect user privacy, which means background work is heavily restricted and can behave unpredictably. This research covers four key areas for the Trendy iOS app overhaul:
+The Trendy iOS app already uses Swift Testing framework (introduced with Xcode 16) for unit tests, providing a modern foundation for testing the SyncEngine actor. This research identifies specific additions needed for comprehensive testing, dependency injection, and metrics collection without introducing heavyweight dependencies.
 
-1. **HealthKit Background Delivery** - Observer queries with anchored object queries for change tracking
-2. **CoreLocation Geofencing** - CLMonitor (iOS 17+) vs legacy CLLocationManager approaches
-3. **SwiftData Sync Engine** - Actor-based offline-first patterns with ModelActor
-4. **BGTaskScheduler** - BGContinuedProcessingTask (iOS 26+) and proper task scheduling
+**Key Finding:** Use protocol-based dependency injection with actor-compatible initialization, Swift Testing's native async/await support, and Apple's native telemetry (os.signpost + MetricKit) rather than third-party frameworks.
 
-**Primary recommendation:** Adopt a layered approach: Local SwiftData as source of truth, with HKAnchoredObjectQuery for change tracking, CLMonitor for modern geofencing, and BGProcessingTask for batch sync operations.
+## Recommended Stack Additions
 
----
+### Testing Framework
 
-## Recommended Stack
+| Component | Choice | Version | Why |
+|-----------|--------|---------|-----|
+| **Primary Framework** | Swift Testing | Built-in (Xcode 16+) | Already in use, native async/await support, parallel execution |
+| **Fallback** | XCTest | Built-in | For UI tests and performance tests (Swift Testing doesn't support these yet) |
+| **No Addition Needed** | - | - | Project already uses Swift Testing |
 
-### Core Technologies
+**Rationale:**
+- Swift Testing ships with Xcode 16 and is **already used** in the project (see `trendyTests/trendyTests.swift`)
+- Native support for async test methods: `@Test func syncOperation() async throws { }`
+- `#expect` macro provides better failure messages than XCTest's 40+ assertion functions
+- Parallel execution by default speeds up test runs
+- Works seamlessly with actors and Swift concurrency
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| **HKAnchoredObjectQuery** | iOS 15+ | Change tracking for HealthKit | Returns only new/deleted samples since last anchor; persists across app launches |
-| **HKObserverQuery** | iOS 8+ | Background delivery trigger | Required for background delivery; notifies app of HealthKit changes |
-| **CLMonitor** | iOS 17+ | Modern geofence monitoring | Swift actor with async/await; cleaner than delegate-based CLLocationManager |
-| **@ModelActor** | iOS 17+ | Thread-safe SwiftData background ops | Guarantees thread safety via DefaultSerialModelExecutor |
-| **NWPathMonitor** | iOS 12+ | Network reachability | Apple's official replacement for Reachability; supports connection type detection |
-| **BGProcessingTask** | iOS 13+ | Background sync | For intensive work requiring network; runs during device charging/idle |
-| **BGAppRefreshTask** | iOS 13+ | Periodic background refresh | For quick updates (<30s); system-scheduled based on app usage patterns |
+**iOS Version Support:**
+- Swift Testing: Xcode 16+ (Swift 6 toolchain)
+- Current project target: iOS 18.5 (deployment target per project.pbxproj)
+- **No compatibility issues**
 
-### Supporting Technologies
+**Migration Status:**
+- ✅ Framework already installed
+- ✅ Test files already using `import Testing` and `@Test` macro
+- ✅ Test fixtures already exist in `TestSupport.swift`
 
-| Technology | Version | Purpose | When to Use |
-|------------|---------|---------|-------------|
-| **BGContinuedProcessingTask** | iOS 26+ | Foreground-started background work | Tasks started in foreground that need to complete in background (video export, large syncs) |
-| **CLBackgroundActivitySession** | iOS 17+ | Background location authorization | Enables CLMonitor events when app is backgrounded |
-| **HKStatisticsQuery** | iOS 8+ | Daily aggregations | Steps, active energy, and other cumulative metrics |
-| **PersistentIdentifier** | iOS 17+ | Cross-context SwiftData references | Pass IDs (not models) between actors/contexts |
+### Dependency Injection for Swift Actors
 
-### Development Tools
+| Approach | Recommendation | Use Case |
+|----------|----------------|----------|
+| **Protocol + Init Injection** | ✅ PRIMARY | SyncEngine dependencies (APIClient, LocalStore) |
+| **Property Injection** | ❌ AVOID | Breaks actor isolation, causes data races |
+| **DI Frameworks** | ❌ AVOID | Overkill for actor-based code, complexity without benefit |
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| **Xcode Instruments - Energy Log** | Battery impact analysis | Essential for debugging background behavior |
-| **Console.app** | System log monitoring | Filter by subsystem to see HealthKit/CoreLocation events |
-| **Background Task Debugger** | BGTaskScheduler testing | Xcode menu: Debug > Simulate Background Fetch |
-
----
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| CLMonitor | CLLocationManager | Legacy codebases on iOS < 17; CLMonitor requires async/await |
-| @ModelActor | Manual ModelContext | Simple one-off operations; @ModelActor overhead not justified |
-| NWPathMonitor | URLSession waitsForConnectivity | When you only need to know if a specific request succeeded |
-| BGProcessingTask | Silent Push Notifications | When you need server-triggered background work (not time-based) |
-| HKAnchoredObjectQuery | HKSampleQuery | When you need ALL samples, not just changes since last sync |
-
----
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| **Reachability (3rd party)** | Outdated; NWPathMonitor is official Apple solution | NWPathMonitor |
-| **HKObserverQuery alone** | Only notifies of changes, doesn't tell WHAT changed | Combine with HKAnchoredObjectQuery |
-| **CLLocationManager.monitoredRegions for state** | Documented bug: may return empty set after app restart | Persist regions in UserDefaults/SwiftData and re-register on launch |
-| **BGAppRefreshTask for sync** | 30-second limit too short for meaningful sync | BGProcessingTask with requiresNetworkConnectivity |
-| **Passing @Model objects between contexts** | Not Sendable; will crash or corrupt data | Pass PersistentIdentifier, fetch in target context |
-| **Polling for HealthKit changes** | Battery drain; HealthKit Observer API is designed for this | HKObserverQuery with background delivery |
-| **Assuming background delivery is reliable** | iOS frequently skips or delays background delivery | Design for eventual consistency; sync on foreground return |
-
----
-
-## iOS Background Processing Patterns
-
-### HealthKit Background Delivery Architecture
-
-**The Three-Query Pattern (Recommended)**
-
-HealthKit background delivery requires combining three query types for reliable data tracking:
-
-```
-1. HKAnchoredObjectQuery (initial fetch)
-   - Run on app launch
-   - Use persisted anchor from last run
-   - Returns all samples since anchor
-
-2. HKAnchoredObjectQuery (foreground updates)
-   - Long-running query while app is active
-   - Receives live updates
-
-3. HKObserverQuery (background trigger)
-   - Notifies app of HealthKit store changes
-   - App launched in background to handle
-   - MUST call completionHandler within 15 seconds
-   - Run HKAnchoredObjectQuery inside to get actual data
-```
-
-**Critical Implementation Requirements:**
-
-1. **Entitlement Required (iOS 15+)**: `com.apple.developer.healthkit.background-delivery`
-   - Without this, background delivery silently fails
-   - Add to both .entitlements file AND provisioning profile
-
-2. **Setup in AppDelegate (NOT SceneDelegate)**:
-   - Observer queries must be created in `application(_:didFinishLaunchingWithOptions:)`
-   - System re-instantiates observers when launching app for background delivery
-
-3. **Call `enableBackgroundDelivery` Every Launch**:
-   - Not just once during setup
-   - Required for system to know you want background updates
-
-4. **Always Call Completion Handler**:
-   - Within 15 seconds of observer query firing
-   - If you don't, HealthKit uses exponential backoff
-   - After 3 failures, stops delivering updates entirely
-
-5. **Persist Anchors Using NSKeyedArchiver**:
-   - HKQueryAnchor conforms to NSSecureCoding
-   - Store in UserDefaults or App Group container
-   - Restore on app launch before querying
-
-**Known Limitations (HIGH confidence - multiple sources):**
-
-- Background delivery may only trigger when device is charging
-- Updates may be batched (several hours delay)
-- Observer query updateHandler doesn't work in background; must use completion handler pattern
-- Device lock blocks HealthKit access (empty results if device is locked)
-
-**Workout-Specific Issues (Current Trendy Problem):**
-
-The current implementation uses `HKSampleQuery` to fetch workouts after observer fires. This is correct but has issues:
-
-1. The query fetches last 24 hours, which may miss workouts if background delivery was delayed
-2. No anchor persistence means re-processing all recent workouts on each launch
-3. Processed sample IDs stored in memory Set, but not tied to anchor
-
-**Recommended Fix:**
-- Use HKAnchoredObjectQuery instead of HKSampleQuery
-- Persist anchor per sample type (workout, sleep, etc.)
-- Let anchor handle "what's new" instead of custom date filtering
-
----
-
-### CoreLocation Geofencing Patterns
-
-**CLMonitor (iOS 17+ Recommended Approach)**
-
-CLMonitor is a Swift actor introduced in iOS 17 that modernizes geofencing:
+**Recommended Pattern:**
 
 ```swift
-// Create monitor (persists state by name)
-let monitor = await CLMonitor("myGeofences")
+// 1. Define protocol for each dependency
+protocol SyncAPIClient {
+    func pushEvent(_ event: Event) async throws -> APIEvent
+    func pullChanges(since cursor: Int64) async throws -> ChangeFeed
+}
 
-// Add geofence condition
-let center = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-let condition = CLMonitor.CircularGeographicCondition(center: center, radius: 100)
-await monitor.add(condition, identifier: "work")
+protocol LocalDataStore {
+    func fetchPendingMutations() async throws -> [PendingMutation]
+    func saveSyncCursor(_ cursor: Int64) async throws
+}
 
-// Consume events with async/await
-Task {
-    for try await event in await monitor.events {
-        switch event.state {
-        case .satisfied:
-            // Inside geofence
-        case .unsatisfied:
-            // Outside geofence
-        case .unknown:
-            // State unknown
+// 2. Actor accepts protocols via initializer
+actor SyncEngine {
+    private let apiClient: SyncAPIClient
+    private let dataStore: LocalDataStore
+
+    init(apiClient: SyncAPIClient, dataStore: LocalDataStore) {
+        self.apiClient = apiClient
+        self.dataStore = dataStore
+    }
+}
+
+// 3. Production uses concrete implementations
+let syncEngine = SyncEngine(
+    apiClient: APIClient(config: config),
+    dataStore: SwiftDataStore(container: container)
+)
+
+// 4. Tests use mocks
+let syncEngine = SyncEngine(
+    apiClient: MockAPIClient(),
+    dataStore: MockDataStore()
+)
+```
+
+**Why This Pattern:**
+- ✅ **Actor-safe:** All dependencies injected before actor starts, no isolation violations
+- ✅ **Testable:** Easy to swap real dependencies for mocks
+- ✅ **Type-safe:** Protocols enforce contracts at compile time
+- ✅ **No magic:** No reflection, no runtime dependency resolution
+- ✅ **Swift-native:** Uses language features, no third-party frameworks
+
+**Critical Actor-Specific Consideration:**
+
+From research: "When applied to Actors, any protocol/extension implementation will behave as if it was executed outside of the Actor's context." ([Source](https://lucasvandongen.dev/swift_actors_and_protocol_extensions.php))
+
+**Solution:** Use protocols for dependency **types**, but ensure protocol methods are called **within** the actor's isolated context:
+
+```swift
+// ✅ CORRECT: Protocol method called from actor-isolated method
+actor SyncEngine {
+    private let apiClient: SyncAPIClient
+
+    func sync() async throws {
+        // This runs in actor's context, apiClient call is awaited properly
+        let changes = try await apiClient.pullChanges(since: cursor)
+    }
+}
+
+// ❌ WRONG: Protocol extension default implementation
+protocol SyncAPIClient {
+    func pullChanges(since: Int64) async throws -> ChangeFeed
+}
+
+extension SyncAPIClient {
+    // This would run outside actor context!
+    func pullChangesWithRetry(since: Int64) async throws -> ChangeFeed {
+        // DON'T DO THIS
+    }
+}
+```
+
+### Mocking Strategy for Async Actors
+
+**Pattern: Actor-Isolated Mock Implementations**
+
+```swift
+// Mock conforms to protocol, can be used in place of real implementation
+actor MockAPIClient: SyncAPIClient {
+    // Configurable responses for testing different scenarios
+    var pushEventResponse: Result<APIEvent, Error> = .success(APIEvent(...))
+    var pullChangesResponse: Result<ChangeFeed, Error> = .success(ChangeFeed(...))
+
+    // Track calls for verification
+    private(set) var pushEventCalls: [(Event)] = []
+    private(set) var pullChangesCalls: [(Int64)] = []
+
+    func pushEvent(_ event: Event) async throws -> APIEvent {
+        pushEventCalls.append(event)
+        return try pushEventResponse.get()
+    }
+
+    func pullChanges(since cursor: Int64) async throws -> ChangeFeed {
+        pullChangesCalls.append(cursor)
+        return try pullChangesResponse.get()
+    }
+
+    // Test helpers (actor-isolated)
+    func assertPushEventCalled(times: Int) async -> Bool {
+        pushEventCalls.count == times
+    }
+
+    func reset() async {
+        pushEventCalls.removeAll()
+        pullChangesCalls.removeAll()
+    }
+}
+```
+
+**Testing Pattern:**
+
+```swift
+@Test func circuitBreakerTripsAfterThreeRateLimits() async throws {
+    // Arrange
+    let mockAPI = MockAPIClient()
+    await mockAPI.setResponse(.failure(APIError.rateLimited(retryAfter: 30)))
+
+    let syncEngine = SyncEngine(apiClient: mockAPI, dataStore: MockDataStore())
+
+    // Act - attempt sync 3 times
+    for _ in 0..<3 {
+        _ = try? await syncEngine.sync()
+    }
+
+    // Assert
+    let state = await syncEngine.state
+    #expect(state == .rateLimited(retryAfter: 30.0, pending: 0))
+
+    let callCount = await mockAPI.pushEventCalls.count
+    #expect(callCount == 3)
+}
+```
+
+**Why Actor-Based Mocks:**
+- ✅ **Thread-safe:** Actor isolation prevents data races in test mocks
+- ✅ **Realistic:** Mirrors real async behavior of network calls
+- ✅ **Verifiable:** Can track calls and state safely across async boundaries
+- ✅ **Simple:** No mocking framework needed, just protocols + implementations
+
+**Alternative (Simple Structs for Stateless Mocks):**
+
+For stateless dependencies, non-actor structs work fine:
+
+```swift
+struct MockSyncHistoryStore: SyncHistoryStore {
+    var eventsToReturn: [ChangeLogEntry] = []
+
+    func getChangesSince(_ cursor: Int64) async throws -> [ChangeLogEntry] {
+        return eventsToReturn
+    }
+}
+```
+
+### Metrics Collection
+
+| Approach | Recommendation | Use Case | iOS Support |
+|----------|----------------|----------|-------------|
+| **os.signpost** | ✅ PRIMARY | Development profiling, duration tracking | iOS 12+ (OSSignposter: iOS 15+) |
+| **MetricKit** | ✅ SECONDARY | Production metrics, aggregated telemetry | iOS 13+ |
+| **Custom Counters** | ✅ SUPPLEMENT | Sync-specific metrics (success rate, retry count) | All versions |
+| **swift-metrics** | ❌ AVOID | Server-side package, not designed for iOS | N/A |
+| **Third-party APM** | ⚠️ DEFER | Already using PostHog, evaluate if sufficient | N/A |
+
+#### os.signpost for Development
+
+**Purpose:** Measure sync operation durations during development and profiling.
+
+**Implementation:**
+
+```swift
+import os.signpost
+
+actor SyncEngine {
+    private let signposter = OSSignposter(subsystem: "com.trendy.sync", category: "SyncEngine")
+
+    func sync() async throws {
+        let signpostID = signposter.makeSignpostID()
+        let state = signposter.beginInterval("sync", id: signpostID)
+
+        defer {
+            signposter.endInterval("sync", state)
         }
+
+        // Sync logic here
+        let pushState = signposter.beginInterval("push", id: signpostID)
+        try await pushLocalChanges()
+        signposter.endInterval("push", pushState)
+
+        let pullState = signposter.beginInterval("pull", id: signpostID)
+        try await pullRemoteChanges()
+        signposter.endInterval("pull", pullState)
     }
 }
 ```
 
-**Key CLMonitor Benefits:**
-- Actor isolation handles thread safety
-- Persists monitored conditions across app launches (by monitor name)
-- Clean async/await API
-- State persistence - lastEvent property shows most recent known state
+**Benefits:**
+- ✅ **Low overhead:** Optimized for production use, negligible performance impact
+- ✅ **Instruments integration:** View timing data in Xcode Instruments
+- ✅ **Hierarchical:** Nest intervals to see push/pull breakdown
+- ✅ **Native:** No dependencies, Apple-supported
 
-**CLMonitor Critical Requirements:**
+**Viewing Metrics:**
+1. Run app in Xcode
+2. Open Instruments (Product → Profile)
+3. Select "os_signpost" template
+4. Filter by subsystem: `com.trendy.sync`
 
-1. **Always await events on launch**: Events can arrive unpredictably; your app needs a Task awaiting `monitor.events` whenever running
-2. **Re-initialize monitor on each launch**: System launches app in background for events; must call init and await events in `didFinishLaunchingWithOptions`
-3. **One monitor instance per name**: Don't create multiple monitors with same name simultaneously
-4. **Don't use in widgets**: Explicitly not supported
+#### MetricKit for Production
 
-**Legacy CLLocationManager Issues (Why Current Trendy Has Problems):**
+**Purpose:** Aggregate real-world performance data from users' devices.
 
-1. **monitoredRegions can be empty after restart**: Known iOS bug; regions may "silently unregister"
-2. **20 region limit**: Hard iOS limit, shared across all apps
-3. **Delegate callbacks require app to be alive**: Must handle app launch case in AppDelegate
-4. **No built-in persistence**: App must track which regions it expects to be monitoring
-
-**Recommended Migration Path:**
-
-1. Keep CLLocationManager for iOS 16 compatibility (if needed)
-2. Add CLMonitor for iOS 17+
-3. Persist geofence definitions in SwiftData (current approach is good)
-4. On app launch: reconcile CLMonitor/CLLocationManager state with SwiftData
-
-**Geofence Reliability Tips:**
-
-1. **Request state after registration**: Call `requestState(for:)` to check if user is already inside
-2. **Handle "Already Inside"**: If state is `.inside` on registration, trigger entry event manually
-3. **Persist active events**: Current Trendy approach of storing activeGeofenceEvents in UserDefaults is correct
-4. **Requires "Always" authorization**: "When In Use" is insufficient for background geofence monitoring
-
----
-
-### SwiftData Background Operations
-
-**@ModelActor Pattern (iOS 17+)**
-
-SwiftData models are NOT Sendable. To safely work with SwiftData in background:
+**Implementation:**
 
 ```swift
-@ModelActor
-actor BackgroundSyncActor {
-    // modelContainer and modelContext are auto-synthesized
+import MetricKit
 
-    func performSync() async throws {
-        // Safe to use modelContext here
-        let events = try modelContext.fetch(FetchDescriptor<Event>())
-        // ... process events ...
-        try modelContext.save()
-    }
-}
-
-// Usage
-let syncActor = BackgroundSyncActor(modelContainer: container)
-try await syncActor.performSync()
-```
-
-**Critical Rules:**
-
-1. **Never pass @Model objects between contexts**: Will crash or corrupt data
-2. **Pass PersistentIdentifier instead**: Fetch the model in the target context
-3. **One ModelContext per actor/thread**: DefaultSerialModelExecutor ensures this
-4. **ModelContainer IS Sendable**: Safe to pass to actors
-
-**Swift 6.2 Changes (iOS 26+):**
-
-- `nonisolated` async methods now inherit caller's isolation
-- Use `@concurrent` annotation to force background execution
-- Xcode 26 template uses MainActor default isolation for @Model
-
-**Current Trendy SyncEngine Analysis:**
-
-The existing SyncEngine is a Swift actor (good) that creates ModelContext per operation (good). Key improvements:
-
-1. **Consider @ModelActor macro**: Simplifies boilerplate
-2. **Batch operations**: Current approach processes one mutation at a time; could batch
-3. **Conflict resolution**: Last-write-wins is simple but risky for multi-device
-
----
-
-### Background Task Scheduling
-
-**BGTaskScheduler Task Types:**
-
-| Type | Duration | When Runs | Use Case |
-|------|----------|-----------|----------|
-| BGAppRefreshTask | ~30 seconds | System-determined (based on app usage) | Quick content updates |
-| BGProcessingTask | Up to 10 minutes | Device idle, often charging | Database maintenance, ML training, large syncs |
-| BGContinuedProcessingTask (iOS 26+) | Until complete | Foreground-started, continues in background | Export, upload, processing started by user |
-
-**Registration Requirements:**
-
-1. Add task identifiers to Info.plist under `BGTaskSchedulerPermittedIdentifiers`
-2. Register handlers in `application(_:didFinishLaunchingWithOptions:)` before app finishes launching
-3. Schedule tasks when entering background (in sceneDidEnterBackground or applicationDidEnterBackground)
-
-**BGProcessingTask for Sync (Recommended):**
-
-```swift
-// Registration (in AppDelegate)
-BGTaskScheduler.shared.register(
-    forTaskWithIdentifier: "com.trendy.sync",
-    using: nil
-) { task in
-    self.handleSync(task: task as! BGProcessingTask)
-}
-
-// Scheduling (when entering background)
-let request = BGProcessingTaskRequest(identifier: "com.trendy.sync")
-request.requiresNetworkConnectivity = true
-request.requiresExternalPower = false // true = more likely to run, but only when charging
-request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 min minimum
-try? BGTaskScheduler.shared.submit(request)
-
-// Handler
-func handleSync(task: BGProcessingTask) {
-    task.expirationHandler = {
-        // Clean up, save state
-        self.syncTask?.cancel()
+class SyncMetricsManager: NSObject, MXMetricManagerSubscriber {
+    override init() {
+        super.init()
+        MXMetricManager.shared.add(self)
     }
 
-    let syncTask = Task {
-        do {
-            try await syncEngine.performSync()
-            task.setTaskCompleted(success: true)
-        } catch {
-            task.setTaskCompleted(success: false)
-        }
-    }
-    self.syncTask = syncTask
-}
-```
+    func didReceive(_ payloads: [MXMetricPayload]) {
+        for payload in payloads {
+            // Extract app launch time, hang rate, etc.
+            if let appTime = payload.applicationTimeMetrics {
+                // Send to analytics backend
+                Analytics.log("app_foreground_time", value: appTime.cumulativeForegroundTime)
+            }
 
-**Testing Background Tasks:**
-
-Xcode provides debugging commands (requires device attached):
-
-```bash
-# Trigger app refresh
-e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.trendy.sync"]
-
-# Or via Debug menu: Debug > Simulate Background Fetch
-```
-
-**BGContinuedProcessingTask (iOS 26+ - Future Enhancement):**
-
-For user-initiated work that should complete if app backgrounds:
-
-```swift
-let request = BGContinuedProcessingTaskRequest(identifier: "com.trendy.export")
-request.title = "Exporting Data"
-request.subtitle = "Please wait..."
-request.requiredResources = [.network]
-request.strategy = .queueOnResourceContention // or .fail
-
-BGTaskScheduler.shared.submit(request) { task in
-    task.progress.totalUnitCount = 100
-
-    for i in 0..<100 {
-        // ... do work ...
-        task.progress.completedUnitCount = Int64(i)
-    }
-
-    task.setTaskCompleted(success: true)
-}
-```
-
----
-
-## Network Monitoring Pattern
-
-**NWPathMonitor for Sync Engine:**
-
-```swift
-import Network
-
-class NetworkMonitor: ObservableObject {
-    private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "NetworkMonitor")
-
-    @Published var isConnected = false
-    @Published var connectionType: NWInterface.InterfaceType = .other
-
-    init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.isConnected = path.status == .satisfied
-                self?.connectionType = path.availableInterfaces.first?.type ?? .other
+            // Custom signpost metrics (if using signposts)
+            if let signpostMetrics = payload.signpostMetrics {
+                // Process sync duration metrics
             }
         }
-        monitor.start(queue: queue)
-    }
-
-    deinit {
-        monitor.cancel()
     }
 }
 ```
 
-**Important:** NWPathMonitor tells you if a network is reachable, NOT if internet is accessible. A WiFi network may be connected but have no internet. For true connectivity, use URLSession with `waitsForConnectivity`.
+**Benefits:**
+- ✅ **Production data:** Real user performance, not synthetic tests
+- ✅ **Aggregated:** Daily reports, not per-event overhead
+- ✅ **Privacy-safe:** Apple aggregates data before delivery
+- ✅ **Crash diagnostics:** Includes hang reports and crash logs
 
----
+**Limitation:**
+- ⚠️ Data delivered daily, not real-time
+- ⚠️ Requires 1+ days of user activity to generate reports
 
-## Offline-First Sync Architecture
+#### Custom Metrics for Sync Operations
 
-**Recommended Three-Layer Model:**
+**Purpose:** Track sync-specific success/failure rates and operation counts.
+
+**Implementation:**
+
+```swift
+actor SyncEngine {
+    // Metrics counters
+    private var syncAttempts = 0
+    private var syncSuccesses = 0
+    private var syncFailures = 0
+    private var rateLimitHits = 0
+
+    func sync() async throws {
+        syncAttempts += 1
+
+        do {
+            try await performSync()
+            syncSuccesses += 1
+        } catch APIError.rateLimited {
+            rateLimitHits += 1
+            syncFailures += 1
+            throw APIError.rateLimited(retryAfter: 30)
+        } catch {
+            syncFailures += 1
+            throw error
+        }
+    }
+
+    // Expose metrics for logging/telemetry
+    func getMetrics() async -> SyncMetrics {
+        SyncMetrics(
+            attempts: syncAttempts,
+            successes: syncSuccesses,
+            failures: syncFailures,
+            successRate: Double(syncSuccesses) / Double(max(syncAttempts, 1)),
+            rateLimitHits: rateLimitHits
+        )
+    }
+}
+
+struct SyncMetrics: Codable {
+    let attempts: Int
+    let successes: Int
+    let failures: Int
+    let successRate: Double
+    let rateLimitHits: Int
+}
+```
+
+**Integration with PostHog:**
+
+```swift
+// Periodically (e.g., daily) send metrics to PostHog
+let metrics = await syncEngine.getMetrics()
+PostHogSDK.shared.capture("sync_metrics", properties: [
+    "attempts": metrics.attempts,
+    "success_rate": metrics.successRate,
+    "rate_limit_hits": metrics.rateLimitHits
+])
+```
+
+**Benefits:**
+- ✅ **Custom:** Track exactly what matters for sync reliability
+- ✅ **Lightweight:** Simple counters, no framework overhead
+- ✅ **Actionable:** Surface issues like high failure rates or rate limiting
+
+### Documentation Tooling
+
+**Current Codebase:**
+- ✅ Uses Swift documentation comments (`///`)
+- ✅ Structured logging with custom `Log.sync` categories
+- ✅ Planning docs in `.planning/` directory use Markdown
+
+**Recommendation: NO NEW TOOLING**
+
+| Tool | Status | Rationale |
+|------|--------|-----------|
+| **Org-mode** | ❌ NOT RECOMMENDED | Team uses Markdown, no Emacs requirement |
+| **Mermaid** | ✅ ALREADY AVAILABLE | GitHub renders Mermaid in Markdown |
+| **Swift DocC** | ⚠️ OPTIONAL | For API documentation export |
+
+**Use Markdown + Mermaid:**
+
+```markdown
+## SyncEngine State Machine
+
+\`\`\`mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Syncing: sync() called
+    Syncing --> Pulling: Push complete
+    Pulling --> Idle: Pull complete
+    Syncing --> RateLimited: 429 error (3x)
+    RateLimited --> Idle: Backoff expires
+    Syncing --> Error: Other error
+    Error --> Idle: User retries
+\`\`\`
+```
+
+**Benefits:**
+- ✅ **Zero setup:** GitHub/GitLab render Mermaid automatically
+- ✅ **Team familiarity:** Everyone knows Markdown
+- ✅ **Version control:** Diagrams stored as text, diffable
+- ✅ **No tooling:** No Emacs, no external diagram tools
+
+**For Technical Docs:**
+
+Place in `.planning/phases/sync-engine/ARCHITECTURE.md`:
+- Mermaid diagrams for state machines, sequence diagrams
+- Code examples with syntax highlighting
+- Decision records (why X over Y)
+
+## Integration with Existing Stack
+
+### Current Dependencies (No Changes Needed)
+
+| Dependency | Purpose | Compatibility |
+|------------|---------|---------------|
+| SwiftData | Local persistence | ✅ Can be mocked via protocol |
+| Supabase Swift SDK | Authentication | ✅ Can be mocked via protocol |
+| os.Logger | Structured logging | ✅ Works in tests, actors |
+
+### Test Target Setup
+
+**Already Configured:**
+- ✅ `trendyTests` target exists
+- ✅ Uses Swift Testing framework
+- ✅ Has `TestSupport.swift` with fixtures
+
+**Addition Needed:**
+
+Add mock protocols to `trendyTests/Mocks/`:
 
 ```
-Layer 1: Local Store (SwiftData)
-├── Source of truth when offline
-├── All user actions write here first
-├── Immediate UI feedback
-└── No waiting for network
-
-Layer 2: Sync Manager (Actor)
-├── Detects network changes
-├── Queues offline mutations
-├── Handles conflict resolution
-└── Processes in FIFO order
-
-Layer 3: Remote API
-├── Backend source of truth
-├── Returns server timestamps
-├── Supports cursor-based sync
-└── Idempotent operations
+trendyTests/
+├── Mocks/
+│   ├── MockAPIClient.swift      # NEW
+│   ├── MockLocalDataStore.swift # NEW
+│   └── MockSyncHistory.swift    # NEW
+├── SyncEngineTests.swift        # NEW
+├── TestSupport.swift            # EXISTS
+└── trendyTests.swift            # EXISTS
 ```
 
-**Conflict Resolution (Current: Last-Write-Wins):**
+### Production Code Changes
 
-The current Trendy SyncEngine uses timestamp-based last-write-wins. This is acceptable for single-user scenarios but has risks:
+**Minimal refactoring required:**
 
-1. **Clock skew**: Device clocks may differ
-2. **Silent overwrites**: User may not know their change was discarded
+1. Extract protocols for dependencies:
+   - `protocol SyncAPIClient` from `APIClient`
+   - `protocol LocalDataStore` from SwiftData operations
+   - `protocol SyncHistoryStore` from existing implementation
 
-**Alternative: Operation-Based CRDTs (Future Enhancement)**
+2. Change SyncEngine init:
+   ```swift
+   // Before
+   init(apiClient: APIClient, modelContainer: ModelContainer)
 
-For multi-device sync, consider:
-- Store individual field changes, not entire objects
-- Merge changes rather than replacing
-- More complex but preserves all edits
+   // After
+   init(apiClient: SyncAPIClient, dataStore: LocalDataStore)
+   ```
 
----
+3. Update call sites (minimal):
+   ```swift
+   // Production code wraps concrete types
+   let syncEngine = SyncEngine(
+       apiClient: apiClient as SyncAPIClient,
+       dataStore: SwiftDataStore(container: container)
+   )
+   ```
 
-## Implementation Priorities
+**Estimated effort:** 2-4 hours
 
-Based on current Trendy issues, recommended order:
+## What NOT to Add
 
-### Priority 1: HealthKit Reliability (Workout Background Delivery)
+### ❌ Dependency Injection Frameworks
 
-1. Add `com.apple.developer.healthkit.background-delivery` entitlement if missing
-2. Replace HKSampleQuery with HKAnchoredObjectQuery for workouts
-3. Persist anchor per sample type in App Group UserDefaults
-4. Move observer query setup to AppDelegate
-5. Add logging to track background delivery events
+**Avoid:** Swinject, Needle, Factory, etc.
 
-### Priority 2: Geofence Persistence
+**Why:**
+- Actor-based DI is simple with protocols + init injection
+- Frameworks add complexity, learning curve, maintenance burden
+- Protocol-oriented approach is more Swift-native
+- Testing doesn't need runtime DI container
 
-1. Add reconciliation check on app launch (compare CLLocationManager.monitoredRegions with SwiftData)
-2. Re-register missing regions automatically
-3. Consider CLMonitor migration for iOS 17+ devices
-4. Add health check that logs monitored region count
+**Exception:** If project grows to 50+ injectable dependencies, revisit. Current scale (3-5 dependencies) doesn't justify framework.
 
-### Priority 3: Sync Engine Hardening
+### ❌ Mocking Frameworks
 
-1. Add BGProcessingTask for background sync
-2. Implement exponential backoff for failed mutations
-3. Add sync health metrics (last sync time, pending count, error rate)
-4. Consider @ModelActor migration for cleaner code
+**Avoid:** Mockingbird, Mockolo, Cuckoo, etc.
 
-### Priority 4: Background Task Scheduling
+**Why:**
+- Swift protocols make manual mocks trivial
+- Code generation adds build complexity
+- Manual mocks are easier to debug and understand
+- Actor-based mocks need manual implementation anyway (frameworks don't handle actors well)
 
-1. Register BGProcessingTask for sync
-2. Schedule when app enters background
-3. Add BGAppRefreshTask for quick state refresh
-4. Implement proper expiration handling
+**Exception:** If maintaining 20+ mock implementations becomes tedious, revisit. Current need (3-5 mocks) is manageable manually.
 
----
+### ❌ swift-metrics Package
 
-## Open Questions
+**Avoid:** Apple's swift-metrics from Server ecosystem
 
-1. **CLMonitor state persistence details**: Documentation is sparse on exactly how CLMonitor persists state. Need empirical testing.
+**Why:**
+- Designed for server-side Swift (Linux, Vapor, etc.)
+- iOS has native telemetry (os.signpost, MetricKit)
+- Adding server package increases app size unnecessarily
+- No iOS-specific integrations (Instruments, Xcode)
 
-2. **HealthKit background delivery on M-series Macs**: Unclear if behavior differs on macOS/Catalyst apps.
+**Use instead:** os.signpost (dev) + MetricKit (prod) + custom counters
 
-3. **BGContinuedProcessingTask adoption**: iOS 26 is future (released 2025); need to plan for when to adopt.
+### ❌ Third-Party APM (New Additions)
 
-4. **SwiftData + CloudKit**: If future Trendy moves to CloudKit sync, SwiftData has built-in support but limited conflict resolution customization.
+**Avoid:** Adding Sentry, Datadog, New Relic for sync metrics
 
----
+**Why:**
+- PostHog already integrated (per project.pbxproj dependencies)
+- Each APM adds SDK overhead (binary size, network usage)
+- Custom metrics + PostHog sufficient for sync telemetry
+- MetricKit provides Apple-native production data
+
+**Use instead:** Extend PostHog usage with custom sync events
+
+### ❌ XCTest for Unit Tests
+
+**Avoid:** Writing new tests with XCTest
+
+**Why:**
+- Swift Testing already in use and superior for async code
+- `#expect` has better failure messages than `XCTAssert*`
+- Parallel execution by default (faster CI/CD)
+- Incremental migration strategy allows coexistence
+
+**Keep XCTest for:**
+- ✅ UI tests (Swift Testing doesn't support UI testing yet)
+- ✅ Performance tests (Swift Testing lacks performance APIs)
+- ✅ Existing tests (migrate incrementally, don't rewrite working tests)
+
+## Installation & Setup
+
+### 1. Testing Framework
+
+**Already installed.** Swift Testing ships with Xcode 16.
+
+Verify:
+```bash
+# In Xcode
+# File → New → Test → Choose "Swift Testing" template
+```
+
+### 2. Dependency Injection Protocols
+
+**Create protocol definitions:**
+
+```bash
+# Add to project
+touch apps/ios/trendy/Services/Protocols/SyncAPIClient.swift
+touch apps/ios/trendy/Services/Protocols/LocalDataStore.swift
+```
+
+### 3. Test Mocks
+
+**Create mock implementations:**
+
+```bash
+mkdir -p apps/ios/trendyTests/Mocks
+touch apps/ios/trendyTests/Mocks/MockAPIClient.swift
+touch apps/ios/trendyTests/Mocks/MockLocalDataStore.swift
+```
+
+### 4. Metrics (Signposts)
+
+**Add to SyncEngine:**
+
+```swift
+import os.signpost
+
+actor SyncEngine {
+    private let signposter = OSSignposter(
+        subsystem: "com.trendy.sync",
+        category: "SyncEngine"
+    )
+
+    // ... existing code
+}
+```
+
+**No package installation needed.** os.signpost is part of the OS framework.
+
+### 5. MetricKit (Production Metrics)
+
+**Create metrics subscriber:**
+
+```bash
+touch apps/ios/trendy/Services/SyncMetricsManager.swift
+```
+
+**Register in AppDelegate/App:**
+
+```swift
+import MetricKit
+
+@main
+struct TrendyApp: App {
+    @State private var metricsManager = SyncMetricsManager()
+
+    var body: some Scene {
+        // ... existing code
+    }
+}
+```
+
+**No package installation needed.** MetricKit is part of iOS SDK.
+
+## Validation Checklist
+
+- [x] Testing framework supports async actors (Swift Testing ✅)
+- [x] DI approach works with actor isolation (Protocol + init ✅)
+- [x] Mocking strategy preserves thread safety (Actor-based mocks ✅)
+- [x] Metrics have negligible performance impact (os.signpost ✅)
+- [x] No heavyweight dependencies added (All native Apple frameworks ✅)
+- [x] Compatible with iOS 18.5 deployment target (All APIs available ✅)
+- [x] Works with existing Xcode 16 toolchain (No new Xcode version needed ✅)
+- [x] Documentation tools already available (Markdown + Mermaid ✅)
 
 ## Sources
 
-### Primary (HIGH confidence)
+### Testing Framework
+- [Swift Testing - Xcode - Apple Developer](https://developer.apple.com/xcode/swift-testing)
+- [Hello Swift Testing, Goodbye XCTest | Medium](https://leocoout.medium.com/welcome-swift-testing-goodbye-xctest-7501b7a5b304)
+- [Swift Testing vs. XCTest: A Comprehensive Comparison | Infosys](https://blogs.infosys.com/digital-experience/mobility/swift-testing-vs-xctest-a-comprehensive-comparison.html)
+- [Unit Testing in Swift (XCTest VS. Swift Testing) | Medium](https://medium.com/@nourhenekrichene_66918/unit-testing-in-swift-xctest-vs-swift-testing-241fb92abe39)
+- [Swift Testing basics explained – Donny Wals](https://www.donnywals.com/swift-testing-basics-explained/)
+- [Getting started with Swift Testing](https://www.polpiella.dev/swift-testing)
+- [swiftlang/swift-testing - GitHub](https://github.com/swiftlang/swift-testing)
 
-- [Apple Developer Documentation: HKObserverQuery](https://developer.apple.com/documentation/healthkit/hkobserverquery) - Observer query API reference
-- [Apple Developer Documentation: HKAnchoredObjectQuery](https://developer.apple.com/documentation/healthkit/hkanchoredobjectquery) - Anchored query for change tracking
-- [WWDC23: Meet Core Location Monitor](https://developer.apple.com/videos/play/wwdc2023/10147/) - CLMonitor introduction
-- [WWDC23: Discover streamlined location updates](https://developer.apple.com/videos/play/wwdc2023/10180/) - Location API modernization
-- [Apple Developer Documentation: Choosing Background Strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app) - BGTaskScheduler guidance
-- [WWDC25: Finish tasks in the background](https://developer.apple.com/videos/play/wwdc2025/227/) - BGContinuedProcessingTask introduction
+### Dependency Injection
+- [Dependency Injection in Swift (2025): Clean Architecture, Better Testing | Medium](https://medium.com/@varunbhola1991/dependency-injection-in-swift-2025-clean-architecture-better-testing-7228f971446c)
+- [Advanced Dependency Injection on iOS with Swift 5](https://www.vadimbulavin.com/dependency-injection-in-swift/)
+- [Dependency Injection in Swift using latest Swift features - SwiftLee](https://www.avanderlee.com/swift/dependency-injection/)
+- [Lightweight dependency injection and unit testing using async functions | Swift by Sundell](https://www.swiftbysundell.com/articles/dependency-injection-and-unit-testing-using-async-await/)
 
-### Secondary (MEDIUM confidence)
+### Actor Testing
+- [Swift Actor in Unit Tests | Thumbtack Engineering | Medium](https://medium.com/thumbtack-engineering/swift-actor-in-unit-tests-9dc15498b631)
+- [Testing Throwing Methods In Swift Actors – SerialCoder.dev](https://serialcoder.dev/text-tutorials/swift-tutorials/testing-throwing-methods-in-swift-actors/)
+- [Unit testing async/await Swift code - SwiftLee](https://www.avanderlee.com/concurrency/unit-testing-async-await/)
+- [Unit Testing Asynchronous Code in Swift](https://www.vadimbulavin.com/unit-testing-async-code-in-swift/)
+- [Unit testing Swift code that uses async/await | Swift by Sundell](https://www.swiftbysundell.com/articles/unit-testing-code-that-uses-async-await/)
+- [Unit Testing in Swift 6: Async/Await, Actors, and Modern Concurrency in Practice | Medium](https://medium.com/@mrhotfix/unit-testing-in-swift-6-async-await-actors-and-modern-concurrency-in-practice-5de4282d3fdd)
+- [Exploring Actors and Protocol Extensions](https://lucasvandongen.dev/swift_actors_and_protocol_extensions.php)
 
-- [DevFright: How to Use HealthKit HKAnchoredObjectQuery](https://www.devfright.com/how-to-use-healthkit-hkanchoredobjectquery/) - Practical anchor persistence patterns (updated March 2025)
-- [iTwenty: Read workouts using HealthKit](https://itwenty.me/posts/09-healthkit-workout-updates/) - Three-query pattern explanation
-- [Fatbobman: Concurrent Programming in SwiftData](https://fatbobman.com/en/posts/concurret-programming-in-swiftdata/) - @ModelActor deep dive
-- [Medium: Offline-First SwiftUI with SwiftData](https://medium.com/@ashitranpura27/offline-first-swiftui-with-swiftdata-clean-fast-and-sync-ready-9a4faefdeedb) - Sync architecture patterns
-- [Radar Blog: Geofencing iOS Limitations](https://radar.com/blog/limitations-of-ios-geofencing) - Comprehensive geofencing limitations
+### Metrics & Telemetry
+- [Using Swift Signpost to Measure Performance | Medium](https://medium.com/@jpmtech/using-swift-signpost-to-measure-performance-of-a-specific-function-6779c920d0f4)
+- [Measuring performance with os_signpost – Donny Wals](https://www.donnywals.com/measuring-performance-with-os_signpost/)
+- [Getting started with signposts | Swift by Sundell](https://www.swiftbysundell.com/wwdc2018/getting-started-with-signposts/)
+- [Measuring app performance in Swift | Swift with Majid](https://swiftwithmajid.com/2022/05/04/measuring-app-performance-in-swift/)
+- [Monitoring app performance with MetricKit | Swift with Majid](https://swiftwithmajid.com/2025/12/09/monitoring-app-performance-with-metrickit/)
+- [Using MetricKit to monitor user data like launch times - SwiftLee](https://www.avanderlee.com/swift/metrickit-launch-time/)
+- [Unlocking MetricKit | Simform Engineering | Medium](https://medium.com/simform-engineering/unlocking-metrickit-see-what-your-app-is-really-doing-on-users-devices-1292026bdef0)
+- [apple/swift-metrics - GitHub](https://github.com/apple/swift-metrics)
 
-### Tertiary (LOW confidence - needs validation)
-
-- [Apple Developer Forums: HKObserverQuery stops delivering](https://developer.apple.com/forums/thread/801627) - Potential iOS 26 regression reports
-- [Apple Developer Forums: monitoredRegions empty](https://developer.apple.com/forums/thread/78107) - Historical bug reports on region persistence
-- [Medium: Default Actor Isolation Changes](https://fatbobman.com/en/posts/default-actor-isolation/) - Swift 6.2 behavior changes (Xcode 26+)
+### Documentation
+- [ob-mermaid: Generate mermaid diagrams within Emacs org-mode - GitHub](https://github.com/arnm/ob-mermaid)
+- [Org Mode + Mermaid - Emacs TIL](https://emacstil.com/til/2021/09/19/org-mermaid/)
 
 ---
 
-## Confidence Assessment
-
-| Area | Level | Reason |
-|------|-------|--------|
-| HealthKit Observer/Anchored Query | HIGH | Official Apple documentation + multiple verified community patterns |
-| HealthKit Background Delivery | MEDIUM | Known to be unreliable; official docs don't acknowledge all limitations |
-| CLMonitor (iOS 17+) | HIGH | Official WWDC session + Apple documentation |
-| CLLocationManager geofencing | MEDIUM | Well-documented but known bugs in monitoredRegions |
-| @ModelActor | HIGH | Official Apple pattern, well-documented |
-| BGTaskScheduler | HIGH | Official documentation + WWDC sessions |
-| BGContinuedProcessingTask | MEDIUM | iOS 26+, limited real-world validation |
-| Offline-first sync patterns | MEDIUM | Community patterns, not Apple-prescribed |
-
-**Research valid until:** 2026-03-15 (3 months - background APIs change infrequently, but new iOS versions may alter behavior)
+**Confidence Assessment:**
+- Testing framework: HIGH (already in use, verified in codebase)
+- DI patterns: HIGH (verified with recent Swift actor documentation)
+- Mocking: HIGH (standard patterns, confirmed actor-safe)
+- Metrics: HIGH (native Apple frameworks, verified availability)
+- Documentation: HIGH (Markdown + Mermaid already supported)

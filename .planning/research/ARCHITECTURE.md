@@ -1,853 +1,834 @@
-# Architecture Research: iOS Background Data Infrastructure
+# Architecture Research: DI Integration with Swift Actor
 
-**Domain:** iOS background data systems (HealthKit, Geofence, Sync)
-**Researched:** 2026-01-15
-**Confidence:** MEDIUM-HIGH
+**Project:** Trendy iOS - SyncEngine DI Refactor
+**Researched:** 2026-01-21
+**Overall confidence:** HIGH
 
 ## Executive Summary
 
-The current iOS data infrastructure has grown organically into monolithic services:
-- `HealthKitService.swift`: 1,972 lines handling authorization, observer setup, sample processing, event creation, persistence
-- `GeofenceManager.swift`: 680 lines mixing CLLocationManager delegation, event handling, state tracking
-- `SyncEngine.swift`: 1,117 lines combining mutation queue, pull sync, bootstrap fetch, conflict handling
-- `EventStore.swift`: 1,355 lines serving as a god object for data access, sync coordination, network monitoring
+This research addresses how to integrate dependency injection (DI) into the existing SyncEngine actor without breaking the current architecture. The core challenge: SyncEngine is a Swift actor with two hard-coded dependencies (APIClient class, LocalStore struct), and we need to add protocol abstraction for testability while preserving actor isolation guarantees.
 
-**Primary Issue:** Single Responsibility Principle violations. Each file handles 4-6 distinct concerns that should be separate components.
+**Key finding:** Protocol-based constructor injection is the cleanest approach for actors in Swift 6+. Actors support initializer injection naturally, and protocols work seamlessly across actor boundaries when marked `Sendable`.
 
-**Recommendation:** Decompose into focused modules following Repository + Use Case patterns, with clear boundaries between:
-1. Platform adapters (HealthKit queries, CLLocationManager delegation)
-2. Processing logic (sample transformation, event creation)
-3. Persistence coordination (SwiftData access)
-4. Sync orchestration (mutation queue, pull sync)
+**Migration strategy:** Define protocols first → Conform existing types → Update SyncEngine init → Refactor tests. This order prevents breaking changes and allows incremental rollout.
 
 ---
 
-## Standard Architecture
+## Current State
 
-### System Overview
+### Dependency Flow
 
 ```
-+-------------------------------------------------------------------------------------+
-|                               APP LAYER                                             |
-|  +-------------------+  +-------------------+  +-------------------+                |
-|  |   ViewModels      |  |    Coordinators   |  |   App Delegate    |                |
-|  +-------------------+  +-------------------+  +-------------------+                |
-|           |                     |                       |                           |
-|           v                     v                       v                           |
-+-------------------------------------------------------------------------------------+
-|                            USE CASE LAYER                                           |
-|  +------------------+  +------------------+  +------------------+                   |
-|  | RecordEventUC    |  | SyncDataUC       |  | ProcessHealthUC  |                   |
-|  +------------------+  +------------------+  +------------------+                   |
-|           |                     |                       |                           |
-|           v                     v                       v                           |
-+-------------------------------------------------------------------------------------+
-|                           SERVICE LAYER                                             |
-|  +------------------+  +------------------+  +------------------+                   |
-|  | EventRepository  |  | SyncCoordinator  |  | HealthProcessor  |                   |
-|  +------------------+  +------------------+  +------------------+                   |
-|           |                     |                       |                           |
-|           v                     v                       v                           |
-+-------------------------------------------------------------------------------------+
-|                          INFRASTRUCTURE LAYER                                       |
-|  +------------------+  +------------------+  +------------------+                   |
-|  | LocalStore       |  | APIClient        |  | HKQueryManager   |                   |
-|  | (SwiftData)      |  | MutationQueue    |  | CLRegionMonitor  |                   |
-|  +------------------+  +------------------+  +------------------+                   |
-+-------------------------------------------------------------------------------------+
-|                          PLATFORM ADAPTERS                                          |
-|  +------------------+  +------------------+  +------------------+                   |
-|  | HKHealthStore    |  | CLLocationMgr    |  | Network.framework|                   |
-|  +------------------+  +------------------+  +------------------+                   |
-+-------------------------------------------------------------------------------------+
+EventStore (@MainActor, @Observable)
+    ↓ creates
+SyncEngine (actor)
+    ↓ owns (hard-coded)
+    ├── APIClient (class) - network requests
+    └── LocalStore (struct) - SwiftData operations
 ```
 
-### Component Responsibilities
+### Initialization Pattern
 
-| Component | Responsibility | Current Location | Lines |
-|-----------|---------------|------------------|-------|
-| HKQueryManager | Observer query setup, background delivery registration | HealthKitService.swift (mixed) | ~300 |
-| HealthProcessor | Sample processing, aggregation, deduplication | HealthKitService.swift (mixed) | ~800 |
-| HealthEventFactory | Event creation from HealthKit samples | HealthKitService.swift (mixed) | ~400 |
-| HealthKitAuthManager | Authorization state, permission flow | HealthKitService.swift (mixed) | ~150 |
-| GeofenceMonitor | CLLocationManager delegation, region state | GeofenceManager.swift (mixed) | ~200 |
-| GeofenceEventFactory | Event creation from entry/exit | GeofenceManager.swift (mixed) | ~200 |
-| GeofenceReconciler | Region sync with backend definitions | GeofenceManager.swift (mixed) | ~100 |
-| SyncCoordinator | Orchestrate push/pull, single-flight | SyncEngine.swift (mixed) | ~200 |
-| MutationQueue | Queue/flush pending mutations | SyncEngine.swift (mixed) | ~300 |
-| PullSyncEngine | Cursor-based incremental pull | SyncEngine.swift (mixed) | ~200 |
-| BootstrapFetcher | Initial full fetch on first sync | SyncEngine.swift (mixed) | ~200 |
-| LocalStore | SwiftData upsert/delete operations | LocalStore.swift | 323 (OK) |
-| EventRepository | Unified data access layer | EventStore.swift (mixed) | ~600 |
-| NetworkMonitor | Online/offline detection | EventStore.swift (mixed) | ~100 |
+**EventStore.swift** (lines 337-344):
+```swift
+func setModelContext(_ context: ModelContext, syncHistoryStore: SyncHistoryStore? = nil) {
+    self.modelContext = context
+    self.modelContainer = context.container
+
+    if let apiClient = apiClient {
+        self.syncEngine = SyncEngine(
+            apiClient: apiClient,              // ← Hard-coded class
+            modelContainer: context.container,
+            syncHistoryStore: syncHistoryStore
+        )
+    }
+}
+```
+
+**SyncEngine.swift** (lines 110-126):
+```swift
+init(apiClient: APIClient, modelContainer: ModelContainer, syncHistoryStore: SyncHistoryStore? = nil) {
+    self.apiClient = apiClient           // ← Concrete APIClient
+    self.modelContainer = modelContainer
+    self.syncHistoryStore = syncHistoryStore
+    // LocalStore created on-demand per operation with fresh ModelContext
+}
+```
+
+**LocalStore usage** (lines 210-213, 437-438, etc.):
+```swift
+// Created inline with new ModelContext
+let localStore = LocalStore(modelContext: preSyncContext)
+let pendingDeletes = try localStore.fetchPendingMutations()
+```
+
+### Current Constraints
+
+1. **APIClient is a class** - Single instance shared across app, holds URLSession config
+2. **LocalStore is a struct** - Lightweight wrapper, created per-operation with fresh ModelContext
+3. **ModelContext threading** - Must create fresh context per actor operation to avoid SwiftData file locking
+4. **Actor isolation** - SyncEngine state protected by actor, dependencies must be Sendable
+5. **EventStore coupling** - EventStore creates SyncEngine, passes real APIClient, no test seam
 
 ---
 
-## Recommended Project Structure
+## Target State
+
+### Dependency Flow with DI
 
 ```
-apps/ios/trendy/
-├── Services/
-│   ├── HealthKit/
-│   │   ├── HKQueryManager.swift           # Observer query setup, background delivery
-│   │   ├── HKAuthorizationManager.swift   # Permission flow, authorization state
-│   │   ├── Processors/
-│   │   │   ├── WorkoutProcessor.swift     # Workout sample processing
-│   │   │   ├── SleepProcessor.swift       # Sleep aggregation logic
-│   │   │   ├── StepsProcessor.swift       # Daily step aggregation
-│   │   │   ├── ActiveEnergyProcessor.swift
-│   │   │   ├── MindfulnessProcessor.swift
-│   │   │   └── WaterProcessor.swift
-│   │   ├── HealthEventFactory.swift       # Create Event from processed samples
-│   │   └── HealthKitSettings.swift        # Category configuration (existing)
-│   │
-│   ├── Location/
-│   │   ├── GeofenceMonitor.swift          # CLLocationManager delegation
-│   │   ├── GeofenceAuthManager.swift      # Location permission flow
-│   │   ├── GeofenceReconciler.swift       # Sync regions with backend
-│   │   └── GeofenceEventFactory.swift     # Create Event from entry/exit
-│   │
-│   ├── Sync/
-│   │   ├── SyncCoordinator.swift          # Orchestrate sync operations
-│   │   ├── MutationQueue.swift            # Queue/flush pending mutations
-│   │   ├── PullSyncEngine.swift           # Cursor-based incremental pull
-│   │   ├── BootstrapFetcher.swift         # Initial full fetch
-│   │   ├── ConflictResolver.swift         # Handle sync conflicts
-│   │   ├── LocalStore.swift               # SwiftData operations (existing)
-│   │   └── SyncableEntity.swift           # Protocol (existing)
-│   │
-│   ├── Network/
-│   │   ├── APIClient.swift                # HTTP client (existing)
-│   │   ├── NetworkMonitor.swift           # Online/offline detection
-│   │   └── RequestRetrier.swift           # Retry logic with backoff
-│   │
-│   └── Persistence/
-│       ├── EventRepository.swift          # Event CRUD, queries
-│       ├── EventTypeRepository.swift      # EventType CRUD
-│       └── GeofenceRepository.swift       # Geofence CRUD
-│
-├── UseCases/
-│   ├── RecordManualEventUC.swift          # Manual event recording
-│   ├── RecordHealthEventUC.swift          # HealthKit event recording
-│   ├── RecordGeofenceEventUC.swift        # Geofence event recording
-│   ├── SyncDataUC.swift                   # Sync orchestration
-│   └── FetchEventsUC.swift                # Load events with caching
-│
-└── ViewModels/
-    ├── EventStore.swift                   # Simplified: delegates to repositories
-    └── ...
+EventStore (@MainActor, @Observable)
+    ↓ creates with protocols
+SyncEngine (actor)
+    ↓ owns (protocol-abstracted)
+    ├── NetworkClient: NetworkClientProtocol (injected) - network operations
+    └── DataStore: DataStoreProtocol (injected) - persistence operations
 ```
 
----
-
-## Architectural Patterns
-
-### Pattern 1: Observer-Processor-Factory Pipeline
-
-**What:** Separate the three stages of background data handling
-
-```
-Observer (setup) → Processor (transform) → Factory (create)
-```
-
-**When to use:** Any background data source (HealthKit, Location, Push notifications)
-
-**Example structure:**
+### Protocol-Based Initialization
 
 ```swift
-// MARK: - Observer (Infrastructure Layer)
-protocol HKQueryManaging {
-    func startObserving(category: HealthDataCategory)
-    func stopObserving(category: HealthDataCategory)
-    var samplePublisher: AnyPublisher<HKSample, Never> { get }
-}
+actor SyncEngine {
+    private let networkClient: NetworkClientProtocol
+    private let dataStoreFactory: DataStoreFactory
 
-actor HKQueryManager: HKQueryManaging {
-    private let healthStore: HKHealthStore
-    private var observerQueries: [HealthDataCategory: HKObserverQuery] = [:]
-    private let sampleSubject = PassthroughSubject<HKSample, Never>()
-
-    var samplePublisher: AnyPublisher<HKSample, Never> {
-        sampleSubject.eraseToAnyPublisher()
+    init(
+        networkClient: NetworkClientProtocol,
+        dataStoreFactory: DataStoreFactory,
+        modelContainer: ModelContainer,
+        syncHistoryStore: SyncHistoryStore? = nil
+    ) {
+        self.networkClient = networkClient
+        self.dataStoreFactory = dataStoreFactory
+        // ... rest of init
     }
 
-    func startObserving(category: HealthDataCategory) {
-        // ONLY query setup logic here - no processing
-        let query = HKObserverQuery(sampleType: category.hkSampleType, predicate: nil) { [weak self] _, _, _ in
-            Task { await self?.fetchNewSamples(for: category) }
-        }
-        healthStore.execute(query)
-        observerQueries[category] = query
-        // Enable background delivery
-        Task {
-            try? await healthStore.enableBackgroundDelivery(for: category.hkSampleType, frequency: category.backgroundDeliveryFrequency)
-        }
-    }
-
-    private func fetchNewSamples(for category: HealthDataCategory) async {
-        // Fetch and emit samples - NO processing here
-        let samples = await querySamples(for: category)
-        for sample in samples {
-            sampleSubject.send(sample)
-        }
-    }
-}
-
-// MARK: - Processor (Service Layer)
-protocol HealthProcessing {
-    func process(_ sample: HKSample) async -> ProcessedHealthData?
-}
-
-struct SleepProcessor: HealthProcessing {
-    // ONLY transformation logic - no persistence, no event creation
-    func process(_ sample: HKSample) async -> ProcessedHealthData? {
-        guard let sleepSample = sample as? HKCategorySample else { return nil }
-        // Aggregation, deduplication logic
-        return ProcessedSleepData(...)
-    }
-}
-
-// MARK: - Factory (Use Case Layer)
-protocol HealthEventCreating {
-    func createEvent(from data: ProcessedHealthData) async throws -> Event
-}
-
-struct HealthEventFactory: HealthEventCreating {
-    private let eventRepository: EventRepository
-    private let eventTypeRepository: EventTypeRepository
-
-    func createEvent(from data: ProcessedHealthData) async throws -> Event {
-        let eventType = try await eventTypeRepository.ensureExists(for: data.category)
-        let event = Event(...)
-        try await eventRepository.save(event)
-        return event
+    // Usage:
+    private func flushPendingMutations() async throws {
+        let context = ModelContext(modelContainer)
+        let dataStore = dataStoreFactory.makeDataStore(context: context)
+        let mutations = try dataStore.fetchPendingMutations()
+        // ...
     }
 }
 ```
 
-**Benefits:**
-- Each component is testable in isolation
-- Processors can be reused (e.g., same sleep processor for historical import)
-- Observer changes (iOS updates) don't affect processing logic
-- Factory can be called from multiple sources (background, manual refresh)
-
-### Pattern 2: Repository with Sync Awareness
-
-**What:** Repositories handle local persistence AND queue sync mutations
+### Testing Seam
 
 ```swift
-protocol EventRepositoryProtocol {
-    func save(_ event: Event) async throws
-    func delete(_ event: Event) async throws
-    func fetch(matching predicate: Predicate<Event>) async throws -> [Event]
-    func fetchAll() async throws -> [Event]
-}
+// In tests:
+let mockNetwork = MockNetworkClient()
+let mockFactory = MockDataStoreFactory()
+let syncEngine = SyncEngine(
+    networkClient: mockNetwork,
+    dataStoreFactory: mockFactory,
+    modelContainer: testContainer
+)
 
-@MainActor
-final class EventRepository: EventRepositoryProtocol {
-    private let modelContext: ModelContext
-    private let syncCoordinator: SyncCoordinator
-
-    func save(_ event: Event) async throws {
-        // 1. Save locally
-        modelContext.insert(event)
-        try modelContext.save()
-
-        // 2. Queue for sync (fire-and-forget, SyncCoordinator handles offline)
-        await syncCoordinator.queueCreate(entity: event)
-    }
-
-    func delete(_ event: Event) async throws {
-        // 1. Queue delete BEFORE local delete (need the ID)
-        await syncCoordinator.queueDelete(entityType: .event, id: event.id)
-
-        // 2. Delete locally
-        modelContext.delete(event)
-        try modelContext.save()
-    }
-}
-```
-
-**When to use:** All entities that sync with backend (Event, EventType, Geofence)
-
-### Pattern 3: Coordinator Pattern for Sync
-
-**What:** Single coordinator orchestrates all sync operations with single-flight protection
-
-```swift
-actor SyncCoordinator {
-    private var isSyncing = false
-    private let mutationQueue: MutationQueue
-    private let pullEngine: PullSyncEngine
-    private let bootstrapFetcher: BootstrapFetcher
-
-    func performSync() async {
-        // Single-flight: prevent concurrent syncs
-        guard !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
-
-        // 1. Flush pending mutations (push)
-        try await mutationQueue.flush()
-
-        // 2. Pull changes (incremental or bootstrap)
-        if needsBootstrap {
-            try await bootstrapFetcher.fetch()
-        } else {
-            try await pullEngine.pull()
-        }
-    }
-
-    func queueCreate(entity: any SyncableEntity) async {
-        await mutationQueue.enqueue(.create(entity))
-        // Trigger sync if online (fire-and-forget)
-        Task { await performSync() }
-    }
-}
-```
-
-### Pattern 4: State Machine for Authorization
-
-**What:** Explicit states for permission flows
-
-```swift
-enum LocationAuthState {
-    case notDetermined
-    case requestingWhenInUse
-    case whenInUseGranted
-    case requestingAlways
-    case alwaysGranted
-    case denied
-    case restricted
-}
-
-@Observable
-final class GeofenceAuthManager: NSObject {
-    private(set) var state: LocationAuthState = .notDetermined
-    private let locationManager: CLLocationManager
-
-    func requestGeofenceAuthorization() {
-        switch state {
-        case .notDetermined:
-            state = .requestingWhenInUse
-            locationManager.requestWhenInUseAuthorization()
-        case .whenInUseGranted:
-            state = .requestingAlways
-            locationManager.requestAlwaysAuthorization()
-        default:
-            break
-        }
-    }
-}
+await syncEngine.performSync()
+XCTAssertEqual(mockNetwork.createEventCallCount, 5)
 ```
 
 ---
 
-## Data Flow
+## Protocol Definitions
 
-### HealthKit Data Flow (Recommended)
+### NetworkClientProtocol
+
+**Purpose:** Abstract network operations for SyncEngine (currently performed by APIClient)
+
+**File:** `apps/ios/trendy/Protocols/NetworkClientProtocol.swift` (new)
+
+**Methods Required:**
+```swift
+protocol NetworkClientProtocol: Sendable {
+    // Event CRUD
+    func createEventWithIdempotency(_ request: CreateEventRequest, idempotencyKey: String) async throws -> APIEvent
+    func updateEvent(id: String, _ request: UpdateEventRequest) async throws -> APIEvent
+    func deleteEvent(id: String) async throws
+    func createEventsBatch(_ events: [CreateEventRequest]) async throws -> BatchCreateEventsResponse
+    func getAllEvents(batchSize: Int) async throws -> [APIEvent]
+
+    // EventType CRUD
+    func createEventTypeWithIdempotency(_ request: CreateEventTypeRequest, idempotencyKey: String) async throws -> APIEventType
+    func updateEventType(id: String, _ request: UpdateEventTypeRequest) async throws -> APIEventType
+    func deleteEventType(id: String) async throws
+    func getEventTypes() async throws -> [APIEventType]
+
+    // Geofence CRUD
+    func createGeofenceWithIdempotency(_ request: CreateGeofenceRequest, idempotencyKey: String) async throws -> APIGeofence
+    func updateGeofence(id: String, _ request: UpdateGeofenceRequest) async throws -> APIGeofence
+    func deleteGeofence(id: String) async throws
+    func getGeofences(activeOnly: Bool) async throws -> [APIGeofence]
+
+    // PropertyDefinition CRUD
+    func createPropertyDefinitionWithIdempotency(_ request: CreatePropertyDefinitionRequest, idempotencyKey: String) async throws -> APIPropertyDefinition
+    func updatePropertyDefinition(id: String, _ request: UpdatePropertyDefinitionRequest) async throws -> APIPropertyDefinition
+    func deletePropertyDefinition(id: String) async throws
+    func getPropertyDefinitions(eventTypeId: String) async throws -> [APIPropertyDefinition]
+
+    // Sync operations
+    func getChanges(since cursor: Int64, limit: Int) async throws -> ChangeFeedResponse
+    func getLatestCursor() async throws -> Int64
+}
+```
+
+**Why these methods:**
+- SyncEngine currently calls these on `apiClient` (see lines 258, 441, 570, 953, etc.)
+- All async/throws to match actor context
+- Marked `Sendable` for actor isolation safety
+
+---
+
+### DataStoreProtocol
+
+**Purpose:** Abstract persistence operations for SyncEngine (currently performed by LocalStore)
+
+**File:** `apps/ios/trendy/Protocols/DataStoreProtocol.swift` (new)
+
+**Methods Required:**
+```swift
+protocol DataStoreProtocol: Sendable {
+    // Upsert operations
+    func upsertEvent(id: String, configure: @Sendable (Event) -> Void) throws -> Event
+    func upsertEventType(id: String, configure: @Sendable (EventType) -> Void) throws -> EventType
+    func upsertGeofence(id: String, configure: @Sendable (Geofence) -> Void) throws -> Geofence
+    func upsertPropertyDefinition(id: String, eventTypeId: String, configure: @Sendable (PropertyDefinition) -> Void) throws -> PropertyDefinition
+
+    // Delete operations
+    func deleteEvent(id: String) throws
+    func deleteEventType(id: String) throws
+    func deleteGeofence(id: String) throws
+    func deletePropertyDefinition(id: String) throws
+
+    // Lookup operations
+    func findEventType(id: String) throws -> EventType?
+
+    // Pending operations
+    func fetchPendingMutations() throws -> [PendingMutation]
+
+    // Sync status updates
+    func markEventSynced(id: String) throws
+    func markEventTypeSynced(id: String) throws
+    func markGeofenceSynced(id: String) throws
+    func markPropertyDefinitionSynced(id: String) throws
+
+    // Save
+    func save() throws
+}
+```
+
+**Why these methods:**
+- All methods currently called on LocalStore instances in SyncEngine
+- `@Sendable` closures required for actor isolation
+- `Sendable` protocol for safe actor boundary crossing
+
+**CRITICAL:** LocalStore is a struct with a ModelContext. Cannot pass struct across actor boundary directly (ModelContext is not Sendable). Need factory pattern instead of direct protocol conformance.
+
+---
+
+### DataStoreFactory Protocol
+
+**Purpose:** Create DataStore instances with fresh ModelContext per operation (avoids SwiftData file locking)
+
+**File:** `apps/ios/trendy/Protocols/DataStoreFactory.swift` (new)
+
+```swift
+protocol DataStoreFactory: Sendable {
+    func makeDataStore(context: ModelContext) -> DataStoreProtocol
+}
+```
+
+**Why factory pattern:**
+- SyncEngine creates new `ModelContext(modelContainer)` for each operation (see lines 202, 283, 394, 437, etc.)
+- Cannot store ModelContext in actor (not Sendable)
+- Factory allows actor to create DataStore on-demand with fresh context
+- Mockable for tests
+
+---
+
+## File Organization
+
+### New Protocol Files
+
+Create directory: `apps/ios/trendy/Protocols/`
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                        Background Wake / App Launch                          │
-└─────────────────────────────────┬────────────────────────────────────────────┘
-                                  │
-                                  v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                    HKQueryManager.fetchNewSamples()                          │
-│  - HKSampleQuery for recent data                                             │
-│  - Emit samples via Combine publisher                                        │
-└─────────────────────────────────┬────────────────────────────────────────────┘
-                                  │ [HKSample]
-                                  v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                    CategoryProcessor.process(sample)                         │
-│  - Category-specific processing (sleep aggregation, step totals)             │
-│  - Deduplication check (in-memory + database)                                │
-│  - Return ProcessedHealthData or nil (skip)                                  │
-└─────────────────────────────────┬────────────────────────────────────────────┘
-                                  │ ProcessedHealthData
-                                  v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                    HealthEventFactory.createEvent()                          │
-│  - Ensure EventType exists (auto-create if needed)                           │
-│  - Create Event with properties                                              │
-│  - Save via EventRepository (queues sync mutation)                           │
-└─────────────────────────────────┬────────────────────────────────────────────┘
-                                  │ Event
-                                  v
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                    SyncCoordinator.performSync()                             │
-│  - Flush pending mutations to backend                                        │
-│  - Pull any server-side changes                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+apps/ios/trendy/Protocols/
+├── NetworkClientProtocol.swift    # NetworkClient abstraction
+├── DataStoreProtocol.swift        # DataStore abstraction
+└── DataStoreFactory.swift         # Factory for creating DataStore instances
 ```
 
-### Sync Data Flow (Recommended)
+**Why separate directory:**
+- Clear separation between protocols and implementations
+- Easy to locate abstractions
+- Follows Swift package organization patterns
+- Makes dependency graph explicit
+
+### Implementation Files (Modified)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       PUSH FLOW (Local → Server)                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  User Action / HealthKit / Geofence                                         │
-│        │                                                                    │
-│        v                                                                    │
-│  Repository.save(entity)                                                    │
-│        │                                                                    │
-│        ├──> SwiftData.insert() + save()  [immediate local persistence]      │
-│        │                                                                    │
-│        └──> MutationQueue.enqueue(mutation)                                 │
-│                  │                                                          │
-│                  v                                                          │
-│             PendingMutation (SwiftData model)                               │
-│                  │                                                          │
-│                  v                                                          │
-│             SyncCoordinator.performSync() [when online]                     │
-│                  │                                                          │
-│                  v                                                          │
-│             MutationQueue.flush()                                           │
-│                  │                                                          │
-│                  ├──> APIClient.createEntity()  [with idempotency key]      │
-│                  │                                                          │
-│                  └──> Delete PendingMutation on success                     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+apps/ios/trendy/Services/
+├── APIClient.swift                # Add: extension APIClient: NetworkClientProtocol
+└── Sync/
+    ├── LocalStore.swift           # Add: extension LocalStore: DataStoreProtocol
+    ├── LocalStoreFactory.swift    # NEW: Factory implementation
+    └── SyncEngine.swift           # MODIFY: Use protocols in init
+```
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       PULL FLOW (Server → Local)                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  SyncCoordinator.performSync()                                              │
-│        │                                                                    │
-│        v                                                                    │
-│  PullSyncEngine.pull(since: cursor)                                         │
-│        │                                                                    │
-│        v                                                                    │
-│  APIClient.getChanges(since: cursor, limit: 100)                            │
-│        │                                                                    │
-│        v                                                                    │
-│  [ChangeEntry] - create/update/delete operations                            │
-│        │                                                                    │
-│        v                                                                    │
-│  LocalStore.upsert() or LocalStore.delete()                                 │
-│        │                                                                    │
-│        v                                                                    │
-│  Update cursor, repeat if hasMore                                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+### Test Files (New)
+
+```
+apps/ios/trendyTests/Mocks/
+├── MockNetworkClient.swift        # Mock NetworkClientProtocol
+├── MockDataStore.swift            # Mock DataStoreProtocol
+├── MockDataStoreFactory.swift    # Mock factory
+└── SyncEngineTests.swift          # NEW: Unit tests using mocks
 ```
 
 ---
 
-## Module Decomposition Strategy
+## Migration Path
 
-### Phase 1: Extract Infrastructure (Low Risk)
+### Phase 1: Define Protocols (Non-Breaking)
 
-**Goal:** Create platform adapters without changing business logic
+**Goal:** Create protocol definitions without changing existing code
 
-1. **Extract `HKQueryManager`** from HealthKitService
-   - Move observer query setup (lines 330-460)
-   - Move background delivery enablement
-   - Keep all processing logic in HealthKitService temporarily
+**Files to create:**
+1. `Protocols/NetworkClientProtocol.swift`
+2. `Protocols/DataStoreProtocol.swift`
+3. `Protocols/DataStoreFactory.swift`
 
-2. **Extract `NetworkMonitor`** from EventStore
-   - Move `NWPathMonitor` setup (lines 76-94)
-   - Create protocol for testability
+**Verification:** Code compiles, no behavior changes
 
-3. **Extract `GeofenceAuthManager`** from GeofenceManager
-   - Move authorization state machine (lines 71-139)
-   - Move two-step permission flow
+**Estimated effort:** 1-2 hours
 
-**Deliverable:** Three new focused infrastructure components
+**Risks:** None (additive only)
 
-### Phase 2: Extract Processors (Medium Risk)
+---
 
-**Goal:** Isolate data transformation logic
+### Phase 2: Conform Existing Types (Non-Breaking)
 
-1. **Create category-specific processors** from HealthKitService
-   - `WorkoutProcessor` (lines 543-664)
-   - `SleepProcessor` (lines 669-870)
-   - `StepsProcessor` (lines 872-976)
-   - `ActiveEnergyProcessor` (lines 978-1090)
-   - Each processor: input HKSample, output ProcessedData
+**Goal:** Make APIClient and LocalStore conform to protocols
 
-2. **Extract `GeofenceEventFactory`** from GeofenceManager
-   - Move `handleGeofenceEntry` (lines 362-461)
-   - Move `handleGeofenceExit` (lines 463-542)
+**Files to modify:**
 
-**Deliverable:** Testable processing components with no dependencies on persistence
+**2.1: APIClient conformance**
+```swift
+// apps/ios/trendy/Services/APIClient.swift
+// Add at bottom of file:
 
-### Phase 3: Extract Sync Components (Higher Risk)
+extension APIClient: NetworkClientProtocol {
+    // No implementation needed - all methods already exist
+    // Swift will automatically recognize conformance
+}
+```
 
-**Goal:** Decompose monolithic SyncEngine
+**2.2: LocalStore conformance**
+```swift
+// apps/ios/trendy/Services/Sync/LocalStore.swift
+// Add at bottom of file:
 
-1. **Extract `MutationQueue`** actor
-   - Move `flushPendingMutations` (lines 320-411)
-   - Move `flushCreate/Update/Delete` (lines 424-500)
+extension LocalStore: DataStoreProtocol {
+    // No implementation needed - all methods already exist
+    // Just need to add @Sendable to configure closures (compiler will warn)
+}
+```
 
-2. **Extract `PullSyncEngine`**
-   - Move `pullChanges` (lines 579-606)
-   - Move `applyChanges` (lines 608-807)
+**2.3: Create LocalStoreFactory**
+```swift
+// apps/ios/trendy/Services/Sync/LocalStoreFactory.swift
+// NEW FILE
 
-3. **Extract `BootstrapFetcher`**
-   - Move `bootstrapFetch` (lines 814-1027)
+struct LocalStoreFactory: DataStoreFactory {
+    func makeDataStore(context: ModelContext) -> DataStoreProtocol {
+        return LocalStore(modelContext: context)
+    }
+}
+```
 
-4. **Simplify `SyncCoordinator`** to orchestration only
-   - Coordinate MutationQueue, PullSyncEngine, BootstrapFetcher
-   - Single-flight protection
-   - State management
+**Verification:** Code compiles, tests pass, no behavior changes
 
-**Deliverable:** Four focused sync components, easier to test and modify
+**Estimated effort:** 2-3 hours
 
-### Phase 4: Create Repositories (Medium Risk)
+**Risks:** Low (compiler enforces protocol conformance)
 
-**Goal:** Unified data access layer
+---
 
-1. **Create `EventRepository`** protocol and implementation
-   - CRUD operations
-   - Auto-queue sync mutations
+### Phase 3: Refactor SyncEngine (Breaking Change)
 
-2. **Create `EventTypeRepository`**
-3. **Create `GeofenceRepository`**
+**Goal:** Update SyncEngine to use protocols instead of concrete types
 
-4. **Simplify `EventStore`** to ViewModel role
-   - Delegate persistence to repositories
-   - Keep only UI state and coordination
+**Files to modify:**
 
-**Deliverable:** Clean separation between ViewModels and persistence
+**3.1: Update SyncEngine properties and init**
+```swift
+// apps/ios/trendy/Services/Sync/SyncEngine.swift
+// Lines 51-54 (OLD):
+actor SyncEngine {
+    private let apiClient: APIClient
+    private let modelContainer: ModelContainer
+    private let syncHistoryStore: SyncHistoryStore?
 
-### Build Order Summary
+// Lines 51-54 (NEW):
+actor SyncEngine {
+    private let networkClient: NetworkClientProtocol
+    private let dataStoreFactory: DataStoreFactory
+    private let modelContainer: ModelContainer
+    private let syncHistoryStore: SyncHistoryStore?
 
-| Phase | Components | Risk | LOC Impact | Dependencies |
-|-------|------------|------|------------|--------------|
-| 1 | HKQueryManager, NetworkMonitor, GeofenceAuthManager | Low | Extract ~500 | None |
-| 2 | Processors (5), GeofenceEventFactory | Medium | Extract ~1000 | Phase 1 |
-| 3 | MutationQueue, PullSyncEngine, BootstrapFetcher, SyncCoordinator | Higher | Refactor ~800 | Phases 1-2 |
-| 4 | Repositories (3), EventStore simplification | Medium | Refactor ~600 | Phases 1-3 |
+// Lines 110-126 (OLD):
+init(apiClient: APIClient, modelContainer: ModelContainer, syncHistoryStore: SyncHistoryStore? = nil) {
+    self.apiClient = apiClient
+    // ...
+
+// Lines 110-126 (NEW):
+init(
+    networkClient: NetworkClientProtocol,
+    dataStoreFactory: DataStoreFactory,
+    modelContainer: ModelContainer,
+    syncHistoryStore: SyncHistoryStore? = nil
+) {
+    self.networkClient = networkClient
+    self.dataStoreFactory = dataStoreFactory
+    // ...
+```
+
+**3.2: Update all usage sites in SyncEngine**
+
+Replace `apiClient.` with `networkClient.` (58 occurrences based on file analysis)
+Replace `LocalStore(modelContext:)` with `dataStoreFactory.makeDataStore(context:)` (21 occurrences)
+
+**Example changes:**
+```swift
+// Line 258 (OLD):
+let latestCursor = try await apiClient.getLatestCursor()
+
+// Line 258 (NEW):
+let latestCursor = try await networkClient.getLatestCursor()
+
+// Line 210 (OLD):
+let localStore = LocalStore(modelContext: preSyncContext)
+
+// Line 210 (NEW):
+let localStore = dataStoreFactory.makeDataStore(context: preSyncContext)
+```
+
+**Verification:** Compiler errors in EventStore (expected - next step fixes)
+
+**Estimated effort:** 3-4 hours
+
+**Risks:** Medium (many call sites, but compiler catches all issues)
+
+---
+
+### Phase 4: Update EventStore Initialization (Breaking Change)
+
+**Goal:** Update EventStore to inject protocols into SyncEngine
+
+**Files to modify:**
+
+**4.1: Create factory in EventStore**
+```swift
+// apps/ios/trendy/ViewModels/EventStore.swift
+// Lines 337-344 (NEW):
+func setModelContext(_ context: ModelContext, syncHistoryStore: SyncHistoryStore? = nil) {
+    self.modelContext = context
+    self.modelContainer = context.container
+    self.syncHistoryStore = syncHistoryStore
+
+    if let apiClient = apiClient {
+        let factory = LocalStoreFactory()
+        self.syncEngine = SyncEngine(
+            networkClient: apiClient,              // ← Conforms to protocol
+            dataStoreFactory: factory,
+            modelContainer: context.container,
+            syncHistoryStore: syncHistoryStore
+        )
+    }
+}
+```
+
+**Verification:** App compiles, runs, all existing tests pass
+
+**Estimated effort:** 1 hour
+
+**Risks:** Low (minimal change, type system enforces correctness)
+
+---
+
+### Phase 5: Add Tests (Non-Breaking)
+
+**Goal:** Create unit tests for SyncEngine using mocks
+
+**Files to create:**
+
+**5.1: Mock implementations** (see Test Architecture section below)
+
+**5.2: SyncEngine unit tests**
+```swift
+// apps/ios/trendyTests/SyncEngineTests.swift
+@testable import trendy
+import XCTest
+
+final class SyncEngineTests: XCTestCase {
+    func testPerformSync_pushesLocalMutations() async throws {
+        // Given
+        let mockNetwork = MockNetworkClient()
+        let mockFactory = MockDataStoreFactory()
+        let testContainer = makeTestContainer()
+
+        let syncEngine = SyncEngine(
+            networkClient: mockNetwork,
+            dataStoreFactory: mockFactory,
+            modelContainer: testContainer
+        )
+
+        // When
+        await syncEngine.performSync()
+
+        // Then
+        XCTAssertTrue(mockNetwork.createEventCalled)
+        XCTAssertEqual(mockFactory.makeDataStoreCallCount, 2)
+    }
+}
+```
+
+**Verification:** Tests run, pass, achieve >80% coverage of SyncEngine
+
+**Estimated effort:** 8-12 hours (comprehensive test suite)
+
+**Risks:** Low (tests validate refactor correctness)
+
+---
+
+## Test Architecture
+
+### Mock NetworkClient
+
+**File:** `apps/ios/trendyTests/Mocks/MockNetworkClient.swift`
+
+**Pattern:** Spy pattern - record calls, return configurable responses
+
+```swift
+final class MockNetworkClient: NetworkClientProtocol, @unchecked Sendable {
+    // Call tracking
+    var createEventCallCount = 0
+    var createEventRequests: [CreateEventRequest] = []
+    var createEventBatchCallCount = 0
+    var getChangesCallCount = 0
+    var getChangesSinceCursors: [Int64] = []
+
+    // Response configuration
+    var createEventResponse: APIEvent?
+    var createEventError: Error?
+    var createEventBatchResponse: BatchCreateEventsResponse?
+    var getChangesResponse: ChangeFeedResponse?
+
+    // Implementations
+    func createEventWithIdempotency(_ request: CreateEventRequest, idempotencyKey: String) async throws -> APIEvent {
+        createEventCallCount += 1
+        createEventRequests.append(request)
+        if let error = createEventError { throw error }
+        return createEventResponse ?? defaultAPIEvent()
+    }
+
+    func createEventsBatch(_ events: [CreateEventRequest]) async throws -> BatchCreateEventsResponse {
+        createEventBatchCallCount += 1
+        if let response = createEventBatchResponse { return response }
+        return BatchCreateEventsResponse(total: events.count, success: events.count, failed: 0, created: [], errors: nil)
+    }
+
+    func getChanges(since cursor: Int64, limit: Int) async throws -> ChangeFeedResponse {
+        getChangesCallCount += 1
+        getChangesSinceCursors.append(cursor)
+        return getChangesResponse ?? ChangeFeedResponse(changes: [], nextCursor: cursor, hasMore: false)
+    }
+
+    // ... implement all NetworkClientProtocol methods
+
+    // Reset for each test
+    func reset() {
+        createEventCallCount = 0
+        createEventRequests = []
+        // ... reset all state
+    }
+
+    private func defaultAPIEvent() -> APIEvent {
+        APIEvent(
+            id: UUID().uuidString,
+            eventTypeId: UUID().uuidString,
+            timestamp: Date(),
+            notes: nil,
+            isAllDay: false,
+            endDate: nil,
+            sourceType: "manual",
+            externalId: nil,
+            originalTitle: nil,
+            geofenceId: nil,
+            locationLatitude: nil,
+            locationLongitude: nil,
+            locationName: nil,
+            healthKitSampleId: nil,
+            healthKitCategory: nil,
+            properties: nil
+        )
+    }
+}
+```
+
+**Why spy pattern:**
+- Track method calls and arguments (essential for actor testing where state is hidden)
+- Configure responses for different scenarios (success, error, rate limit)
+- Reset state between tests (avoid test pollution)
+
+**Why `@unchecked Sendable`:**
+- Mock contains mutable state (call counts, recorded arguments)
+- Only used in single-threaded test context (XCTest runs tests serially by default)
+- Cleaner than wrapping everything in `@MainActor`
+
+---
+
+### Mock DataStoreFactory
+
+**File:** `apps/ios/trendyTests/Mocks/MockDataStoreFactory.swift`
+
+**Pattern:** Returns same mock instance for all calls (spy pattern)
+
+```swift
+final class MockDataStoreFactory: DataStoreFactory, @unchecked Sendable {
+    let mockStore = MockDataStore()
+    var makeDataStoreCallCount = 0
+
+    func makeDataStore(context: ModelContext) -> DataStoreProtocol {
+        makeDataStoreCallCount += 1
+        return mockStore
+    }
+
+    func reset() {
+        makeDataStoreCallCount = 0
+        mockStore.reset()
+    }
+}
+```
+
+**Why return same instance:**
+- Track state changes across multiple factory calls
+- Easier to verify behavior (single source of truth)
+- Matches test pattern: "Given store has X, when sync runs, then store has Y"
+
+---
+
+## Architecture Patterns
+
+### Pattern 1: Actor + Protocol Injection
+
+**What:** Actors accept protocols in initializer, store as properties
+
+**When:** Actor needs testable dependencies with async operations
+
+**Why works:**
+- Protocols marked `Sendable` can cross actor boundaries
+- Initializer injection ensures immutability (actor properties are private let)
+- Type system enforces all dependencies provided at creation
+
+**Tradeoffs:**
+- ✅ Type-safe, compiler-enforced
+- ✅ Immutable dependencies (cannot swap at runtime)
+- ❌ Requires protocol for every dependency
+- ❌ More files to maintain
+
+**Source:** [Actor-Based Dependency Container in Swift](https://medium.com/@dmitryshlepkin/actor-based-dependency-container-in-swift-e677c105e57b)
+
+---
+
+### Pattern 2: Factory for Non-Sendable Types
+
+**What:** Create per-operation instances of non-Sendable types via factory
+
+**When:** Dependency (like ModelContext) cannot be stored in actor but needed per-operation
+
+**Why works:**
+- Factory is Sendable (no mutable state)
+- Actor creates dependency on-demand with fresh context
+- Each operation gets isolated instance (avoids shared mutable state)
+
+**Tradeoffs:**
+- ✅ Handles non-Sendable dependencies
+- ✅ Prevents shared mutable state bugs
+- ✅ Testable (mock factory returns mock store)
+- ❌ Slightly more complex than direct injection
+- ❌ One extra protocol layer
+
+**Source:** [Managing Dependencies in the Age of SwiftUI](https://lucasvandongen.dev/dependency_injection_swift_swiftui.php)
+
+---
+
+### Pattern 3: @unchecked Sendable for Test Mocks
+
+**What:** Mark mocks as `@unchecked Sendable` to bypass compiler checks
+
+**When:** Mock contains mutable state (call counts, recorded values) but only used in single-threaded tests
+
+**Why works:**
+- Tests run serially in XCTest (no concurrent access to mock state)
+- Mock state only accessed from test thread (controlled environment)
+- Avoids complexity of wrapping everything in locks/actors
+
+**Tradeoffs:**
+- ✅ Simpler mock code
+- ✅ Clearer test assertions (direct state access)
+- ❌ Bypasses compiler safety (use carefully)
+- ❌ Breaks if mock used in real concurrent context
+
+**Source:** [Swift Actor in Unit Tests](https://medium.com/thumbtack-engineering/swift-actor-in-unit-tests-9dc15498b631)
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: God Object
+### Anti-Pattern 1: Service Locator in Actor
 
-**Current:** `EventStore` (1,355 lines) handles:
-- Data access (CRUD)
-- Network monitoring
-- Sync coordination
-- Widget integration
-- Calendar integration
-- Geofence reconciliation
+**What goes wrong:** Global singleton registry accessed from actor
 
-**Problem:** Changes to any concern affect the entire class. Testing requires mocking everything.
+**Why bad:**
+- Defeats actor isolation (shared mutable state accessed from actor)
+- Harder to test (global state persists between tests)
+- Runtime errors instead of compile-time safety
 
-**Solution:** Extract each concern into focused components, have EventStore delegate.
+**Instead:**
+- Use constructor injection with protocols
+- Pass dependencies explicitly at initialization
 
-### Anti-Pattern 2: Mixed Abstraction Levels
-
-**Current:** `HealthKitService.processWorkoutSample()` (lines 543-628):
-```swift
-// LOW-LEVEL: HKWorkout property access
-let duration = workout.duration
-let calories = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
-
-// MEDIUM-LEVEL: Property building
-var properties: [String: PropertyValue] = [...]
-
-// HIGH-LEVEL: Event creation and persistence
-let event = Event(...)
-modelContext.insert(event)
-try modelContext.save()
-
-// SYNC-LEVEL: Backend synchronization
-await eventStore.syncEventToBackend(event)
-```
-
-**Problem:** Single method spans 4 abstraction levels, making it hard to modify or test any single level.
-
-**Solution:** Each level in separate component:
-- `WorkoutProcessor`: Extract data from HKWorkout
-- `HealthEventFactory`: Build Event from processed data
-- `EventRepository`: Persist and queue sync
-
-### Anti-Pattern 3: Implicit State Machine
-
-**Current:** GeofenceManager authorization flow uses `pendingAlwaysAuthorizationRequest` boolean flag
-
-**Problem:** State transitions are implicit, easy to get into invalid states
-
-**Solution:** Explicit enum-based state machine with defined transitions
-
-### Anti-Pattern 4: Callback Soup
-
-**Current:** HealthKitService observer queries use completion handlers that dispatch to async context:
-```swift
-let query = HKObserverQuery(...) { [weak self] _, completionHandler, error in
-    Task {
-        await self?.handleNewSamples(for: category)
-    }
-    completionHandler()
-}
-```
-
-**Problem:** Mixed callback and async/await paradigms, completion handler timing issues
-
-**Solution:** Use Combine or AsyncStream to bridge observer callbacks to async context:
-```swift
-// Better: Observable stream
-func observeSamples(for category: HealthDataCategory) -> AsyncStream<HKSample> {
-    AsyncStream { continuation in
-        let query = HKObserverQuery(...) { ... in
-            // yield samples to stream
-        }
-        ...
-    }
-}
-```
-
-### Anti-Pattern 5: Defensive Programming Overload
-
-**Current:** HealthKitService has 45+ `print()` statements for debugging
-
-**Problem:** Debug logging mixed with business logic, no structured logging, difficult to analyze
-
-**Solution:** Use structured logging (`Log.healthkit.debug(...)`) with context, remove print statements
+**Source:** [Dependency Injection Strategies in Swift](https://quickbirdstudios.com/blog/swift-dependency-injection-service-locators/)
 
 ---
 
-## HealthKit-Specific Patterns
+### Anti-Pattern 2: Property Injection for Actor Dependencies
 
-### Observer Query Lifecycle
+**What goes wrong:** Actor exposes `var` properties for dependency injection
 
-Based on [Apple's HKObserverQuery documentation](https://developer.apple.com/documentation/healthkit/hkobserverquery), observer queries should:
+**Why bad:**
+- Dependencies can change mid-operation (race condition)
+- Nil checks required everywhere (boilerplate)
+- Cannot guarantee dependency availability
 
-1. Be started once at app launch (not recreated)
-2. Call completion handler promptly to avoid timeout
-3. Use separate queries for each data type
+**Instead:**
+- Use initializer injection with non-optional properties
+- Enforce dependency availability at compile time
 
-**Recommended pattern:**
-```swift
-actor HKQueryManager {
-    private var observerQueries: [HealthDataCategory: HKObserverQuery] = [:]
-
-    // Start all at app launch, not on-demand
-    func startAllObservers(for categories: Set<HealthDataCategory>) {
-        for category in categories {
-            guard observerQueries[category] == nil else { continue }
-            let query = createObserverQuery(for: category)
-            healthStore.execute(query)
-            observerQueries[category] = query
-        }
-    }
-
-    private func createObserverQuery(for category: HealthDataCategory) -> HKObserverQuery {
-        HKObserverQuery(sampleType: category.hkSampleType, predicate: nil) { [weak self] _, completionHandler, _ in
-            // Call completion handler IMMEDIATELY, before processing
-            completionHandler()
-            // Then process asynchronously
-            Task { await self?.emitSamplesForProcessing(category: category) }
-        }
-    }
-}
-```
-
-### Daily Aggregation Pattern
-
-For steps, active energy, sleep - aggregate per day rather than per sample:
-
-```swift
-struct DailyAggregator {
-    private let sampleIdPrefix: String // e.g., "steps-", "sleep-"
-
-    func aggregationId(for date: Date) -> String {
-        "\(sampleIdPrefix)\(dateFormatter.string(from: date))"
-    }
-
-    func shouldProcess(date: Date, lastProcessed: Date?, throttleSeconds: TimeInterval = 300) -> Bool {
-        guard let last = lastProcessed else { return true }
-        guard Calendar.current.isDate(last, inSameDayAs: date) else { return true }
-        return Date().timeIntervalSince(last) >= throttleSeconds
-    }
-}
-```
+**Source:** [Dependency Injection in Swift (2025)](https://medium.com/@varunbhola1991/dependency-injection-in-swift-2025-clean-architecture-better-testing-7228f971446c)
 
 ---
 
-## Geofence-Specific Patterns
+### Anti-Pattern 3: Passing Non-Sendable Types to Actor
 
-### Region Re-registration
+**What goes wrong:** Pass ModelContext directly to actor
 
-Based on [Apple's region monitoring documentation](https://developer.apple.com/documentation/corelocation/monitoring-the-user-s-proximity-to-geographic-regions), geofences must be re-registered:
-- After app reinstall
-- After device reboot
-- When authorization changes
+**Why bad:**
+- Compiler error (ModelContext is not Sendable)
+- If forced with `@unchecked Sendable`, causes data races
 
-**Recommended pattern:**
-```swift
-@Observable
-final class GeofenceReconciler {
-    func reconcile(desired: [GeofenceDefinition]) {
-        let currentIds = Set(locationManager.monitoredRegions.map { $0.identifier })
-        let desiredIds = Set(desired.map { $0.identifier })
+**Instead:**
+- Use factory pattern to create non-Sendable types per-operation
+- Store Sendable container, create context on-demand
 
-        // Remove stale
-        for id in currentIds.subtracting(desiredIds) {
-            if let region = locationManager.monitoredRegions.first(where: { $0.identifier == id }) {
-                locationManager.stopMonitoring(for: region)
-            }
-        }
-
-        // Add missing
-        for def in desired where !currentIds.contains(def.identifier) {
-            let region = CLCircularRegion(...)
-            locationManager.startMonitoring(for: region)
-            locationManager.requestState(for: region) // Check if already inside
-        }
-    }
-}
-```
-
-### Active Event Tracking
-
-Track in-progress geofence visits persistently (survives app termination):
-
-```swift
-actor ActiveGeofenceTracker {
-    private let userDefaults: UserDefaults
-    private let key = "activeGeofenceEvents"
-
-    func setActive(geofenceId: String, eventId: String) async {
-        var active = loadActive()
-        active[geofenceId] = eventId
-        saveActive(active)
-    }
-
-    func clearActive(geofenceId: String) async {
-        var active = loadActive()
-        active.removeValue(forKey: geofenceId)
-        saveActive(active)
-    }
-
-    func activeEventId(for geofenceId: String) async -> String? {
-        loadActive()[geofenceId]
-    }
-}
-```
+**Source:** Swift Concurrency documentation (Apple)
 
 ---
 
-## Sync-Specific Patterns
+## Build Order
 
-### Mutation Queue with Idempotency
+### Step 1: Define Protocols (Day 1, Morning)
 
-```swift
-actor MutationQueue {
-    private let modelContainer: ModelContainer
+**Dependencies:** None
 
-    func enqueue(_ mutation: QueuedMutation) async throws {
-        let context = ModelContext(modelContainer)
-        let pending = PendingMutation(
-            entityType: mutation.entityType,
-            operation: mutation.operation,
-            entityId: mutation.entityId,
-            payload: mutation.payload,
-            idempotencyKey: UUID().uuidString // Client-generated
-        )
-        context.insert(pending)
-        try context.save()
-    }
+**Files:**
+1. `Protocols/NetworkClientProtocol.swift`
+2. `Protocols/DataStoreProtocol.swift`
+3. `Protocols/DataStoreFactory.swift`
 
-    func flush(using apiClient: APIClient) async throws {
-        let context = ModelContext(modelContainer)
-        let mutations = try fetchPending(context: context)
+**Validation:** `swift build` succeeds
 
-        for mutation in mutations {
-            do {
-                try await sendMutation(mutation, apiClient: apiClient)
-                context.delete(mutation)
-            } catch let error as APIError where error.isDuplicateError {
-                // Idempotency: duplicate means it succeeded before
-                context.delete(mutation)
-            } catch {
-                mutation.recordFailure()
-                if mutation.hasExceededRetryLimit {
-                    // Move to dead letter queue or mark entity failed
-                }
-            }
-        }
-        try context.save()
-    }
-}
-```
+---
 
-### Cursor-Based Pull with Delete Protection
+### Step 2: Conform Existing Types (Day 1, Afternoon)
 
-```swift
-actor PullSyncEngine {
-    private var cursor: Int64
-    private var pendingDeleteIds: Set<String> = []
+**Dependencies:** Step 1 complete
 
-    func pull(capturingDeletesFrom mutationQueue: MutationQueue) async throws {
-        // CRITICAL: Capture pending deletes BEFORE pulling
-        pendingDeleteIds = await mutationQueue.pendingDeleteEntityIds()
+**Files:**
+1. `Services/APIClient.swift` - add conformance
+2. `Services/Sync/LocalStore.swift` - add conformance
+3. `Services/Sync/LocalStoreFactory.swift` - NEW
 
-        var hasMore = true
-        while hasMore {
-            let response = try await apiClient.getChanges(since: cursor, limit: 100)
+**Validation:** `swift build` succeeds, `swift test` passes
 
-            for change in response.changes {
-                // Skip resurrection of entities we're about to delete
-                guard !pendingDeleteIds.contains(change.entityId) else { continue }
-                try apply(change)
-            }
+---
 
-            cursor = response.nextCursor
-            hasMore = response.hasMore
-        }
+### Step 3: Refactor SyncEngine (Day 2, Morning)
 
-        pendingDeleteIds.removeAll()
-        persistCursor()
-    }
-}
-```
+**Dependencies:** Step 2 complete
+
+**Files:**
+1. `Services/Sync/SyncEngine.swift` - update init, replace usages
+
+**Validation:** Compiler errors in EventStore (expected, fixed in Step 4)
+
+---
+
+### Step 4: Update EventStore (Day 2, Afternoon)
+
+**Dependencies:** Step 3 complete
+
+**Files:**
+1. `ViewModels/EventStore.swift` - update `setModelContext`
+
+**Validation:** `swift build` succeeds, app runs, manual smoke test
+
+---
+
+### Step 5: Add Tests (Day 3-4)
+
+**Dependencies:** Step 4 complete (app working)
+
+**Files:**
+1. `trendyTests/Mocks/MockNetworkClient.swift`
+2. `trendyTests/Mocks/MockDataStore.swift`
+3. `trendyTests/Mocks/MockDataStoreFactory.swift`
+4. `trendyTests/SyncEngineTests.swift`
+
+**Validation:** `swift test` passes, >80% coverage of SyncEngine
+
+---
+
+## Confidence Assessment
+
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Protocol design | HIGH | Based on Swift official patterns, widely used in production |
+| Actor compatibility | HIGH | Protocols marked Sendable work with actors (verified in docs) |
+| Migration path | HIGH | Incremental, compiler-enforced, low risk |
+| Test architecture | MEDIUM | @unchecked Sendable pattern well-documented but requires care |
+| Build order | HIGH | Dependencies explicit, can validate each step |
+
+**Overall confidence: HIGH** - Architecture is sound, migration is incremental, risks are mitigated.
 
 ---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Codebase analysis: `/Users/cipher/Repositories/trendy/apps/ios/trendy/Services/` (direct review)
-- [Apple HKObserverQuery Documentation](https://developer.apple.com/documentation/healthkit/hkobserverquery)
-- [Apple Region Monitoring Documentation](https://developer.apple.com/documentation/corelocation/monitoring-the-user-s-proximity-to-geographic-regions)
+### Swift Actor + DI Patterns
+- [Actor-Based Dependency Container in Swift](https://medium.com/@dmitryshlepkin/actor-based-dependency-container-in-swift-e677c105e57b) - Modern actor DI patterns
+- [Dependency Injection in Swift with Protocols](https://swiftwithmajid.com/2019/03/06/dependency-injection-in-swift-with-protocols/) - Protocol-based DI fundamentals
+- [Different flavors of dependency injection in Swift](https://www.swiftbysundell.com/articles/different-flavors-of-dependency-injection-in-swift/) - Constructor vs property vs parameter injection
 
-### Secondary (MEDIUM confidence)
-- [SwiftData Architecture Patterns and Practices](https://azamsharp.com/2025/03/28/swiftdata-architecture-patterns-and-practices.html)
-- [Designing Efficient Local-First Architectures with SwiftData](https://medium.com/@gauravharkhani01/designing-efficient-local-first-architectures-with-swiftdata-cc74048526f2)
-- [Clean Architecture in iOS Development](https://medium.com/@dyaremyshyn/clean-architecture-in-ios-development-a-comprehensive-guide-7e3d5f851e79)
-- [HealthKit Background Delivery Guide](https://medium.com/@ios_guru/working-with-healthkit-background-delivery-828d5144c5a8)
-- [Geofencing iOS Limitations](https://radar.com/blog/limitations-of-ios-geofencing)
-- [Offline-First SwiftUI with SwiftData](https://medium.com/@ashitranpura27/offline-first-swiftui-with-swiftdata-clean-fast-and-sync-ready-9a4faefdeedb)
+### Testing Actors with Mocks
+- [Swift Actor in Unit Tests](https://medium.com/thumbtack-engineering/swift-actor-in-unit-tests-9dc15498b631) - @unchecked Sendable pattern for mocks
+- [Advanced Unit Testing in Swift: Protocols, Dependency Injection, and HealthKit](https://medium.com/@azharanwar/advanced-unit-testing-in-swift-protocols-dependency-injection-and-healthkit-4795ef4f33ec) - Mock architecture patterns
+- [Writing unit tests with mocked dependencies in Swift](https://dev.to/davidvanerkelens/writing-unit-tests-with-mocked-dependencies-in-swift-2doh) - Mock implementation strategies
 
-### Tertiary (LOW confidence - patterns from web search, not verified)
-- Repository pattern implementation specifics
-- Exact Combine bridging patterns for HealthKit observers
-
----
-
-## Metadata
-
-**Confidence breakdown:**
-- Component identification: HIGH - based on direct code analysis
-- Architecture patterns: MEDIUM-HIGH - based on established iOS patterns
-- Build order: MEDIUM - based on dependency analysis, may need adjustment
-- Anti-patterns: HIGH - directly observed in codebase
-
-**Research date:** 2026-01-15
-**Valid until:** 2026-03-15 (patterns are stable, implementation details may change)
-
-**Implications for roadmap:**
-1. Phase 1 (Infrastructure extraction) can start immediately, low risk
-2. Phase 2 (Processors) should follow Phase 1 to have clean boundaries
-3. Phase 3 (Sync decomposition) is highest risk, should have comprehensive tests first
-4. Phase 4 (Repositories) provides the clean API surface for future features
+### Best Practices (2025-2026)
+- [Dependency Injection in Swift (2025): Clean Architecture, Better Testing](https://medium.com/@varunbhola1991/dependency-injection-in-swift-2025-clean-architecture-better-testing-7228f971446c) - Modern DI patterns with latest Swift features
+- [Managing Dependencies in the Age of SwiftUI](https://lucasvandongen.dev/dependency_injection_swift_swiftui.php) - SwiftUI + actor DI integration
+- [Dependency Injection Strategies in Swift](https://quickbirdstudios.com/blog/swift-dependency-injection-service-locators/) - Anti-patterns to avoid
