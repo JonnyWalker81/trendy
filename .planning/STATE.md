@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 12 of 22 (Foundation & Cleanup)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-01-21 — Completed 12-02-PLAN.md (Service/Manager Print Cleanup)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-01-21 — Completed 12-01-PLAN.md (Core App Logging)
 
-Progress: [████░░░░░░] 4/5 plans in Phase 12
+Progress: [██████████] 5/5 plans in Phase 12
 
 ## Milestone History
 
@@ -38,6 +38,7 @@ Recent decisions affecting v1.2:
 - Tests before refactoring — large method splits need safety net
 - Factory pattern for ModelContext — handles non-Sendable limitation
 - Log.* category usage in UI views — data, auth, geofence, calendar, healthKit, ui, general
+- Private logger in model files — for widget extension compatibility
 
 ### Pending Todos
 
@@ -45,11 +46,11 @@ None
 
 ### Blockers/Concerns
 
-- Pre-existing build error in trendyApp.swift:312 (unrelated to plan work, should be fixed separately)
+None - Phase 12 complete, build succeeds
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 12-02-PLAN.md (Service/Manager Print Cleanup)
+Stopped at: Completed 12-01-PLAN.md (Core App Logging)
 Resume file: None
-Next: Execute remaining Phase 12 plan (01)
+Next: Phase 13 - Protocol Extraction
