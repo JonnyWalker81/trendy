@@ -372,14 +372,14 @@ struct GeofenceListView: View {
 
     private func refreshGeofences() async {
         guard let store = eventStore else {
-            print("📍 Cannot refresh: EventStore not available")
+            Log.geofence.warning("Cannot refresh: EventStore not available")
             return
         }
 
         isRefreshing = true
         defer { isRefreshing = false }
 
-        print("📍 Syncing geofences with backend...")
+        Log.geofence.debug("Syncing geofences with backend")
 
         // Fetch from backend and reconcile with local SwiftData
         let definitions = await store.reconcileGeofencesWithBackend(forceRefresh: true)
@@ -389,101 +389,147 @@ struct GeofenceListView: View {
             geoManager.reconcileRegions(desired: definitions)
         }
 
-        print("📍 Sync complete: \(definitions.count) geofence definitions")
+        Log.geofence.info("Sync complete", context: .with { ctx in
+            ctx.add("geofence_count", definitions.count)
+        })
     }
     
     #if DEBUG
     private func printDebugInfo() {
-        print("========== GEOFENCE DEBUG INFO ==========")
-        print("GeofenceManager available: \(geofenceManager != nil)")
+        Log.geofence.debug("========== GEOFENCE DEBUG INFO ==========")
+        Log.geofence.debug("GeofenceManager available", context: .with { ctx in
+            ctx.add("available", geofenceManager != nil)
+        })
         if let manager = geofenceManager {
-            print("Authorization status: \(manager.authorizationStatus.description)")
-            print("Has geofencing authorization: \(manager.hasGeofencingAuthorization)")
-            print("Location services enabled: \(manager.isLocationServicesEnabled)")
-            print("Monitored regions count: \(manager.monitoredRegions.count)")
+            Log.geofence.debug("GeofenceManager status", context: .with { ctx in
+                ctx.add("authorization_status", manager.authorizationStatus.description)
+                ctx.add("has_authorization", manager.hasGeofencingAuthorization)
+                ctx.add("location_services_enabled", manager.isLocationServicesEnabled)
+                ctx.add("monitored_regions_count", manager.monitoredRegions.count)
+            })
             for region in manager.monitoredRegions {
-                print("  - Region: \(region.identifier)")
                 if let circular = region as? CLCircularRegion {
-                    print("    Center: \(circular.center.latitude), \(circular.center.longitude)")
-                    print("    Radius: \(circular.radius)m")
+                    Log.geofence.debug("Monitored region", context: .with { ctx in
+                        ctx.add("region_id", region.identifier)
+                        ctx.add("latitude", circular.center.latitude)
+                        ctx.add("longitude", circular.center.longitude)
+                        ctx.add("radius", circular.radius)
+                    })
+                } else {
+                    Log.geofence.debug("Monitored region", context: .with { ctx in
+                        ctx.add("region_id", region.identifier)
+                    })
                 }
             }
         }
-        print("Geofences in database: \(geofences.count)")
+        Log.geofence.debug("Geofences in database", context: .with { ctx in
+            ctx.add("count", geofences.count)
+        })
         for geofence in geofences {
             let eventTypeStatus: String
             if let eventTypeID = geofence.eventTypeEntryID {
                 if let eventType = eventTypes.first(where: { $0.id == eventTypeID }) {
-                    eventTypeStatus = "✅ \(eventType.name) (\(eventTypeID))"
+                    eventTypeStatus = "found: \(eventType.name) (\(eventTypeID))"
                 } else {
-                    eventTypeStatus = "❌ MISSING (\(eventTypeID))"
+                    eventTypeStatus = "MISSING (\(eventTypeID))"
                 }
             } else {
-                eventTypeStatus = "⚠️ Not set"
+                eventTypeStatus = "Not set"
             }
-            print("  - \(geofence.name): active=\(geofence.isActive)")
-            print("    EventType: \(eventTypeStatus)")
-            print("    Location: \(geofence.latitude), \(geofence.longitude), radius=\(geofence.radius)m")
+            Log.geofence.debug("Geofence detail", context: .with { ctx in
+                ctx.add("name", geofence.name)
+                ctx.add("is_active", geofence.isActive)
+                ctx.add("event_type_status", eventTypeStatus)
+                ctx.add("latitude", geofence.latitude)
+                ctx.add("longitude", geofence.longitude)
+                ctx.add("radius", geofence.radius)
+            })
         }
-        print("Available EventTypes:")
+        Log.geofence.debug("Available EventTypes", context: .with { ctx in
+            ctx.add("count", eventTypes.count)
+        })
         for eventType in eventTypes {
-            print("  - \(eventType.name): \(eventType.id)")
+            Log.geofence.debug("EventType", context: .with { ctx in
+                ctx.add("name", eventType.name)
+                ctx.add("id", eventType.id)
+            })
         }
-        print("==========================================")
+        Log.geofence.debug("========== END DEBUG INFO ==========")
     }
     
     private func repairBrokenGeofences() {
-        print("🔧 Repairing broken geofences...")
-        
+        Log.geofence.info("Starting geofence repair")
+
         var repaired = 0
         for geofence in geofences {
             guard let eventTypeID = geofence.eventTypeEntryID else { continue }
-            
+
             // Check if the EventType exists
             let eventTypeExists = eventTypes.contains { $0.id == eventTypeID }
-            
+
             if !eventTypeExists {
-                print("🔧 Geofence '\(geofence.name)' has broken eventTypeID: \(eventTypeID)")
-                
+                Log.geofence.warning("Geofence has broken eventTypeID", context: .with { ctx in
+                    ctx.add("geofence_name", geofence.name)
+                    ctx.add("broken_event_type_id", eventTypeID)
+                })
+
                 // Try to find a matching EventType by name
                 // This is a heuristic - we look for an EventType with a similar name
-                if let matchingType = eventTypes.first(where: { 
+                if let matchingType = eventTypes.first(where: {
                     geofence.name.lowercased().contains($0.name.lowercased()) ||
                     $0.name.lowercased().contains(geofence.name.lowercased())
                 }) {
                     geofence.eventTypeEntryID = matchingType.id
-                    print("   ✅ Auto-matched to EventType '\(matchingType.name)' (\(matchingType.id))")
+                    Log.geofence.info("Auto-matched geofence to EventType", context: .with { ctx in
+                        ctx.add("geofence_name", geofence.name)
+                        ctx.add("matched_event_type", matchingType.name)
+                        ctx.add("matched_event_type_id", matchingType.id)
+                    })
                     repaired += 1
                 } else if let firstType = eventTypes.first {
                     // Fallback: assign the first available EventType
                     geofence.eventTypeEntryID = firstType.id
-                    print("   ⚠️ No match found, assigned to '\(firstType.name)' (\(firstType.id))")
+                    Log.geofence.warning("No match found, assigned to first EventType", context: .with { ctx in
+                        ctx.add("geofence_name", geofence.name)
+                        ctx.add("assigned_event_type", firstType.name)
+                        ctx.add("assigned_event_type_id", firstType.id)
+                    })
                     repaired += 1
                 } else {
-                    print("   ❌ No EventTypes available to assign")
+                    Log.geofence.error("No EventTypes available to assign", context: .with { ctx in
+                        ctx.add("geofence_name", geofence.name)
+                    })
                 }
             }
         }
-        
+
         if repaired > 0 {
             do {
                 try modelContext.save()
-                print("🔧 Repaired \(repaired) geofence(s)")
+                Log.geofence.info("Geofence repair complete", context: .with { ctx in
+                    ctx.add("repaired_count", repaired)
+                })
             } catch {
-                print("❌ Failed to save repairs: \(error)")
+                Log.geofence.error("Failed to save repairs", error: error)
             }
         } else {
-            print("🔧 No broken geofences found")
+            Log.geofence.debug("No broken geofences found")
         }
     }
     
     private func simulateGeofenceEntry(_ geofence: Geofence) {
-        print("🧪 Simulating geofence ENTRY for: \(geofence.name)")
+        Log.geofence.debug("Simulating geofence ENTRY", context: .with { ctx in
+            ctx.add("geofence_name", geofence.name)
+            ctx.add("geofence_id", geofence.id)
+        })
         geofenceManager?.simulateEntry(geofenceId: geofence.id)
     }
-    
+
     private func simulateGeofenceExit(_ geofence: Geofence) {
-        print("🧪 Simulating geofence EXIT for: \(geofence.name)")
+        Log.geofence.debug("Simulating geofence EXIT", context: .with { ctx in
+            ctx.add("geofence_name", geofence.name)
+            ctx.add("geofence_id", geofence.id)
+        })
         geofenceManager?.simulateExit(geofenceId: geofence.id)
     }
     #endif
@@ -508,7 +554,10 @@ struct GeofenceListView: View {
                 geofenceManager?.stopMonitoring(geofence: geofence)
             }
         } catch {
-            print("Failed to toggle geofence: \(error)")
+            Log.geofence.error("Failed to toggle geofence", error: error, context: .with { ctx in
+                ctx.add("geofence_name", geofence.name)
+                ctx.add("geofence_id", geofence.id)
+            })
         }
     }
 
@@ -804,7 +853,7 @@ struct EditGeofenceView: View {
                 do {
                     try await manager.requestAuthorization()
                 } catch {
-                    print("Failed to request notification permission: \(error)")
+                    Log.general.warning("Failed to request notification permission", error: error)
                 }
             }
         case .denied:
@@ -844,10 +893,15 @@ struct EditGeofenceView: View {
                 }
             }
 
-            print("✅ Updated geofence '\(trimmedName)'")
+            Log.geofence.info("Updated geofence", context: .with { ctx in
+                ctx.add("geofence_name", trimmedName)
+                ctx.add("geofence_id", geofence.id)
+            })
             dismiss()
         } catch {
-            print("❌ Failed to save geofence: \(error)")
+            Log.geofence.error("Failed to save geofence", error: error, context: .with { ctx in
+                ctx.add("geofence_name", trimmedName)
+            })
         }
     }
 }

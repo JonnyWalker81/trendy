@@ -47,9 +47,9 @@ class NotificationManager: NSObject {
         let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
 
         if granted {
-            print("✅ Notification authorization granted")
+            Log.general.info("Notification authorization granted")
         } else {
-            print("⚠️ Notification authorization denied")
+            Log.general.warning("Notification authorization denied")
         }
 
         await checkAuthorizationStatus()
@@ -61,7 +61,9 @@ class NotificationManager: NSObject {
         let settings = await notificationCenter.notificationSettings()
         authorizationStatus = settings.authorizationStatus
 
-        print("📱 Notification authorization status: \(authorizationStatus.description)")
+        Log.general.debug("Notification authorization status", context: .with { ctx in
+            ctx.add("status", authorizationStatus.description)
+        })
     }
 
     // MARK: - Notification Delivery
@@ -72,7 +74,7 @@ class NotificationManager: NSObject {
     ///   - eventTypeName: Name of the event type that was triggered
     func sendGeofenceEntryNotification(geofenceName: String, eventTypeName: String) async {
         guard isAuthorized else {
-            print("⚠️ Cannot send notification: not authorized")
+            Log.general.warning("Cannot send notification: not authorized")
             return
         }
 
@@ -89,9 +91,14 @@ class NotificationManager: NSObject {
 
         do {
             try await notificationCenter.add(request)
-            print("✅ Sent geofence entry notification: \(geofenceName)")
+            Log.general.debug("Sent geofence entry notification", context: .with { ctx in
+                ctx.add("geofence_name", geofenceName)
+                ctx.add("event_type", eventTypeName)
+            })
         } catch {
-            print("❌ Failed to send notification: \(error.localizedDescription)")
+            Log.general.warning("Failed to send notification", error: error, context: .with { ctx in
+                ctx.add("geofence_name", geofenceName)
+            })
         }
     }
 
@@ -102,7 +109,7 @@ class NotificationManager: NSObject {
     ///   - duration: Duration spent in the geofence (optional)
     func sendGeofenceExitNotification(geofenceName: String, eventTypeName: String, duration: TimeInterval? = nil) async {
         guard isAuthorized else {
-            print("⚠️ Cannot send notification: not authorized")
+            Log.general.warning("Cannot send notification: not authorized")
             return
         }
 
@@ -126,9 +133,17 @@ class NotificationManager: NSObject {
 
         do {
             try await notificationCenter.add(request)
-            print("✅ Sent geofence exit notification: \(geofenceName)")
+            Log.general.debug("Sent geofence exit notification", context: .with { ctx in
+                ctx.add("geofence_name", geofenceName)
+                ctx.add("event_type", eventTypeName)
+                if let duration = duration {
+                    ctx.add(duration: duration)
+                }
+            })
         } catch {
-            print("❌ Failed to send notification: \(error.localizedDescription)")
+            Log.general.warning("Failed to send notification", error: error, context: .with { ctx in
+                ctx.add("geofence_name", geofenceName)
+            })
         }
     }
 
@@ -139,7 +154,7 @@ class NotificationManager: NSObject {
     ///   - categoryIdentifier: Optional category identifier
     func sendNotification(title: String, body: String, categoryIdentifier: String? = nil) async {
         guard isAuthorized else {
-            print("⚠️ Cannot send notification: not authorized")
+            Log.general.warning("Cannot send notification: not authorized")
             return
         }
 
@@ -159,9 +174,16 @@ class NotificationManager: NSObject {
 
         do {
             try await notificationCenter.add(request)
-            print("✅ Sent custom notification: \(title)")
+            Log.general.debug("Sent custom notification", context: .with { ctx in
+                ctx.add("title", title)
+                if let category = categoryIdentifier {
+                    ctx.add("category", category)
+                }
+            })
         } catch {
-            print("❌ Failed to send notification: \(error.localizedDescription)")
+            Log.general.warning("Failed to send notification", error: error, context: .with { ctx in
+                ctx.add("title", title)
+            })
         }
     }
 
@@ -170,13 +192,13 @@ class NotificationManager: NSObject {
     /// Remove all delivered notifications
     func removeAllDeliveredNotifications() {
         notificationCenter.removeAllDeliveredNotifications()
-        print("✅ Removed all delivered notifications")
+        Log.general.debug("Removed all delivered notifications")
     }
 
     /// Remove all pending notification requests
     func removeAllPendingNotifications() {
         notificationCenter.removeAllPendingNotificationRequests()
-        print("✅ Removed all pending notifications")
+        Log.general.debug("Removed all pending notifications")
     }
 
     /// Get count of pending notifications
@@ -220,20 +242,25 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         let identifier = response.notification.request.identifier
         let categoryIdentifier = response.notification.request.content.categoryIdentifier
 
-        print("📱 User tapped notification: \(identifier) (category: \(categoryIdentifier))")
+        Log.general.debug("User tapped notification", context: .with { ctx in
+            ctx.add("notification_id", identifier)
+            ctx.add("category", categoryIdentifier)
+        })
 
         // Handle different notification actions
         switch categoryIdentifier {
         case "GEOFENCE_ENTRY":
-            print("Geofence entry notification tapped")
+            Log.general.debug("Geofence entry notification tapped")
             // Could navigate to event details here
 
         case "GEOFENCE_EXIT":
-            print("Geofence exit notification tapped")
+            Log.general.debug("Geofence exit notification tapped")
             // Could navigate to event details here
 
         default:
-            print("Unknown notification category")
+            Log.general.debug("Unknown notification category tapped", context: .with { ctx in
+                ctx.add("category", categoryIdentifier)
+            })
         }
 
         completionHandler()
