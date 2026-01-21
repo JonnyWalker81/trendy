@@ -99,11 +99,15 @@ struct ManageHealthKitCategoriesView: View {
         if enabled {
             settings.setEnabled(category, enabled: true)
             healthKitService?.startMonitoring(category: category)
-            print("✅ HealthKit: Enabled \(category.displayName)")
+            Log.healthKit.info("Enabled HealthKit category", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         } else {
             healthKitService?.stopMonitoring(category: category)
             settings.setEnabled(category, enabled: false)
-            print("✅ HealthKit: Disabled \(category.displayName)")
+            Log.healthKit.info("Disabled HealthKit category", context: .with { ctx in
+                ctx.add("category", category.displayName)
+            })
         }
     }
 

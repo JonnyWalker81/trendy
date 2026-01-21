@@ -266,6 +266,6 @@ private struct StatView: View {
         categoryName: "All Categories",
         current: $current,
         total: $total,
-        onCancel: { print("Cancelled") }
+        onCancel: { Log.healthKit.debug("Historical import cancelled (preview)") }
     )
 }

@@ -337,7 +337,7 @@ struct HealthKitSettingsView: View {
                 try await healthKitService?.requestAuthorization()
                 healthKitService?.startMonitoringAllConfigurations()
             } catch {
-                print("Failed to request HealthKit permission: \(error)")
+                Log.healthKit.warning("Failed to request HealthKit permission", error: error)
             }
 
             await MainActor.run {
@@ -618,7 +618,9 @@ struct AddHealthKitCategoriesView: View {
             healthKitService?.startMonitoring(category: category)
         }
 
-        print("✅ HealthKit: Added \(selectedCategories.count) categories")
+        Log.healthKit.info("Added HealthKit categories", context: .with { ctx in
+            ctx.add("count", selectedCategories.count)
+        })
         settings.logCurrentState()
 
         dismiss()
@@ -710,7 +712,10 @@ struct EditHealthKitCategoryView: View {
     private func saveChanges() {
         settings.setEventTypeId(selectedEventTypeId, for: category)
         settings.setNotifyOnDetection(notifyOnDetection, for: category)
-        print("✅ HealthKit: Updated \(category.displayName) settings (eventTypeId: \(selectedEventTypeId ?? "auto"))")
+        Log.healthKit.info("Updated HealthKit category settings", context: .with { ctx in
+            ctx.add("category", category.displayName)
+            ctx.add("event_type_id", selectedEventTypeId ?? "auto")
+        })
         dismiss()
     }
 }
