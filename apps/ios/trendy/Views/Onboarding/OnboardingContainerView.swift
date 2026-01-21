@@ -99,11 +99,11 @@ struct OnboardingNavigationView: View {
         Group {
             switch viewModel.currentStep {
             case .welcome:
-                WelcomeView(viewModel: viewModel)
+                WelcomeView(viewModel: viewModel, focusedField: $focusedField)
                     .id(OnboardingStep.welcome)
 
             case .auth:
-                OnboardingAuthView(viewModel: viewModel)
+                OnboardingAuthView(viewModel: viewModel, focusedField: $focusedField)
                     .id(OnboardingStep.auth)
 
             case .createEventType:

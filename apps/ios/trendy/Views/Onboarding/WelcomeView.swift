@@ -11,6 +11,9 @@ import SwiftUI
 struct WelcomeView: View {
     @Bindable var viewModel: OnboardingViewModel
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     /// Trigger for haptic feedback on primary button tap
     @State private var stepAdvanced = 0
 
@@ -40,6 +43,8 @@ struct WelcomeView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(Color.dsForeground)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusedField, equals: .welcome)
 
                 Text("See patterns.")
                     .font(.largeTitle)
@@ -92,6 +97,8 @@ struct WelcomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .sensoryFeedback(.impact(weight: .medium), trigger: stepAdvanced)
+                .accessibilityLabel("Get started")
+                .accessibilityHint("Creates your account to begin tracking")
 
                 Button {
                     viewModel.isSignInMode = true
@@ -100,6 +107,8 @@ struct WelcomeView: View {
                     Text("I already have an account")
                         .foregroundStyle(Color.dsLink)
                 }
+                .accessibilityLabel("Sign in to existing account")
+                .accessibilityHint("Opens sign in form")
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 40)
@@ -123,6 +132,7 @@ private struct FeatureHighlightRow: View {
                 .frame(width: 44, height: 44)
                 .background(Color.dsAccent)
                 .clipShape(Circle())
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -136,10 +146,13 @@ private struct FeatureHighlightRow: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
 #Preview {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     let previewConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -147,6 +160,6 @@ private struct FeatureHighlightRow: View {
     let previewSupabase = SupabaseService(configuration: previewConfig)
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
 
-    return WelcomeView(viewModel: viewModel)
+    return WelcomeView(viewModel: viewModel, focusedField: $focusedField)
         .preferredColorScheme(.dark)
 }

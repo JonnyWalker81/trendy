@@ -11,6 +11,9 @@ import SwiftUI
 struct OnboardingAuthView: View {
     @Bindable var viewModel: OnboardingViewModel
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -67,6 +70,8 @@ struct OnboardingAuthView: View {
                             .fontWeight(.bold)
                             .foregroundStyle(Color.dsForeground)
                             .multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($focusedField, equals: .auth)
 
                         Text(isSignIn ? "Sign in to continue" : "Start tracking your life")
                             .font(.subheadline)
@@ -96,6 +101,7 @@ struct OnboardingAuthView: View {
                                 .frame(height: 1)
                         }
                         .padding(.horizontal, 32)
+                        .accessibilityHidden(true)
                     }
 
                     // Email/Password Form
@@ -114,6 +120,7 @@ struct OnboardingAuthView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.dsBorder, lineWidth: 1)
                             )
+                            .accessibilityLabel("Email address")
 
                         // Password Field
                         SecureField("Password", text: $password)
@@ -126,6 +133,7 @@ struct OnboardingAuthView: View {
                                 RoundedRectangle(cornerRadius: 10)
                                     .stroke(Color.dsBorder, lineWidth: 1)
                             )
+                            .accessibilityLabel(isSignIn ? "Password" : "Choose a password")
 
                         // Confirm Password (sign up only)
                         if !isSignIn {
@@ -139,6 +147,7 @@ struct OnboardingAuthView: View {
                                     RoundedRectangle(cornerRadius: 10)
                                         .stroke(Color.dsBorder, lineWidth: 1)
                                 )
+                                .accessibilityLabel("Confirm your password")
 
                             Text("Password must be at least 6 characters")
                                 .font(.caption)
@@ -180,6 +189,8 @@ struct OnboardingAuthView: View {
                         .foregroundStyle(isFormValid ? Color.dsPrimaryForeground : Color.dsSecondaryForeground)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .disabled(viewModel.isLoading || !isFormValid)
+                        .accessibilityLabel(isSignIn ? "Sign in" : "Create account")
+                        .accessibilityHint(isSignIn ? "Signs into your existing account" : "Creates your new account")
                     }
                     .padding(.horizontal, 32)
 
@@ -200,6 +211,7 @@ struct OnboardingAuthView: View {
                         }
                     }
                     .padding(.top, 8)
+                    .accessibilityLabel(isSignIn ? "Switch to sign up" : "Switch to sign in")
 
                     // Back Button
                     Button {
@@ -211,6 +223,8 @@ struct OnboardingAuthView: View {
                         }
                         .foregroundStyle(Color.dsMutedForeground)
                     }
+                    .accessibilityLabel("Go back")
+                    .accessibilityHint("Returns to welcome screen")
 
                     // Sign out option (subtle link for wrong account scenario)
                     Button {
@@ -309,10 +323,14 @@ private struct GoogleSignInButton: View {
                     .stroke(Color.dsBorder, lineWidth: 1)
             )
         }
+        .accessibilityLabel("Continue with Google")
+        .accessibilityHint("Signs in using your Google account")
     }
 }
 
 #Preview("Sign Up") {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     let previewConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -321,11 +339,13 @@ private struct GoogleSignInButton: View {
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
     viewModel.isSignInMode = false
 
-    return OnboardingAuthView(viewModel: viewModel)
+    return OnboardingAuthView(viewModel: viewModel, focusedField: $focusedField)
         .preferredColorScheme(.dark)
 }
 
 #Preview("Sign In") {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
     let previewConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -334,6 +354,6 @@ private struct GoogleSignInButton: View {
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
     viewModel.isSignInMode = true
 
-    return OnboardingAuthView(viewModel: viewModel)
+    return OnboardingAuthView(viewModel: viewModel, focusedField: $focusedField)
         .preferredColorScheme(.dark)
 }
