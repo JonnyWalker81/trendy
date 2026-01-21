@@ -111,7 +111,7 @@ Plans:
 
 ---
 
-### Phase 11: Accessibility
+### Phase 11: Accessibility ✓
 
 **Goal:** Onboarding is usable with VoiceOver and respects motion preferences.
 
@@ -124,14 +124,16 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Shared components accessibility (ProgressBar, HeroView) + navigation focus management
-- [ ] 11-02-PLAN.md — Screen-by-screen VoiceOver labels, hints, and Reduce Motion handling
+- [x] 11-01-PLAN.md — Shared components accessibility (ProgressBar, HeroView) + navigation focus management
+- [x] 11-02-PLAN.md — Screen-by-screen VoiceOver labels, hints, and Reduce Motion handling
 
 **Success Criteria:**
-1. VoiceOver user can complete entire onboarding flow using only screen reader
-2. All interactive elements have accessibility labels and hints
-3. User with Reduce Motion enabled sees no animations (instant transitions)
-4. Focus order follows visual layout top-to-bottom
+1. ✓ VoiceOver user can complete entire onboarding flow using only screen reader
+2. ✓ All interactive elements have accessibility labels and hints
+3. ✓ User with Reduce Motion enabled sees no animations (instant transitions)
+4. ✓ Focus order follows visual layout top-to-bottom
+
+**Completed:** 2026-01-21
 
 ---
 
@@ -142,9 +144,9 @@ Plans:
 | 8 | Backend Onboarding Status | Complete | 2/2 | 4/4 |
 | 9 | iOS State Architecture | Complete | 7/7 | 5/5 |
 | 10 | Visual Design & Flow | Complete | 10/10 | 5/5 |
-| 11 | Accessibility | Pending | 2/2 | 0/4 |
+| 11 | Accessibility | Complete | 2/2 | 4/4 |
 
-**Total:** 21 requirements mapped, 19 complete
+**Total:** 21 requirements mapped, 21 complete
 
 ## Coverage Verification
 
@@ -179,4 +181,4 @@ All 21 v1.1 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-19*
-*Last updated: 2026-01-20 — Phase 11 planned*
+*Last updated: 2026-01-21 — Phase 11 complete, v1.1 milestone complete*

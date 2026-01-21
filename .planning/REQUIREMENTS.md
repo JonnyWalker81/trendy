@@ -21,24 +21,24 @@ Requirements for the onboarding overhaul. Each maps to roadmap phases.
 
 ### Visual Design
 
-- [ ] **DESIGN-01**: Modern layouts for all onboarding screens
-- [ ] **DESIGN-02**: Consistent design language throughout flow
-- [ ] **DESIGN-03**: Single loading view matching Launch Screen aesthetic
-- [ ] **DESIGN-04**: PhaseAnimator/KeyframeAnimator for polished step transitions
-- [ ] **DESIGN-05**: Progress indicator showing steps remaining
-- [ ] **DESIGN-06**: Celebration animation on onboarding completion
+- [x] **DESIGN-01**: Modern layouts for all onboarding screens
+- [x] **DESIGN-02**: Consistent design language throughout flow
+- [x] **DESIGN-03**: Single loading view matching Launch Screen aesthetic
+- [x] **DESIGN-04**: PhaseAnimator/KeyframeAnimator for polished step transitions
+- [x] **DESIGN-05**: Progress indicator showing steps remaining
+- [x] **DESIGN-06**: Celebration animation on onboarding completion
 
 ### Flow & UX
 
-- [ ] **FLOW-01**: Flow order is Welcome -> Auth -> Permissions
-- [ ] **FLOW-02**: Pre-permission priming screens explain value before system dialog
-- [ ] **FLOW-03**: Skip option available with explanation of what user will miss
-- [ ] **FLOW-04**: Each permission request has contextual benefit messaging
+- [x] **FLOW-01**: Flow order is Welcome -> Auth -> CreateEventType -> LogFirstEvent -> Permissions -> Finish
+- [x] **FLOW-02**: Pre-permission priming screens explain value before system dialog
+- [x] **FLOW-03**: Skip option available with explanation of what user will miss
+- [x] **FLOW-04**: Each permission request has contextual benefit messaging
 
 ### Accessibility
 
-- [ ] **A11Y-01**: All onboarding screens support VoiceOver
-- [ ] **A11Y-02**: Animations respect `accessibilityReduceMotion` preference
+- [x] **A11Y-01**: All onboarding screens support VoiceOver
+- [x] **A11Y-02**: Animations respect `accessibilityReduceMotion` preference
 
 ## Future Requirements
 
@@ -77,18 +77,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STATE-07 | Phase 9 | Complete |
 | STATE-08 | Phase 9 | Complete |
 | STATE-09 | Phase 9 | Complete |
-| DESIGN-01 | Phase 10 | Pending |
-| DESIGN-02 | Phase 10 | Pending |
-| DESIGN-03 | Phase 10 | Pending |
-| DESIGN-04 | Phase 10 | Pending |
-| DESIGN-05 | Phase 10 | Pending |
-| DESIGN-06 | Phase 10 | Pending |
-| FLOW-01 | Phase 10 | Pending |
-| FLOW-02 | Phase 10 | Pending |
-| FLOW-03 | Phase 10 | Pending |
-| FLOW-04 | Phase 10 | Pending |
-| A11Y-01 | Phase 11 | Pending |
-| A11Y-02 | Phase 11 | Pending |
+| DESIGN-01 | Phase 10 | Complete |
+| DESIGN-02 | Phase 10 | Complete |
+| DESIGN-03 | Phase 10 | Complete |
+| DESIGN-04 | Phase 10 | Complete |
+| DESIGN-05 | Phase 10 | Complete |
+| DESIGN-06 | Phase 10 | Complete |
+| FLOW-01 | Phase 10 | Complete |
+| FLOW-02 | Phase 10 | Complete |
+| FLOW-03 | Phase 10 | Complete |
+| FLOW-04 | Phase 10 | Complete |
+| A11Y-01 | Phase 11 | Complete |
+| A11Y-02 | Phase 11 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 21 total
@@ -97,4 +97,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-19*
-*Last updated: 2026-01-20 after Phase 9 completion*
+*Last updated: 2026-01-21 — v1.1 milestone complete, all requirements satisfied*
