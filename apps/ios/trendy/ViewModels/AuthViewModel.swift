@@ -84,7 +84,10 @@ class AuthViewModel {
             if let email = session.user.email {
                 userProperties["email"] = email
             }
-            print("📊 PostHog identify (signUp): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            Log.auth.debug("📊 PostHog identify (signUp)", context: .with { ctx in
+                ctx.add("user_id", session.user.id.uuidString)
+                ctx.add("email", session.user.email)
+            })
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             // Identify user in FullDisclosure for feedback submissions
@@ -93,9 +96,12 @@ class AuthViewModel {
                     userId: session.user.id.uuidString,
                     email: session.user.email
                 )
-                print("📝 FullDisclosure identify (signUp): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+                Log.auth.debug("📝 FullDisclosure identify (signUp)", context: .with { ctx in
+                    ctx.add("user_id", session.user.id.uuidString)
+                    ctx.add("email", session.user.email)
+                })
             } catch {
-                print("⚠️ FullDisclosure identify failed: \(error)")
+                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
             }
 
             await MainActor.run {
@@ -142,7 +148,10 @@ class AuthViewModel {
             if let email = session.user.email {
                 userProperties["email"] = email
             }
-            print("📊 PostHog identify (signIn): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+            Log.auth.debug("📊 PostHog identify (signIn)", context: .with { ctx in
+                ctx.add("user_id", session.user.id.uuidString)
+                ctx.add("email", session.user.email)
+            })
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             // Identify user in FullDisclosure for feedback submissions
@@ -151,9 +160,12 @@ class AuthViewModel {
                     userId: session.user.id.uuidString,
                     email: session.user.email
                 )
-                print("📝 FullDisclosure identify (signIn): user_id=\(session.user.id.uuidString), email=\(session.user.email ?? "nil")")
+                Log.auth.debug("📝 FullDisclosure identify (signIn)", context: .with { ctx in
+                    ctx.add("user_id", session.user.id.uuidString)
+                    ctx.add("email", session.user.email)
+                })
             } catch {
-                print("⚠️ FullDisclosure identify failed: \(error)")
+                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
             }
 
             await MainActor.run {

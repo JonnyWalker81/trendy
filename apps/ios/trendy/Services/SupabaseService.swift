@@ -32,7 +32,9 @@ class SupabaseService {
     private func cacheUserId(_ userId: String) {
         UserDefaults.standard.set(userId, forKey: Self.cachedUserIdKey)
         #if DEBUG
-        print("🔑 Cached userId for synchronous access: \(userId)")
+        Log.auth.debug("🔑 Cached userId for synchronous access", context: .with { ctx in
+            ctx.add("user_id", userId)
+        })
         #endif
     }
 
@@ -40,7 +42,7 @@ class SupabaseService {
     private func clearCachedUserId() {
         UserDefaults.standard.removeObject(forKey: Self.cachedUserIdKey)
         #if DEBUG
-        print("🔑 Cleared cached userId")
+        Log.auth.debug("🔑 Cleared cached userId")
         #endif
     }
 
@@ -74,11 +76,13 @@ class SupabaseService {
                 self.isAuthenticated = true
             }
             #if DEBUG
-            print("✅ Session restored for user: \(session.user.email ?? "unknown")")
+            Log.auth.info("✅ Session restored", context: .with { ctx in
+                ctx.add("email", session.user.email)
+            })
             #endif
         } catch {
             #if DEBUG
-            print("ℹ️ No existing session found: \(error.localizedDescription)")
+            Log.auth.debug("ℹ️ No existing session found", error: error)
             #endif
             await MainActor.run {
                 self.isAuthenticated = false
@@ -118,7 +122,9 @@ class SupabaseService {
 
         guard let session = response.session else {
             #if DEBUG
-            print("⚠️ Signup completed but no session returned for: \(email)")
+            Log.auth.warning("⚠️ Signup completed but no session returned", context: .with { ctx in
+                ctx.add("email", email)
+            })
             #endif
             throw AuthError.noSession
         }
@@ -132,7 +138,9 @@ class SupabaseService {
         }
 
         #if DEBUG
-        print("✅ User signed up: \(email)")
+        Log.auth.info("✅ User signed up", context: .with { ctx in
+            ctx.add("email", email)
+        })
         #endif
         return session
     }
@@ -140,7 +148,9 @@ class SupabaseService {
     /// Sign in existing user with email and password
     func signIn(email: String, password: String) async throws -> Session {
         #if DEBUG
-        print("🔐 SupabaseService.signIn: Starting sign-in for \(email)")
+        Log.auth.debug("🔐 Starting sign-in", context: .with { ctx in
+            ctx.add("email", email)
+        })
         #endif
 
         do {
@@ -158,14 +168,18 @@ class SupabaseService {
             }
 
             #if DEBUG
-            print("✅ User signed in: \(email)")
+            Log.auth.info("✅ User signed in", context: .with { ctx in
+                ctx.add("email", email)
+            })
             #endif
             return session
         } catch {
             #if DEBUG
-            print("❌ SupabaseService.signIn failed: \(error)")
-            print("❌ Error type: \(type(of: error))")
-            print("❌ Localized description: \(error.localizedDescription)")
+            Log.auth.error("❌ Sign-in failed", context: .with { ctx in
+                ctx.add("email", email)
+                ctx.add("error_type", String(describing: type(of: error)))
+                ctx.add(error: error)
+            })
             #endif
             throw error
         }
@@ -200,7 +214,10 @@ class SupabaseService {
         }
 
         #if DEBUG
-        print("✅ User signed in with \(provider): \(session.user.email ?? "unknown")")
+        Log.auth.info("✅ User signed in with OAuth", context: .with { ctx in
+            ctx.add("provider", String(describing: provider))
+            ctx.add("email", session.user.email)
+        })
         #endif
         return session
     }
@@ -218,7 +235,7 @@ class SupabaseService {
         }
 
         #if DEBUG
-        print("✅ User signed out")
+        Log.auth.info("✅ User signed out")
         #endif
     }
 
