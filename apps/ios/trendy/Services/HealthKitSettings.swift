@@ -34,10 +34,10 @@ final class HealthKitSettings {
     private init() {
         if let appGroupDefaults = UserDefaults(suiteName: Self.appGroupIdentifier) {
             self.defaults = appGroupDefaults
-            print("✅ HealthKitSettings: Using App Group UserDefaults")
+            Log.healthKit.info("HealthKitSettings: Using App Group UserDefaults")
         } else {
             self.defaults = .standard
-            print("⚠️ HealthKitSettings: App Group not available, using standard UserDefaults")
+            Log.healthKit.warning("HealthKitSettings: App Group not available, using standard UserDefaults")
         }
     }
 
@@ -54,7 +54,9 @@ final class HealthKitSettings {
         set {
             let rawValues = newValue.map { $0.rawValue }
             defaults.set(rawValues, forKey: enabledCategoriesKey)
-            print("📱 HealthKitSettings: Saved \(newValue.count) enabled categories")
+            Log.healthKit.debug("Saved enabled categories", context: .with { ctx in
+                ctx.add("count", newValue.count)
+            })
         }
     }
 
@@ -174,12 +176,17 @@ final class HealthKitSettings {
     // MARK: - Debug
 
     func logCurrentState() {
-        print("📱 HealthKitSettings State:")
-        print("   Enabled categories: \(enabledCategories.map { $0.displayName }.joined(separator: ", "))")
+        Log.healthKit.debug("HealthKitSettings State", context: .with { ctx in
+            ctx.add("enabled_categories", enabledCategories.map { $0.displayName }.joined(separator: ", "))
+        })
         for category in enabledCategories {
             let notify = notifyOnDetection(for: category) ? "yes" : "no"
             let linked = eventTypeId(for: category)?.prefix(8) ?? "auto"
-            print("   - \(category.displayName): notify=\(notify), eventTypeId=\(linked)")
+            Log.healthKit.debug("Category config", context: .with { ctx in
+                ctx.add("category", category.displayName)
+                ctx.add("notify", notify)
+                ctx.add("event_type_id", String(linked))
+            })
         }
     }
 }

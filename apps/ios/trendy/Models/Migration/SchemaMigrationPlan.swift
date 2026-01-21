@@ -49,8 +49,8 @@ enum TrendySchemaMigrationPlan: SchemaMigrationPlan {
             // "wipe and resync" approach for users with existing data,
             // or handle the migration at the application level.
 
-            print("📦 Schema migration V1→V2 completed")
-            print("   Note: Users with existing V1 data will need to resync from backend")
+            Log.migration.info("Schema migration V1→V2 completed")
+            Log.migration.info("Note: Users with existing V1 data will need to resync from backend")
 
             // Clear the sync cursor to force a full resync after migration
             // This ensures the backend data (with correct IDs) repopulates local storage

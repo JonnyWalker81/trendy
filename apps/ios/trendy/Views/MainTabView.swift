@@ -32,9 +32,10 @@ struct MainTabView: View {
     /// Check if running in screenshot mode for UI tests
     private var isScreenshotMode: Bool {
         let result = ScreenshotMockData.isScreenshotMode
-        print("📸 isScreenshotMode check: \(result)")
-        print("📸 Arguments: \(ProcessInfo.processInfo.arguments)")
-        print("📸 Environment UITEST_SCREENSHOT_MODE: \(ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] ?? "nil")")
+        Log.ui.debug("isScreenshotMode check", context: .with { ctx in
+            ctx.add("result", result)
+            ctx.add("uitest_env", ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_MODE"] ?? "nil")
+        })
         return result
     }
     #endif
@@ -127,7 +128,9 @@ struct MainTabView: View {
                             let definitions = store.getLocalGeofenceDefinitions()
                             geoManager.reconcileRegions(desired: definitions)
                             #if DEBUG
-                            print("📍 App became active - reconciled \(definitions.count) geofences with device")
+                            Log.geofence.debug("App became active - reconciled geofences with device", context: .with { ctx in
+                                ctx.add("count", definitions.count)
+                            })
                             #endif
                         }
                     }
@@ -240,7 +243,7 @@ struct MainTabView: View {
     #if DEBUG
     /// Initialize for screenshot mode - uses local SwiftData only, no network calls
     private func initializeForScreenshotMode() async {
-        print("📸 Screenshot mode: Initializing with local-only EventStore")
+        Log.ui.debug("Screenshot mode: Initializing with local-only EventStore")
 
         // Create a local-only EventStore (no API client needed)
         let store = EventStore()
@@ -255,7 +258,9 @@ struct MainTabView: View {
         // Load data from SwiftData
         await store.fetchData()
 
-        print("📸 Screenshot mode: Initialization complete with \(store.eventTypes.count) event types")
+        Log.ui.debug("Screenshot mode: Initialization complete", context: .with { ctx in
+            ctx.add("event_types_count", store.eventTypes.count)
+        })
     }
     #endif
 
@@ -263,7 +268,7 @@ struct MainTabView: View {
     private func initializeNormally() async {
         // Initialize EventStore with APIClient from environment
         guard let apiClient = apiClient else {
-            print("Error: APIClient not available in environment")
+            Log.ui.error("APIClient not available in environment")
             return
         }
 
