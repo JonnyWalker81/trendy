@@ -54,19 +54,20 @@ See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 **Requirements:** QUAL-01, QUAL-02, QUAL-05, QUAL-06, QUAL-07
 
 **Success Criteria** (what must be TRUE):
-1. Zero print() statements in SyncEngine, APIClient, LocalStore, and HealthKit modules
-2. All HealthKit observer query handlers call completion handler in every code path (success and error)
+1. Zero print() statements in peripheral modules (191 statements across 20 files); core modules (SyncEngine, APIClient, LocalStore, HealthKit services) already use structured logging
+2. All HealthKit observer query handlers call completion handler in every code path (success and error) - verified via audit
 3. All cursor state changes logged with before/after values for debugging
 4. Busy-wait polling replaced with continuation-based waiting in sync operations
 5. Property type fallback errors logged (no silent failures)
 
-**Plans:** 4 plans
+**Plans:** 5 plans
 
 Plans:
 - [ ] 12-01-PLAN.md — Replace print() in core app files (trendyApp, auth services)
 - [ ] 12-02-PLAN.md — Replace print() in service and utility modules
 - [ ] 12-03-PLAN.md — SyncEngine hardening (cursor, logging, async waiting)
 - [ ] 12-04-PLAN.md — Replace print() in UI views and debug utilities
+- [ ] 12-05-PLAN.md — Verify HealthKit completion handler correctness (QUAL-02 audit)
 
 ---
 
@@ -356,7 +357,7 @@ All 44 v1.2 requirements mapped:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 12. Foundation & Cleanup | v1.2 | 0/4 | Planned | - |
+| 12. Foundation & Cleanup | v1.2 | 0/5 | Planned | - |
 | 13. Protocol Definitions | v1.2 | 0/? | Not started | - |
 | 14. Implementation Conformance | v1.2 | 0/? | Not started | - |
 | 15. SyncEngine DI Refactor | v1.2 | 0/? | Not started | - |
