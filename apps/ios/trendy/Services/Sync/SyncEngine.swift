@@ -368,10 +368,13 @@ actor SyncEngine {
     func forceFullResync() async {
         Log.sync.info("Force full resync requested")
 
-        // If a sync is already running, wait for it to complete
-        while isSyncing {
-            Log.sync.debug("Waiting for in-progress sync to complete...")
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        // Wait for any in-progress sync with timeout
+        do {
+            try await waitForSyncCompletion(timeout: .seconds(30))
+        } catch {
+            Log.sync.warning("Timeout waiting for sync, proceeding anyway", context: .with { ctx in
+                ctx.add(error: error)
+            })
         }
 
         // Reset cursor and set flag to force bootstrap
@@ -385,6 +388,38 @@ actor SyncEngine {
             ctx.add("after", 0)
         })
         await performSync()
+    }
+
+    /// Wait for any in-progress sync to complete, with timeout.
+    /// Uses task group pattern instead of busy-wait polling for proper cancellation support.
+    private func waitForSyncCompletion(timeout: Duration = .seconds(30)) async throws {
+        guard isSyncing else { return }
+
+        Log.sync.debug("Waiting for in-progress sync to complete", context: .with { ctx in
+            ctx.add("timeout_seconds", 30)
+        })
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            // Task 1: Poll for sync completion with cancellation support
+            group.addTask { [self] in
+                while await self.isSyncing {
+                    try Task.checkCancellation()
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+            }
+
+            // Task 2: Timeout after specified duration
+            group.addTask {
+                try await Task.sleep(until: .now + timeout, clock: .continuous)
+                throw SyncError.waitTimeout
+            }
+
+            // Wait for first task to complete, cancel the other
+            defer { group.cancelAll() }
+            try await group.next()
+        }
+
+        Log.sync.debug("In-progress sync completed, proceeding")
     }
 
     /// Skip all pending change_log entries and jump cursor to latest.
@@ -1874,12 +1909,15 @@ actor SyncEngine {
 
 enum SyncError: LocalizedError {
     case encodingFailed
+    case waitTimeout
     case unknown(String)
 
     var errorDescription: String? {
         switch self {
         case .encodingFailed:
             return "Failed to encode mutation payload"
+        case .waitTimeout:
+            return "Timed out waiting for sync to complete"
         case .unknown(let message):
             return message
         }
