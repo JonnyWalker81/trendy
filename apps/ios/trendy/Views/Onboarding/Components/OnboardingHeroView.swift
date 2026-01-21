@@ -18,6 +18,8 @@ import SwiftUI
 /// - Optional subtle pulse animation for visual interest
 ///
 /// - Note: This component adapts to both light and dark modes via the gradient colors provided.
+/// - Accessibility: This view is hidden from VoiceOver as it is purely decorative.
+///   Pulse animation respects Reduce Motion preference.
 struct OnboardingHeroView: View {
     /// The SF Symbol name to display
     let symbolName: String
@@ -30,6 +32,14 @@ struct OnboardingHeroView: View {
 
     /// State for the pulse animation
     @State private var isPulsing = false
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Determines if animation should run (both enabled and motion allowed)
+    private var shouldAnimate: Bool {
+        symbolAnimation && !reduceMotion
+    }
 
     var body: some View {
         ZStack {
@@ -46,9 +56,9 @@ struct OnboardingHeroView: View {
                 .foregroundStyle(.white)
                 .shadow(color: .white.opacity(0.4), radius: 16)
                 .shadow(color: .white.opacity(0.2), radius: 32)
-                .scaleEffect(symbolAnimation && isPulsing ? 1.05 : 1.0)
+                .scaleEffect(shouldAnimate && isPulsing ? 1.05 : 1.0)
                 .animation(
-                    symbolAnimation
+                    shouldAnimate
                         ? .easeInOut(duration: 2.5).repeatForever(autoreverses: true)
                         : .default,
                     value: isPulsing
@@ -56,8 +66,9 @@ struct OnboardingHeroView: View {
         }
         .frame(height: 280)
         .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
         .onAppear {
-            if symbolAnimation {
+            if shouldAnimate {
                 isPulsing = true
             }
         }
