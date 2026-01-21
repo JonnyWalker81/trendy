@@ -7,9 +7,9 @@
 
 ## Milestones
 
-- ✅ **v1.0 iOS Data Infrastructure** - Phases 1-7 (shipped 2026-01-18)
-- ✅ **v1.1 Onboarding Overhaul** - Phases 8-11 (shipped 2026-01-21)
-- 🚧 **v1.2 SyncEngine Quality** - Phases 12-22 (in progress)
+- v1.0 iOS Data Infrastructure - Phases 1-7 (shipped 2026-01-18)
+- v1.1 Onboarding Overhaul - Phases 8-11 (shipped 2026-01-21)
+- v1.2 SyncEngine Quality - Phases 12-22 (in progress)
 
 ## Overview
 
@@ -24,14 +24,14 @@ v1.2 transforms the SyncEngine from working code to production-ready infrastruct
 ---
 
 <details>
-<summary>✅ v1.0 iOS Data Infrastructure (Phases 1-7) - SHIPPED 2026-01-18</summary>
+<summary>v1.0 iOS Data Infrastructure (Phases 1-7) - SHIPPED 2026-01-18</summary>
 
 See MILESTONES.md for v1.0 details (7 phases, 27 plans, 25 requirements).
 
 </details>
 
 <details>
-<summary>✅ v1.1 Onboarding Overhaul (Phases 8-11) - SHIPPED 2026-01-21</summary>
+<summary>v1.1 Onboarding Overhaul (Phases 8-11) - SHIPPED 2026-01-21</summary>
 
 See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 
@@ -39,7 +39,7 @@ See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 
 ---
 
-### 🚧 v1.2 SyncEngine Quality (In Progress)
+### v1.2 SyncEngine Quality (In Progress)
 
 **Milestone Goal:** Production-ready sync infrastructure with comprehensive test coverage, code quality improvements, and observability
 
@@ -60,10 +60,13 @@ See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 4. Busy-wait polling replaced with continuation-based waiting in sync operations
 5. Property type fallback errors logged (no silent failures)
 
-**Plans:** TBD
+**Plans:** 4 plans
 
 Plans:
-- [ ] 12-01: TBD
+- [ ] 12-01-PLAN.md — Replace print() in core app files (trendyApp, auth services)
+- [ ] 12-02-PLAN.md — Replace print() in service and utility modules
+- [ ] 12-03-PLAN.md — SyncEngine hardening (cursor, logging, async waiting)
+- [ ] 12-04-PLAN.md — Replace print() in UI views and debug utilities
 
 ---
 
@@ -167,7 +170,7 @@ Plans:
 1. Test verifies circuit breaker trips after 3 consecutive rate limit errors
 2. Test verifies circuit breaker resets after backoff period expires
 3. Test verifies sync blocked while circuit breaker tripped
-4. Test verifies exponential backoff timing (30s → 60s → 120s → max 300s)
+4. Test verifies exponential backoff timing (30s -> 60s -> 120s -> max 300s)
 5. Test verifies rate limit counter resets on successful sync
 
 **Plans:** TBD
@@ -349,11 +352,11 @@ All 44 v1.2 requirements mapped:
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22
+**Execution Order:** Phases execute in numeric order: 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> 22
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 12. Foundation & Cleanup | v1.2 | 0/? | Not started | - |
+| 12. Foundation & Cleanup | v1.2 | 0/4 | Planned | - |
 | 13. Protocol Definitions | v1.2 | 0/? | Not started | - |
 | 14. Implementation Conformance | v1.2 | 0/? | Not started | - |
 | 15. SyncEngine DI Refactor | v1.2 | 0/? | Not started | - |
