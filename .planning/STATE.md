@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Effortless tracking — users set up tracking once and forget about it
-**Current focus:** Phase 12 - Foundation & Cleanup
+**Current focus:** Phase 13 - Protocol Definitions
 
 ## Current Position
 
-Phase: 12 of 22 (Foundation & Cleanup)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-01-21 — Completed 12-01-PLAN.md (Core App Logging)
+Phase: 13 of 22 (Protocol Definitions)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-01-21 — Phase 12 complete and verified
 
-Progress: [██████████] 5/5 plans in Phase 12
+Progress: [█░░░░░░░░░] 9%
 
 ## Milestone History
 
@@ -40,17 +40,26 @@ Recent decisions affecting v1.2:
 - Log.* category usage in UI views — data, auth, geofence, calendar, healthKit, ui, general
 - Private logger in model files — for widget extension compatibility
 
+### Phase 12 Completed
+
+**Foundation & Cleanup** (5 plans, 2026-01-21):
+- print() → Log.* across 20 peripheral files (191 statements)
+- SyncEngine hardened: cursor fallback (Int64.max/2), before/after cursor logging, continuation-based waiting
+- HealthKit completion handlers verified (QUAL-02)
+- Property type fallback logging added
+- Requirements completed: QUAL-01, QUAL-02, QUAL-05, QUAL-06, QUAL-07
+
 ### Pending Todos
 
 None
 
 ### Blockers/Concerns
 
-None - Phase 12 complete, build succeeds
+None
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 12-01-PLAN.md (Core App Logging)
+Stopped at: Phase 12 execution and verification complete
 Resume file: None
-Next: Phase 13 - Protocol Extraction
+Next: Plan Phase 13 (Protocol Definitions)

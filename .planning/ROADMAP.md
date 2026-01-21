@@ -63,11 +63,11 @@ See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 **Plans:** 5 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — Replace print() in core app files (trendyApp, auth services)
-- [ ] 12-02-PLAN.md — Replace print() in service and utility modules
-- [ ] 12-03-PLAN.md — SyncEngine hardening (cursor, logging, async waiting)
-- [ ] 12-04-PLAN.md — Replace print() in UI views and debug utilities
-- [ ] 12-05-PLAN.md — Verify HealthKit completion handler correctness (QUAL-02 audit)
+- [x] 12-01-PLAN.md — Replace print() in core app files (trendyApp, auth services)
+- [x] 12-02-PLAN.md — Replace print() in service and utility modules
+- [x] 12-03-PLAN.md — SyncEngine hardening (cursor, logging, async waiting)
+- [x] 12-04-PLAN.md — Replace print() in UI views and debug utilities
+- [x] 12-05-PLAN.md — Verify HealthKit completion handler correctness (QUAL-02 audit)
 
 ---
 
@@ -357,7 +357,7 @@ All 44 v1.2 requirements mapped:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 12. Foundation & Cleanup | v1.2 | 0/5 | Planned | - |
+| 12. Foundation & Cleanup | v1.2 | 5/5 | Complete | 2026-01-21 |
 | 13. Protocol Definitions | v1.2 | 0/? | Not started | - |
 | 14. Implementation Conformance | v1.2 | 0/? | Not started | - |
 | 15. SyncEngine DI Refactor | v1.2 | 0/? | Not started | - |
@@ -371,4 +371,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21*
+*Last updated: 2026-01-21 (Phase 12 complete)*

@@ -53,13 +53,13 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 ### Code Quality
 
-- [ ] **QUAL-01**: Replace all print() statements with structured Log.sync logging
-- [ ] **QUAL-02**: Audit HealthKit completion handlers called in all code paths
+- [x] **QUAL-01**: Replace all print() statements with structured Log.sync logging
+- [x] **QUAL-02**: Audit HealthKit completion handlers called in all code paths
 - [ ] **QUAL-03**: Split flushPendingMutations into smaller focused methods
 - [ ] **QUAL-04**: Split bootstrapFetch into entity-specific methods
-- [ ] **QUAL-05**: Replace busy-wait polling with continuation-based waiting
-- [ ] **QUAL-06**: Use safer cursor fallback (Int64.max/2 instead of 1B)
-- [ ] **QUAL-07**: Add logging for property type fallback (silent error fix)
+- [x] **QUAL-05**: Replace busy-wait polling with continuation-based waiting
+- [x] **QUAL-06**: Use safer cursor fallback (Int64.max/2 instead of 1B)
+- [x] **QUAL-07**: Add logging for property type fallback (silent error fix)
 
 ### Metrics
 
@@ -141,13 +141,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-03 | Phase 20 | Pending |
 | SYNC-04 | Phase 20 | Pending |
 | SYNC-05 | Phase 20 | Pending |
-| QUAL-01 | Phase 12 | Pending |
-| QUAL-02 | Phase 12 | Pending |
+| QUAL-01 | Phase 12 | Complete |
+| QUAL-02 | Phase 12 | Complete |
 | QUAL-03 | Phase 21 | Pending |
 | QUAL-04 | Phase 21 | Pending |
-| QUAL-05 | Phase 12 | Pending |
-| QUAL-06 | Phase 12 | Pending |
-| QUAL-07 | Phase 12 | Pending |
+| QUAL-05 | Phase 12 | Complete |
+| QUAL-06 | Phase 12 | Complete |
+| QUAL-07 | Phase 12 | Complete |
 | METR-01 | Phase 22 | Pending |
 | METR-02 | Phase 22 | Pending |
 | METR-03 | Phase 22 | Pending |
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-21 after roadmap creation*
+*Last updated: 2026-01-21 (Phase 12 complete)*
