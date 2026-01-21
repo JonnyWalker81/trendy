@@ -68,8 +68,11 @@ class AppRouter {
         // Check if we have ANY cached onboarding status (indicates returning user)
         let hasAnyCompletedUser = OnboardingCache.hasAnyUserCompletedOnboarding()
 
+        let cachedUserId = supabaseService.cachedUserId
+
         Log.auth.debug("determineInitialRoute (cache-first)", context: .with { ctx in
             ctx.add("has_any_completed", String(hasAnyCompletedUser))
+            ctx.add("cached_user_id", cachedUserId ?? "nil")
         })
 
         // Try to find a cached user with completed onboarding
@@ -111,13 +114,28 @@ class AppRouter {
     /// Find most recent cached onboarding status
     /// Returns nil if no cache exists
     private func findMostRecentCachedStatus() -> CachedOnboardingStatus? {
-        // First, try to get userId from cached session (sync)
-        if let userId = try? supabaseService.getUserId() {
+        // Use cached userId from UserDefaults for synchronous access.
+        // This is necessary because Supabase session restore is async (Keychain),
+        // and we need the userId synchronously at app launch for instant routing.
+        //
+        // The cached userId is set when user signs in/up, and cleared on sign out.
+        if let userId = supabaseService.cachedUserId {
+            Log.auth.debug("findMostRecentCachedStatus: using cached userId", context: .with { ctx in
+                ctx.add("user_id", userId)
+            })
             return OnboardingCache.read(userId: userId)
         }
 
-        // If no session, we can't determine user-specific cache
-        // But we can check the "any completed" flag for routing decision
+        // Fallback: try to get userId from current session (may work if session already restored)
+        if let userId = try? supabaseService.getUserId() {
+            Log.auth.debug("findMostRecentCachedStatus: using session userId", context: .with { ctx in
+                ctx.add("user_id", userId)
+            })
+            return OnboardingCache.read(userId: userId)
+        }
+
+        // No cached userId and no session - can't determine user-specific cache
+        Log.auth.debug("findMostRecentCachedStatus: no userId available")
         return nil
     }
 

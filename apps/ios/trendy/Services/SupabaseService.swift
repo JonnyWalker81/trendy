@@ -15,6 +15,35 @@ class SupabaseService {
     var currentSession: Session?
     var isAuthenticated = false
 
+    // MARK: - Cached User ID
+    // Stores userId in UserDefaults for synchronous access on app launch.
+    // This is necessary because Supabase's session restore is async (Keychain access),
+    // but we need the userId synchronously for instant routing decisions.
+
+    private static let cachedUserIdKey = "supabase_cached_user_id"
+
+    /// Get cached user ID synchronously from UserDefaults
+    /// Returns nil if no cached user ID exists (user never signed in or signed out)
+    var cachedUserId: String? {
+        UserDefaults.standard.string(forKey: Self.cachedUserIdKey)
+    }
+
+    /// Cache the user ID for synchronous access
+    private func cacheUserId(_ userId: String) {
+        UserDefaults.standard.set(userId, forKey: Self.cachedUserIdKey)
+        #if DEBUG
+        print("🔑 Cached userId for synchronous access: \(userId)")
+        #endif
+    }
+
+    /// Clear the cached user ID (called on sign-out)
+    private func clearCachedUserId() {
+        UserDefaults.standard.removeObject(forKey: Self.cachedUserIdKey)
+        #if DEBUG
+        print("🔑 Cleared cached userId")
+        #endif
+    }
+
     /// Initialize SupabaseService with configuration
     /// - Parameter configuration: Supabase configuration containing URL and anon key
     init(configuration: SupabaseConfiguration) {
@@ -94,6 +123,9 @@ class SupabaseService {
             throw AuthError.noSession
         }
 
+        // Cache userId for synchronous access on future app launches
+        cacheUserId(session.user.id.uuidString)
+
         await MainActor.run {
             self.currentSession = session
             self.isAuthenticated = true
@@ -116,6 +148,9 @@ class SupabaseService {
                 email: email,
                 password: password
             )
+
+            // Cache userId for synchronous access on future app launches
+            cacheUserId(session.user.id.uuidString)
 
             await MainActor.run {
                 self.currentSession = session
@@ -156,6 +191,9 @@ class SupabaseService {
             )
         )
 
+        // Cache userId for synchronous access on future app launches
+        cacheUserId(session.user.id.uuidString)
+
         await MainActor.run {
             self.currentSession = session
             self.isAuthenticated = true
@@ -170,6 +208,9 @@ class SupabaseService {
     /// Sign out current user
     func signOut() async throws {
         try await client.auth.signOut()
+
+        // Clear cached userId so next app launch won't try to auto-route
+        clearCachedUserId()
 
         await MainActor.run {
             self.currentSession = nil
