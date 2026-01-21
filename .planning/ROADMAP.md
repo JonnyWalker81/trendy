@@ -83,13 +83,14 @@ Plans:
 1. NetworkClientProtocol exists with all methods SyncEngine requires for network operations
 2. DataStoreProtocol exists with all persistence operations SyncEngine requires
 3. DataStoreFactory protocol exists for creating ModelContext-based stores
-4. All protocols marked Sendable for actor compatibility
+4. All protocols marked Sendable for actor compatibility (except DataStoreProtocol which is used within actor)
 5. Protocol files organized in Protocols/ directory
 
-**Plans:** TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 13-01: TBD
+- [ ] 13-01-PLAN.md — Define NetworkClientProtocol with all SyncEngine network methods
+- [ ] 13-02-PLAN.md — Define DataStoreProtocol and DataStoreFactory for persistence
 
 ---
 
@@ -358,7 +359,7 @@ All 44 v1.2 requirements mapped:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 12. Foundation & Cleanup | v1.2 | 5/5 | Complete | 2026-01-21 |
-| 13. Protocol Definitions | v1.2 | 0/? | Not started | - |
+| 13. Protocol Definitions | v1.2 | 0/2 | Not started | - |
 | 14. Implementation Conformance | v1.2 | 0/? | Not started | - |
 | 15. SyncEngine DI Refactor | v1.2 | 0/? | Not started | - |
 | 16. Test Infrastructure | v1.2 | 0/? | Not started | - |
@@ -371,4 +372,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 12 complete)*
+*Last updated: 2026-01-21 (Phase 13 planned)*
