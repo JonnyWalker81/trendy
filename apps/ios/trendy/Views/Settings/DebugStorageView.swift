@@ -488,12 +488,12 @@ struct DebugStorageView: View {
             // Use EventStore's API client to fetch geofences
             let geofences = try await eventStore.testFetchGeofences()
             geofenceTestResult = "Success: \(geofences.count) geofences returned"
-            for (i, g) in geofences.prefix(5).enumerated() {
-                print("Geofence \(i): \(g.name) - \(g.id)")
-            }
+            Log.geofence.debug("Test geofence fetch succeeded", context: .with { ctx in
+                ctx.add("count", geofences.count)
+            })
         } catch {
             geofenceTestResult = "Error: \(error.localizedDescription)"
-            print("Geofence fetch error: \(error)")
+            Log.geofence.debug("Test geofence fetch failed", error: error)
         }
     }
 
@@ -671,7 +671,7 @@ struct DebugStorageView: View {
                         ))
                     }
                 } catch {
-                    print("Error reading file: \(error)")
+                    Log.data.debug("Error reading file", error: error)
                 }
             }
         }
@@ -727,9 +727,9 @@ struct DebugStorageView: View {
         if let supabase = supabaseService {
             do {
                 try await supabase.signOut()
-                print("✅ Signed out from Supabase")
+                Log.auth.info("Signed out from Supabase for data clear")
             } catch {
-                print("⚠️ Error signing out: \(error)")
+                Log.auth.warning("Error signing out during data clear", error: error)
                 // Continue anyway - we still want to clear local data
             }
         }
@@ -749,7 +749,9 @@ struct DebugStorageView: View {
                 defaults.removeObject(forKey: key)
             }
             defaults.synchronize()
-            print("✅ Cleared App Group UserDefaults")
+            Log.data.info("Cleared App Group UserDefaults", context: .with { ctx in
+                ctx.add("app_group", appGroupIdentifier)
+            })
         }
 
         // Clear standard UserDefaults app-specific keys
@@ -766,13 +768,15 @@ struct DebugStorageView: View {
         for key in keysToRemove {
             standardDefaults.removeObject(forKey: key)
         }
-        print("✅ Cleared \(keysToRemove.count) standard UserDefaults keys")
+        Log.data.info("Cleared standard UserDefaults keys", context: .with { ctx in
+            ctx.add("keys_removed", keysToRemove.count)
+        })
 
         // Mark for file deletion on next launch
         // This flag is checked in trendyApp.swift BEFORE creating the ModelContainer
         UserDefaults.standard.set(true, forKey: "debug_clear_container_on_launch")
         UserDefaults.standard.synchronize()
-        print("✅ Set flag to clear container on next launch")
+        Log.data.info("Set flag to clear container on next launch")
 
         showingClearSuccess = true
     }
@@ -780,7 +784,7 @@ struct DebugStorageView: View {
     private func resetOnboarding() async {
         // Clear OnboardingCache (all users)
         OnboardingCache.clearAll()
-        print("✅ Cleared OnboardingCache")
+        Log.data.info("Cleared OnboardingCache")
 
         // Clear onboarding-related UserDefaults keys
         let defaults = UserDefaults.standard
@@ -788,15 +792,15 @@ struct DebugStorageView: View {
         defaults.removeObject(forKey: "onboarding_start_time")
         defaults.removeObject(forKey: "onboarding_complete")
         defaults.synchronize()
-        print("✅ Cleared onboarding UserDefaults keys")
+        Log.data.info("Cleared onboarding UserDefaults keys")
 
         // Sign out from Supabase
         if let supabase = supabaseService {
             do {
                 try await supabase.signOut()
-                print("✅ Signed out from Supabase")
+                Log.auth.info("Signed out from Supabase for onboarding reset")
             } catch {
-                print("⚠️ Error signing out: \(error)")
+                Log.auth.warning("Error signing out during onboarding reset", error: error)
                 // Continue anyway - we still want to reset onboarding
             }
         }

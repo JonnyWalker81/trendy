@@ -73,11 +73,13 @@ struct CalendarImportView: View {
             .task {
                 // First check existing permission
                 if importManager.checkCalendarAccess() {
-                    print("Calendar access already granted")
+                    Log.calendar.debug("Calendar access already granted")
                 } else {
-                    print("Requesting calendar access...")
+                    Log.calendar.debug("Requesting calendar access")
                     let hasAccess = await importManager.requestCalendarAccess()
-                    print("Calendar access result: \(hasAccess)")
+                    Log.calendar.debug("Calendar access request completed", context: .with { ctx in
+                        ctx.add("granted", hasAccess)
+                    })
                 }
             }
             .alert("Error", isPresented: .constant(importManager.errorMessage != nil)) {
@@ -143,7 +145,9 @@ struct CalendarImportView: View {
                             Button("Request Permission") {
                                 Task {
                                     let granted = await importManager.requestCalendarAccess()
-                                    print("Permission granted: \(granted)")
+                                    Log.calendar.debug("Calendar permission request result", context: .with { ctx in
+                                        ctx.add("granted", granted)
+                                    })
                                     if granted {
                                         // Force UI update
                                         await MainActor.run {

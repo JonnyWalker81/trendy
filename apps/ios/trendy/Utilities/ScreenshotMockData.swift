@@ -122,7 +122,7 @@ struct ScreenshotMockData {
         // This ensures we never accidentally show real user data
         clearMockData(from: context)
 
-        print("📸 Screenshot mode: Injecting fresh mock data for screenshots")
+        Log.general.debug("Screenshot mode: Injecting fresh mock data for screenshots")
 
         // Create event types
         var createdEventTypes: [EventType] = []
@@ -158,9 +158,12 @@ struct ScreenshotMockData {
         // Save context
         do {
             try context.save()
-            print("📸 Screenshot mode: Successfully injected \(createdEventTypes.count) event types and \(generateEvents(for: createdEventTypes).count) events")
+            Log.general.debug("Screenshot mode: Successfully injected mock data", context: .with { ctx in
+                ctx.add("event_types", createdEventTypes.count)
+                ctx.add("events", generateEvents(for: createdEventTypes).count)
+            })
         } catch {
-            print("📸 Screenshot mode: Failed to save mock data: \(error)")
+            Log.general.debug("Screenshot mode: Failed to save mock data", error: error)
         }
     }
 
@@ -171,9 +174,9 @@ struct ScreenshotMockData {
             try context.delete(model: Event.self)
             try context.delete(model: EventType.self)
             try context.save()
-            print("📸 Screenshot mode: Cleared mock data")
+            Log.general.debug("Screenshot mode: Cleared mock data")
         } catch {
-            print("📸 Screenshot mode: Failed to clear mock data: \(error)")
+            Log.general.debug("Screenshot mode: Failed to clear mock data", error: error)
         }
     }
 }
