@@ -47,8 +47,13 @@ struct CreateEventTypeView: View {
                 .padding(.top, 40)
 
                 // Progress Bar
-                OnboardingProgressBar(progress: OnboardingStep.createEventType.progress)
-                    .padding(.horizontal, 24)
+                OnboardingProgressBar(
+                    progress: OnboardingStep.createEventType.progress,
+                    stepName: "Event Type",
+                    stepNumber: 3,
+                    totalSteps: 6
+                )
+                .padding(.horizontal, 24)
 
                 if showCustomForm {
                     // Custom Event Type Form

@@ -41,15 +41,20 @@ struct OnboardingAuthView: View {
                 .frame(height: 200)
 
                 // Progress bar with contrasting background
-                OnboardingProgressBar(progress: currentProgress)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.2))
-                            .padding(.horizontal, 16)
-                    )
-                    .padding(.top, 8)
+                OnboardingProgressBar(
+                    progress: currentProgress,
+                    stepName: "Account",
+                    stepNumber: 2,
+                    totalSteps: 6
+                )
+                .padding(.horizontal, 24)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.2))
+                        .padding(.horizontal, 16)
+                )
+                .padding(.top, 8)
             }
 
             // Scrollable form content

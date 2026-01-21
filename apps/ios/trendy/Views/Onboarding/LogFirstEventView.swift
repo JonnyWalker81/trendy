@@ -21,9 +21,14 @@ struct LogFirstEventView: View {
     var body: some View {
         VStack(spacing: 24) {
             // Progress Bar at top
-            OnboardingProgressBar(progress: OnboardingStep.logFirstEvent.progress)
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+            OnboardingProgressBar(
+                progress: OnboardingStep.logFirstEvent.progress,
+                stepName: "First Event",
+                stepNumber: 4,
+                totalSteps: 6
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
 
             Spacer()
 

@@ -17,9 +17,14 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Progress bar at top (step 1 of flow, 0% progress)
-            OnboardingProgressBar(progress: 0.0)
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+            OnboardingProgressBar(
+                progress: 0.0,
+                stepName: "Welcome",
+                stepNumber: 1,
+                totalSteps: 6
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
 
             // Hero area with gradient and SF Symbol
             OnboardingHeroView(

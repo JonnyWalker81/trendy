@@ -18,9 +18,14 @@ struct OnboardingFinishView: View {
     var body: some View {
         VStack(spacing: 32) {
             // Progress bar at top showing 100% complete
-            OnboardingProgressBar(progress: 1.0)
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+            OnboardingProgressBar(
+                progress: 1.0,
+                stepName: "Complete",
+                stepNumber: 6,
+                totalSteps: 6
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
 
             Spacer()
 

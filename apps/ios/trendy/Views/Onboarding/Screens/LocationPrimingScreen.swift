@@ -34,9 +34,14 @@ struct LocationPrimingScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             // Progress bar at top
-            OnboardingProgressBar(progress: progress)
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+            OnboardingProgressBar(
+                progress: progress,
+                stepName: "Location",
+                stepNumber: 5,
+                totalSteps: 6
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
 
             // Hero view with gradient and icon
             OnboardingHeroView(
