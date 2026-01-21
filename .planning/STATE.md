@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 12 of 22 (Foundation & Cleanup)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-21 — Completed 12-03-PLAN.md (Harden SyncEngine)
+Last activity: 2026-01-21 — Completed 12-04-PLAN.md (UI Print Cleanup)
 
-Progress: [██░░░░░░░░] 2/5 plans in Phase 12
+Progress: [███░░░░░░░] 3/5 plans in Phase 12
 
 ## Milestone History
 
@@ -37,6 +37,7 @@ Recent decisions affecting v1.2:
 - Protocol extraction over frameworks — actor-safe DI without dependencies
 - Tests before refactoring — large method splits need safety net
 - Factory pattern for ModelContext — handles non-Sendable limitation
+- Log.* category usage in UI views — data, auth, geofence, calendar, healthKit, ui, general
 
 ### Pending Todos
 
@@ -44,11 +45,11 @@ None
 
 ### Blockers/Concerns
 
-None
+- Pre-existing build error in trendyApp.swift:312 (unrelated to plan work, should be fixed separately)
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 12-03-PLAN.md (Harden SyncEngine)
+Stopped at: Completed 12-04-PLAN.md (UI Print Cleanup)
 Resume file: None
-Next: Execute remaining Phase 12 plans (01, 02, 04)
+Next: Execute remaining Phase 12 plans (01, 02)
