@@ -197,16 +197,18 @@ actor SyncEngine {
                 ctx.add("is_first_sync", lastSyncCursor == 0)
             })
 
+            // Create a single context for pre-sync operations to avoid SQLite file locking issues.
+            // Multiple concurrent ModelContexts can cause "default.store couldn't be opened" errors.
+            let preSyncContext = ModelContext(modelContainer)
+
             // Count pending mutations before sync for history tracking
-            let pendingContext = ModelContext(modelContainer)
             let pendingDescriptor = FetchDescriptor<PendingMutation>()
-            let initialPendingCount = (try? pendingContext.fetchCount(pendingDescriptor)) ?? 0
+            let initialPendingCount = (try? preSyncContext.fetchCount(pendingDescriptor)) ?? 0
 
             // Capture IDs with pending DELETE mutations BEFORE flush
             // These should not be resurrected by pullChanges even if change_log has CREATE entries
-            let deleteContext = ModelContext(modelContainer)
-            let deleteStore = LocalStore(modelContext: deleteContext)
-            let pendingDeletes = try deleteStore.fetchPendingMutations()
+            let localStore = LocalStore(modelContext: preSyncContext)
+            let pendingDeletes = try localStore.fetchPendingMutations()
                 .filter { $0.operation == .delete }
                 .map { $0.entityId }
             pendingDeleteIds = Set(pendingDeletes)
@@ -305,7 +307,7 @@ actor SyncEngine {
 
             // Calculate sync duration and record to history
             let syncDurationMs = Int(Date().timeIntervalSince(syncStartTime) * 1000)
-            let finalPendingCount = (try? pendingContext.fetchCount(pendingDescriptor)) ?? 0
+            let finalPendingCount = (try? preSyncContext.fetchCount(pendingDescriptor)) ?? 0
             let syncedCount = max(0, initialPendingCount - finalPendingCount)
 
             Log.sync.info("Sync completed successfully", context: .with { ctx in
@@ -529,6 +531,12 @@ actor SyncEngine {
     /// Get the current pending mutation count
     func getPendingCount() async -> Int {
         let context = ModelContext(modelContainer)
+        return getPendingCountFromContext(context)
+    }
+
+    /// Get the current pending mutation count using an existing context.
+    /// This avoids creating multiple ModelContexts which can cause SQLite file locking issues.
+    private func getPendingCountFromContext(_ context: ModelContext) -> Int {
         let descriptor = FetchDescriptor<PendingMutation>()
         return (try? context.fetchCount(descriptor)) ?? 0
     }
@@ -694,7 +702,8 @@ actor SyncEngine {
                 if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                     tripCircuitBreaker()
                     let remaining = circuitBreakerBackoffRemaining
-                    let pendingNow = await getPendingCount()
+                    // Use existing context to get pending count - avoids creating concurrent ModelContext
+                    let pendingNow = getPendingCountFromContext(context)
                     Log.sync.warning("Circuit breaker tripped during batch flush", context: .with { ctx in
                         ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
                         ctx.add("backoff_seconds", Int(remaining))
@@ -768,7 +777,8 @@ actor SyncEngine {
             if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                 tripCircuitBreaker()
                 let remaining = circuitBreakerBackoffRemaining
-                let pendingNow = await getPendingCount()
+                // Use existing context to get pending count - avoids creating concurrent ModelContext
+                let pendingNow = getPendingCountFromContext(context)
                 Log.sync.warning("Circuit breaker tripped during flush - aborting remaining mutations", context: .with { ctx in
                     ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
                     ctx.add("backoff_seconds", Int(remaining))
