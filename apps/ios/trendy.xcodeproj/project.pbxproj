@@ -8,11 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		471955AC2EC0349400C72F91 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 471955AB2EC0349400C72F91 /* Supabase */; };
-		DE10012A2F3E2B0000A01001 /* ConfettiSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DE1001292F3E2B0000A01001 /* ConfettiSwiftUI */; };
 		47CA3F3C2EC418A3004C79DB /* Config/Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3B2EC418A3004C79DB /* Config/Debug.xcconfig */; };
 		47CA3F3E2EC418BB004C79DB /* Config/Staging.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3D2EC418BB004C79DB /* Config/Staging.xcconfig */; };
 		47CA3F402EC418C5004C79DB /* Config/TestFlight.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F3F2EC418C5004C79DB /* Config/TestFlight.xcconfig */; };
 		47CA3F422EC418CF004C79DB /* Config/Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 47CA3F412EC418CF004C79DB /* Config/Release.xcconfig */; };
+		DE10012A2F3E2B0000A01001 /* ConfettiSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DE1001292F3E2B0000A01001 /* ConfettiSwiftUI */; };
 		DE23C4D62EDD063000709B97 /* FoundationModels.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE23C4D52EDD063000709B97 /* FoundationModels.framework */; };
 		DE6E7D142ED7CEA8006CA4DD /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE6E7D132ED7CEA8006CA4DD /* WidgetKit.framework */; };
 		DE6E7D162ED7CEA8006CA4DD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE6E7D152ED7CEA8006CA4DD /* SwiftUI.framework */; };
@@ -1387,14 +1387,14 @@
 			package = 4719560A2EF5B10000C72F91 /* XCRemoteSwiftPackageReference "posthog-ios" */;
 			productName = PostHog;
 		};
-		DEEE16532F136BF100610F03 /* FullDisclosureSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = FullDisclosureSDK;
-		};
 		DE1001292F3E2B0000A01001 /* ConfettiSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DE1001282F3E2B0000A01001 /* XCRemoteSwiftPackageReference "ConfettiSwiftUI" */;
 			productName = ConfettiSwiftUI;
+		};
+		DEEE16532F136BF100610F03 /* FullDisclosureSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FullDisclosureSDK;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
