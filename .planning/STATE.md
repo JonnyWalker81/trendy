@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** v1.1 Onboarding Overhaul — Phase 10 in progress
+**Current focus:** v1.1 Onboarding Overhaul — Phase 10 complete, ready for Phase 11
 
 ## Current Position
 
-Phase: 10 of 4 (Visual Design & Flow)
-Plan: 4 of 5 complete
-Status: In progress
-Last activity: 2026-01-20 — Completed 10-04-PLAN.md (Flow Integration)
+Phase: 10 of 4 (Visual Design & Flow) - COMPLETE
+Plan: 5 of 5 complete
+Status: Phase complete
+Last activity: 2026-01-20 — Completed 10-05-PLAN.md (Confetti Celebration)
 
-Progress: [████████] 4/5 plans in current phase
+Progress: [██████████] 5/5 plans in current phase
 
 ## Milestone History
 
@@ -28,7 +28,7 @@ Progress: [████████] 4/5 plans in current phase
 |-------|------|--------------|--------|
 | 8 | Backend Onboarding Status | 2 | Complete |
 | 9 | iOS State Architecture | 7 | Complete |
-| 10 | Visual Design & Flow | 10 | In Progress (4/5 plans) |
+| 10 | Visual Design & Flow | 10 | Complete |
 | 11 | Accessibility | 2 | Pending |
 
 **Total requirements:** 21
@@ -79,6 +79,11 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Progress interpolation within permissions step for smooth bar advancement
 - Pulsing icon animation (scale 1.0-1.05) replaces spinner in loading views
 - ROADMAP.md FLOW-01 corrected to reflect actual 6-step flow
+- Confetti: 50 particles, 300 radius, haptic feedback for celebration
+- Progress bar background: Color.secondary.opacity(0.3) for contrast on dark gradients
+- Sign out link in auth screen styled as subtle blue text
+- Reset onboarding debug option clears local cache, server status, and signs out
+- Post-sign-in routing checks server status and continues onboarding if incomplete
 
 ### Pending Todos
 
@@ -90,21 +95,24 @@ None
 
 ## Next Action
 
-**Phase 10 Plan 04 Complete - Ready for Plan 05**
+**Phase 10 Complete - Ready for Phase 11 (Accessibility)**
 
-Flow Integration delivered:
-- OnboardingStep.progress computed property (0.0-1.0)
-- Spring animations on OnboardingContainerView step transitions
-- PermissionsView rewritten with full-screen priming screens
-- All screens using OnboardingProgressBar consistently
-- LaunchLoadingView with polished pulsing icon aesthetic
-- ROADMAP.md FLOW-01 corrected to match actual implementation
+Phase 10 delivered complete visual redesign of onboarding:
+- Hero layouts on welcome, auth, and permission screens
+- Progress bar with smooth advancement across all steps
+- Spring-animated transitions between steps
+- Full-screen permission priming screens with benefit bullets
+- Confetti celebration with haptic feedback on finish screen
+- Auth screen polish and sign out options
+- Debug reset functionality for testing
 
-Next: Execute 10-05-PLAN.md (OnboardingFinishView confetti celebration)
+All 10 requirements addressed (DESIGN-01 through DESIGN-06, FLOW-01 through FLOW-04).
+
+Next: Plan Phase 11 (Accessibility - 2 requirements)
 
 ## Session Continuity
 
-Last session: 2026-01-20T22:13:00Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-01-20T23:05:00Z
+Stopped at: Completed 10-05-PLAN.md (Phase 10 complete)
 Resume file: None
-Next: Execute 10-05-PLAN.md
+Next: Plan Phase 11 Accessibility
