@@ -239,7 +239,12 @@ struct AddGeofenceView: View {
                 if success {
                     // Start monitoring
                     geofenceManager?.startMonitoring(geofence: geofence)
-                    print("✅ Created geofence: \(geofence.name)")
+                    Log.geofence.info("Created geofence", context: .with { ctx in
+                        ctx.add("name", geofence.name)
+                        ctx.add("latitude", geofence.latitude)
+                        ctx.add("longitude", geofence.longitude)
+                        ctx.add("radius", geofence.radius)
+                    })
                     await MainActor.run {
                         dismiss()
                     }
@@ -255,7 +260,11 @@ struct AddGeofenceView: View {
                 do {
                     try modelContext.save()
                     geofenceManager?.startMonitoring(geofence: geofence)
-                    print("✅ Created geofence: \(geofence.name)")
+                    Log.geofence.info("Created geofence (local)", context: .with { ctx in
+                        ctx.add("name", geofence.name)
+                        ctx.add("latitude", geofence.latitude)
+                        ctx.add("longitude", geofence.longitude)
+                    })
                     await MainActor.run {
                         dismiss()
                     }
@@ -279,7 +288,7 @@ struct AddGeofenceView: View {
                 do {
                     try await manager.requestAuthorization()
                 } catch {
-                    print("Failed to request notification permission: \(error)")
+                    Log.geofence.warning("Failed to request notification permission", error: error)
                 }
             }
         case .denied:
@@ -631,7 +640,12 @@ struct AddGeofenceViewWithMapReader: View {
                 let success = await eventStore.createGeofence(geofence)
                 if success {
                     geofenceManager?.startMonitoring(geofence: geofence)
-                    print("✅ Created geofence: \(geofence.name)")
+                    Log.geofence.info("Created geofence via MapReader", context: .with { ctx in
+                        ctx.add("name", geofence.name)
+                        ctx.add("latitude", geofence.latitude)
+                        ctx.add("longitude", geofence.longitude)
+                        ctx.add("radius", geofence.radius)
+                    })
                     await MainActor.run {
                         dismiss()
                     }
@@ -647,7 +661,11 @@ struct AddGeofenceViewWithMapReader: View {
                 do {
                     try modelContext.save()
                     geofenceManager?.startMonitoring(geofence: geofence)
-                    print("✅ Created geofence: \(geofence.name)")
+                    Log.geofence.info("Created geofence (local) via MapReader", context: .with { ctx in
+                        ctx.add("name", geofence.name)
+                        ctx.add("latitude", geofence.latitude)
+                        ctx.add("longitude", geofence.longitude)
+                    })
                     await MainActor.run {
                         dismiss()
                     }
@@ -670,7 +688,7 @@ struct AddGeofenceViewWithMapReader: View {
                 do {
                     try await manager.requestAuthorization()
                 } catch {
-                    print("Failed to request notification permission: \(error)")
+                    Log.geofence.warning("Failed to request notification permission via MapReader", error: error)
                 }
             }
         case .denied:

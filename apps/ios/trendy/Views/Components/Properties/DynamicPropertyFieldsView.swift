@@ -53,7 +53,10 @@ struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
                                     }
 
                                     #if DEBUG
-                                    print("🔄 Schema property '\(definition.key)' updated - total: \(storage.properties.count), keys: \(storage.properties.keys.joined(separator: ", "))")
+                                    Log.ui.debug("Schema property updated", context: .with { ctx in
+                                        ctx.add("property_key", definition.key)
+                                        ctx.add("total_properties", storage.properties.count)
+                                    })
                                     #endif
                                 }
                             )
@@ -82,7 +85,10 @@ struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
                                     storage.properties.removeValue(forKey: key)
                                     refreshTrigger = UUID()
                                     #if DEBUG
-                                    print("➖ Removed property '\(key)' - remaining: \(storage.properties.count)")
+                                    Log.ui.debug("Removed custom property", context: .with { ctx in
+                                        ctx.add("property_key", key)
+                                        ctx.add("remaining_properties", storage.properties.count)
+                                    })
                                     #endif
                                 }
                             )
@@ -93,7 +99,9 @@ struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
 
             // Add custom property button
             Button(action: {
-                print("🟡 OPENING ADD SHEET - storage object: \(ObjectIdentifier(storage)), properties count: \(storage.properties.count), keys: \(storage.properties.keys.joined(separator: ", "))")
+                Log.ui.debug("Opening add property sheet", context: .with { ctx in
+                    ctx.add("properties_count", storage.properties.count)
+                })
                 showingAddCustomProperty = true
             }) {
                 Label("Add Custom Property", systemImage: "plus.circle.fill")
@@ -105,9 +113,15 @@ struct DynamicPropertyFieldsView<Storage: PropertyStorage>: View {
                 AddCustomPropertySheet(
                     eventTypeId: eventTypeId,
                     onAdd: { key, value in
-                        print("🟢 onAdd callback - storage.properties count: \(storageRef.properties.count), adding key: \(key)")
+                        Log.ui.debug("Adding custom property", context: .with { ctx in
+                            ctx.add("property_key", key)
+                            ctx.add("before_count", storageRef.properties.count)
+                        })
                         storageRef.properties[key] = value
-                        print("🟢 After add - storage.properties count: \(storageRef.properties.count), keys: \(storageRef.properties.keys.joined(separator: ", "))")
+                        Log.ui.debug("Custom property added", context: .with { ctx in
+                            ctx.add("property_key", key)
+                            ctx.add("after_count", storageRef.properties.count)
+                        })
                         // Trigger view refresh
                         refreshTrigger = UUID()
                     },
@@ -314,7 +328,9 @@ struct AddCustomPropertySheet: View {
             value = PropertyValue(type: propertyType, value: defaultValue)
         }
 
-        print("🔵 AddCustomPropertySheet.addProperty() - key: \(propertyKey)")
+        Log.ui.debug("AddCustomPropertySheet adding property", context: .with { ctx in
+            ctx.add("property_key", propertyKey)
+        })
 
         // Call the callback which runs in the parent's context with fresh binding
         onAdd(propertyKey, value)
