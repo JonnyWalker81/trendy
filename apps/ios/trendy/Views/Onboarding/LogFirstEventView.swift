@@ -11,6 +11,12 @@ struct LogFirstEventView: View {
     @Bindable var viewModel: OnboardingViewModel
     @Environment(EventStore.self) private var eventStore
 
+    /// Focus binding for VoiceOver focus management
+    @AccessibilityFocusState.Binding var focusedField: OnboardingNavigationView.OnboardingFocusField?
+
+    /// Respects user's Reduce Motion accessibility preference
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var notes = ""
     @State private var showSuccess = false
 
@@ -53,6 +59,8 @@ struct LogFirstEventView: View {
                         .foregroundStyle(Color.dsMutedForeground)
                 }
                 .padding(.bottom, 40)
+                .accessibilityLabel("Skip logging first event")
+                .accessibilityHint("Continues without logging")
             }
         }
         .background(Color.dsBackground)
@@ -69,6 +77,8 @@ struct LogFirstEventView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(Color.dsForeground)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($focusedField, equals: .logEvent)
 
                 if let eventType = eventType {
                     Text("Let's track your first \(eventType.name)")
@@ -87,6 +97,7 @@ struct LogFirstEventView: View {
                         .background(eventType.color)
                         .clipShape(Circle())
                         .shadow(color: eventType.color.opacity(0.5), radius: 10)
+                        .accessibilityHidden(true)
 
                     Text(eventType.name)
                         .font(.title2)
@@ -98,6 +109,7 @@ struct LogFirstEventView: View {
                         .foregroundStyle(Color.dsPrimary)
                 }
                 .padding(.vertical, 20)
+                .accessibilityElement(children: .combine)
             }
 
             // Optional Notes
@@ -115,6 +127,7 @@ struct LogFirstEventView: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color.dsBorder, lineWidth: 1)
                     )
+                    .accessibilityLabel("Optional note for this event")
             }
             .padding(.horizontal, 32)
 
@@ -145,6 +158,8 @@ struct LogFirstEventView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 32)
             .disabled(viewModel.isLoading)
+            .accessibilityLabel("Log event now")
+            .accessibilityHint("Records your first event")
         }
     }
 
@@ -155,8 +170,9 @@ struct LogFirstEventView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 80))
                 .foregroundStyle(Color.dsSuccess)
-                .scaleEffect(showSuccess ? 1.0 : 0.5)
-                .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showSuccess)
+                .scaleEffect(reduceMotion ? 1.0 : (showSuccess ? 1.0 : 0.5))
+                .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6), value: showSuccess)
+                .accessibilityLabel("Success! First event logged.")
 
             Text("First event logged!")
                 .font(.title)
@@ -192,6 +208,7 @@ struct LogFirstEventView: View {
 }
 
 #Preview {
+    @Previewable @AccessibilityFocusState var focusedField: OnboardingNavigationView.OnboardingFocusField?
     @Previewable @State var previewSupabaseConfig = SupabaseConfiguration(
         url: "http://127.0.0.1:54321",
         anonKey: "preview_key"
@@ -203,7 +220,7 @@ struct LogFirstEventView: View {
     let viewModel = OnboardingViewModel(supabaseService: previewSupabase)
     let eventStore = EventStore(apiClient: previewAPIClient)
 
-    LogFirstEventView(viewModel: viewModel)
+    LogFirstEventView(viewModel: viewModel, focusedField: $focusedField)
         .environment(eventStore)
         .preferredColorScheme(.dark)
 }

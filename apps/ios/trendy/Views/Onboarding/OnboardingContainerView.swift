@@ -107,12 +107,12 @@ struct OnboardingNavigationView: View {
                     .id(OnboardingStep.auth)
 
             case .createEventType:
-                CreateEventTypeView(viewModel: viewModel)
+                CreateEventTypeView(viewModel: viewModel, focusedField: $focusedField)
                     .environment(eventStore)
                     .id(OnboardingStep.createEventType)
 
             case .logFirstEvent:
-                LogFirstEventView(viewModel: viewModel)
+                LogFirstEventView(viewModel: viewModel, focusedField: $focusedField)
                     .environment(eventStore)
                     .id(OnboardingStep.logFirstEvent)
 
