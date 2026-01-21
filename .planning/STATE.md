@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Effortless tracking. Users should be able to set up tracking once and forget about it.
-**Current focus:** v1.1 Onboarding Overhaul — Phase 11 Plan 01 complete
+**Current focus:** v1.1 Onboarding Overhaul — Phase 11 Complete
 
 ## Current Position
 
 Phase: 11 of 4 (Accessibility)
-Plan: 1 of 2 complete
-Status: In progress
-Last activity: 2026-01-20 — Completed 11-01-PLAN.md (Foundation Accessibility)
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-01-21 — Completed 11-02-PLAN.md (View Accessibility)
 
-Progress: [█████░░░░░] 1/2 plans in current phase
+Progress: [██████████] 2/2 plans in current phase
 
 ## Milestone History
 
@@ -29,7 +29,7 @@ Progress: [█████░░░░░] 1/2 plans in current phase
 | 8 | Backend Onboarding Status | 2 | Complete |
 | 9 | iOS State Architecture | 7 | Complete |
 | 10 | Visual Design & Flow | 10 | Complete |
-| 11 | Accessibility | 2 | In Progress |
+| 11 | Accessibility | 2 | Complete |
 
 **Total requirements:** 21
 
@@ -92,6 +92,10 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Reduce Motion: disable pulse animations entirely rather than slowing them
 - Focus management via enum-based @AccessibilityFocusState
 - Loading view icon marked as accessibilityHidden
+- Skip delay extended from 1.5s to 3.0s when VoiceOver is running
+- Color/icon pickers use isSelected trait for selection state
+- Confetti num=0 and hapticFeedback=false when reduceMotion enabled
+- All animations instant-appear when reduceMotion enabled
 
 ### Pending Todos
 
@@ -103,23 +107,23 @@ None
 
 ## Next Action
 
-**Phase 11 Plan 01 Complete - Continue with Plan 02**
+**Phase 11 Complete - v1.1 Milestone Ready**
 
-Plan 01 delivered foundation accessibility infrastructure:
-- VoiceOver step announcements on progress bar (stepName, step N of M)
-- Reduce Motion compliance for all animations (hero pulse, transitions, loading)
-- Focus management infrastructure ready for individual views
-- All hero views and loading icons hidden from VoiceOver
+Phase 11 delivered complete onboarding accessibility:
+- Plan 01: Foundation infrastructure (progress bar, hero views, focus enum, reduceMotion)
+- Plan 02: View accessibility (button labels/hints, focus bindings, confetti handling)
 
-Next: Plan 02 will add accessibility to individual onboarding views:
-- Contextual button labels with hints
-- Focus binding on view titles
-- Confetti Reduce Motion handling
-- Feature highlight grouping for VoiceOver
+v1.1 Onboarding Overhaul milestone is complete:
+- Phase 8: Backend onboarding status API
+- Phase 9: iOS state architecture
+- Phase 10: Visual design and flow
+- Phase 11: Accessibility
+
+Ready to archive v1.1 milestone.
 
 ## Session Continuity
 
-Last session: 2026-01-20T23:22:00Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-01-21T01:44:00Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
-Next: Execute 11-02-PLAN.md
+Next: Archive v1.1 milestone
