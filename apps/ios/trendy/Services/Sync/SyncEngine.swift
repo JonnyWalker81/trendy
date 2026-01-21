@@ -255,13 +255,15 @@ actor SyncEngine {
                 // After bootstrap, get the latest cursor (max change_log ID) from the backend.
                 // This ensures we skip ALL existing change_log entries, only pulling truly new changes.
                 do {
+                    let previousCursor = lastSyncCursor
                     let latestCursor = try await apiClient.getLatestCursor()
                     lastSyncCursor = latestCursor
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
                     UserDefaults.standard.synchronize() // Force immediate persistence
-                    Log.sync.info("🔧 Cursor saved after bootstrap", context: .with { ctx in
+                    Log.sync.info("Cursor saved after bootstrap", context: .with { ctx in
+                        ctx.add("before", Int(previousCursor))
+                        ctx.add("after", Int(latestCursor))
                         ctx.add("cursor_key", cursorKey)
-                        ctx.add("saved_cursor", Int(latestCursor))
                         ctx.add("was_forced", wasForceBootstrap)
                         // Verify it was saved
                         let verifyValue = UserDefaults.standard.integer(forKey: cursorKey)
@@ -373,11 +375,15 @@ actor SyncEngine {
         }
 
         // Reset cursor and set flag to force bootstrap
+        let previousCursor = lastSyncCursor
         lastSyncCursor = 0
         UserDefaults.standard.set(0, forKey: cursorKey)
         forceBootstrapOnNextSync = true
 
-        Log.sync.info("Cursor reset to 0, starting forced bootstrap sync")
+        Log.sync.info("Cursor reset for forced resync", context: .with { ctx in
+            ctx.add("before", Int(previousCursor))
+            ctx.add("after", 0)
+        })
         await performSync()
     }
 
@@ -400,6 +406,7 @@ actor SyncEngine {
         let pendingCount = pendingMutations.count
 
         // Get the latest cursor from the backend
+        let previousCursor = lastSyncCursor
         let latestCursor = try await apiClient.getLatestCursor()
 
         // Update local cursor
@@ -408,7 +415,8 @@ actor SyncEngine {
         UserDefaults.standard.synchronize()
 
         Log.sync.info("Skipped to latest cursor", context: .with { ctx in
-            ctx.add("new_cursor", Int(latestCursor))
+            ctx.add("before", Int(previousCursor))
+            ctx.add("after", Int(latestCursor))
             ctx.add("pending_mutations", pendingCount)
         })
 
@@ -1269,8 +1277,13 @@ actor SyncEngine {
             // Only update cursor if it advances forward
             // This prevents cursor reset to 0 causing duplicate bootstrap syncs
             if response.nextCursor > lastSyncCursor {
+                let previousCursor = lastSyncCursor
                 lastSyncCursor = response.nextCursor
                 UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
+                Log.sync.debug("Cursor advanced", context: .with { ctx in
+                    ctx.add("before", Int(previousCursor))
+                    ctx.add("after", Int(lastSyncCursor))
+                })
             }
             hasMore = response.hasMore
 
