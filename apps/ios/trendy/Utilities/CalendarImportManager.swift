@@ -19,22 +19,24 @@ class CalendarImportManager {
     var errorMessage: String?
     
     func requestCalendarAccess() async -> Bool {
-        print("DEBUG: Requesting calendar access...")
-        
+        Log.calendar.debug("Requesting calendar access")
+
         // Check current status first
         let currentStatus = EKEventStore.authorizationStatus(for: .event)
-        print("DEBUG: Current authorization status: \(currentStatus.rawValue)")
-        
+        Log.calendar.debug("Current authorization status", context: .with { ctx in
+            ctx.add("status_raw", currentStatus.rawValue)
+        })
+
         // If already denied, we can't request again
         if currentStatus == .denied || currentStatus == .restricted {
-            print("DEBUG: Calendar access previously denied or restricted")
+            Log.calendar.warning("Calendar access previously denied or restricted")
             errorMessage = "Calendar access denied. Please enable in Settings > Privacy > Calendars"
             return false
         }
-        
+
         do {
             if #available(iOS 17.0, *) {
-                print("DEBUG: Using iOS 17+ permission API")
+                Log.calendar.debug("Using iOS 17+ permission API")
                 // For iOS 17+, we need to check if we can actually request
                 if currentStatus == .notDetermined {
                     hasCalendarAccess = try await eventStore.requestFullAccessToEvents()
@@ -44,10 +46,15 @@ class CalendarImportManager {
                     hasCalendarAccess = false
                 }
             } else {
-                print("DEBUG: Using legacy permission API")
+                Log.calendar.debug("Using legacy permission API")
                 hasCalendarAccess = try await withCheckedThrowingContinuation { continuation in
                     eventStore.requestAccess(to: .event) { granted, error in
-                        print("DEBUG: Permission callback - granted: \(granted), error: \(String(describing: error))")
+                        Log.calendar.debug("Permission callback", context: .with { ctx in
+                            ctx.add("granted", granted)
+                            if let error = error {
+                                ctx.add(error: error)
+                            }
+                        })
                         if let error = error {
                             continuation.resume(throwing: error)
                         } else {
@@ -56,16 +63,18 @@ class CalendarImportManager {
                     }
                 }
             }
-            
-            print("DEBUG: Calendar access granted: \(hasCalendarAccess)")
-            
+
+            Log.calendar.info("Calendar access result", context: .with { ctx in
+                ctx.add("granted", hasCalendarAccess)
+            })
+
             if hasCalendarAccess {
                 loadAvailableCalendars()
             }
-            
+
             return hasCalendarAccess
         } catch {
-            print("DEBUG: Error requesting calendar access: \(error)")
+            Log.calendar.error("Error requesting calendar access", error: error)
             errorMessage = "Failed to request calendar access: \(error.localizedDescription). Make sure calendar permissions are configured in the app's Info.plist."
             return false
         }
@@ -84,13 +93,19 @@ class CalendarImportManager {
     
     private func loadAvailableCalendars() {
         let allCalendars = eventStore.calendars(for: .event)
-        print("DEBUG: Found \(allCalendars.count) total calendars")
-        
+        Log.calendar.info("Found calendars", context: .with { ctx in
+            ctx.add("total_count", allCalendars.count)
+        })
+
         availableCalendars = allCalendars
             .sorted { $0.title < $1.title }
-        
+
         for calendar in availableCalendars {
-            print("DEBUG: Calendar: \(calendar.title), Type: \(calendar.type.rawValue), Immutable: \(calendar.isImmutable)")
+            Log.calendar.debug("Calendar detail", context: .with { ctx in
+                ctx.add("title", calendar.title)
+                ctx.add("type_raw", calendar.type.rawValue)
+                ctx.add("is_immutable", calendar.isImmutable)
+            })
         }
     }
     

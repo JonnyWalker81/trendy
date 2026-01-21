@@ -33,7 +33,7 @@ class CalendarManager: ObservableObject {
             }
             return granted
         } catch {
-            print("Error requesting calendar access: \(error)")
+            Log.calendar.error("Error requesting calendar access", error: error)
             return false
         }
     }

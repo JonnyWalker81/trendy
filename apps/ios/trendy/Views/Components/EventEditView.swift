@@ -33,17 +33,24 @@ class EventEditFormState: ObservableObject, PropertyStorage {
         get {
             let count = propertiesBox.dict.count
             let keys = propertiesBox.dict.keys.joined(separator: ", ")
-            print("📖 GET properties - count: \(count), keys: \(keys), box: \(ObjectIdentifier(propertiesBox))")
+            Log.ui.debug("GET properties", context: .with { ctx in
+                ctx.add("count", count)
+                ctx.add("keys", keys)
+            })
             return propertiesBox.dict
         }
         set {
             let oldCount = propertiesBox.dict.count
             let newCount = newValue.count
-            print("📝 SET properties - old: \(oldCount), new: \(newCount), keys: \(newValue.keys.joined(separator: ", ")), box: \(ObjectIdentifier(propertiesBox))")
-            // Print stack trace to find who's setting it
+            Log.ui.debug("SET properties", context: .with { ctx in
+                ctx.add("old_count", oldCount)
+                ctx.add("new_count", newCount)
+                ctx.add("keys", newValue.keys.joined(separator: ", "))
+            })
+            // Log stack trace to find who's setting it
             if newCount < oldCount {
-                print("⚠️ PROPERTIES DECREASED! Stack trace:")
-                Thread.callStackSymbols.prefix(10).forEach { print("   \($0)") }
+                Log.ui.warning("PROPERTIES DECREASED! Stack trace:")
+                Thread.callStackSymbols.prefix(10).forEach { Log.ui.debug("   \($0)") }
             }
             propertiesBox.dict = newValue
             objectWillChange.send()  // Manually notify observers
@@ -60,13 +67,17 @@ class EventEditFormState: ObservableObject, PropertyStorage {
         self.isAllDay = false
         self.notes = ""
         self.showEndDate = false
-        print("🆔 EventEditFormState.init - instance: \(instanceId.uuidString.prefix(8)), object: \(ObjectIdentifier(self))")
+        Log.ui.debug("EventEditFormState.init", context: .with { ctx in
+            ctx.add("instance_id", String(instanceId.uuidString.prefix(8)))
+        })
     }
 
     func initialize(from event: Event?) {
         // Only initialize once to prevent re-initialization on view recreation
         guard !isInitialized else {
-            print("🏗️ EventEditFormState.initialize - Already initialized (instance: \(instanceId.uuidString.prefix(8))), skipping")
+            Log.ui.debug("EventEditFormState.initialize - Already initialized, skipping", context: .with { ctx in
+                ctx.add("instance_id", String(instanceId.uuidString.prefix(8)))
+            })
             return
         }
         isInitialized = true
@@ -78,9 +89,14 @@ class EventEditFormState: ObservableObject, PropertyStorage {
             self.notes = event.notes ?? ""
             self.showEndDate = event.endDate != nil
             self.properties = event.properties  // Use setter for logging
-            print("🏗️ EventEditFormState.initialize - Loaded \(properties.count) properties (instance: \(instanceId.uuidString.prefix(8)))")
+            Log.ui.debug("EventEditFormState.initialize - Loaded from event", context: .with { ctx in
+                ctx.add("instance_id", String(instanceId.uuidString.prefix(8)))
+                ctx.add("properties_count", properties.count)
+            })
         } else {
-            print("🏗️ EventEditFormState.initialize - New event (instance: \(instanceId.uuidString.prefix(8)))")
+            Log.ui.debug("EventEditFormState.initialize - New event", context: .with { ctx in
+                ctx.add("instance_id", String(instanceId.uuidString.prefix(8)))
+            })
         }
     }
 }
@@ -113,7 +129,10 @@ struct EventEditView: View {
     init(eventType: EventType, existingEvent: Event? = nil) {
         self.eventType = eventType
         self.existingEvent = existingEvent
-        print("🏗️ EventEditView.init called")
+        Log.ui.debug("EventEditView.init called", context: .with { ctx in
+            ctx.add("event_type", eventType.name)
+            ctx.add("is_editing", existingEvent != nil)
+        })
     }
     
     var body: some View {
@@ -210,10 +229,17 @@ struct EventEditView: View {
         .onAppear {
             // Initialize form state from existing event (only happens once due to isInitialized flag)
             formState.initialize(from: existingEvent)
-            print("📋 EventEditView.onAppear - formState object: \(ObjectIdentifier(formState)), properties count: \(formState.properties.count), keys: \(formState.properties.keys.joined(separator: ", "))")
+            Log.ui.debug("EventEditView.onAppear", context: .with { ctx in
+                ctx.add("properties_count", formState.properties.count)
+                ctx.add("properties_keys", formState.properties.keys.joined(separator: ", "))
+            })
         }
         .onChange(of: formState.properties) { oldValue, newValue in
-            print("🔄 EventEditView.properties changed: \(oldValue.count) -> \(newValue.count), keys: \(newValue.keys.joined(separator: ", "))")
+            Log.ui.debug("EventEditView.properties changed", context: .with { ctx in
+                ctx.add("old_count", oldValue.count)
+                ctx.add("new_count", newValue.count)
+                ctx.add("new_keys", newValue.keys.joined(separator: ", "))
+            })
         }
     }
     
