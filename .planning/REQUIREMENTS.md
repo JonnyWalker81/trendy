@@ -12,8 +12,8 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 - [x] **TEST-01**: Define NetworkClientProtocol with all SyncEngine-required methods
 - [x] **TEST-02**: Define DataStoreProtocol with all persistence operations
 - [x] **TEST-03**: Define DataStoreFactory protocol for ModelContext creation
-- [ ] **TEST-04**: APIClient conforms to NetworkClientProtocol
-- [ ] **TEST-05**: LocalStore conforms to DataStoreProtocol
+- [x] **TEST-04**: APIClient conforms to NetworkClientProtocol
+- [x] **TEST-05**: LocalStore conforms to DataStoreProtocol
 - [ ] **TEST-06**: SyncEngine accepts protocol-based dependencies via init
 - [ ] **TEST-07**: MockNetworkClient with spy pattern (tracks calls, configurable responses)
 - [ ] **TEST-08**: MockDataStore with spy pattern (in-memory state)
@@ -115,8 +115,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 13 | Complete |
 | TEST-02 | Phase 13 | Complete |
 | TEST-03 | Phase 13 | Complete |
-| TEST-04 | Phase 14 | Pending |
-| TEST-05 | Phase 14 | Pending |
+| TEST-04 | Phase 14 | Complete |
+| TEST-05 | Phase 14 | Complete |
 | TEST-06 | Phase 15 | Pending |
 | TEST-07 | Phase 16 | Pending |
 | TEST-08 | Phase 16 | Pending |
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 13 complete)*
+*Last updated: 2026-01-21 (Phase 14 complete)*
