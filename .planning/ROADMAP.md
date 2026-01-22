@@ -109,10 +109,10 @@ Plans:
 4. LocalStoreFactory implementation creates DataStore instances correctly
 5. Protocol conformance complete with no TODO comments
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 14-01: TBD
+- [ ] 14-01-PLAN.md — Add NetworkClientProtocol conformance to APIClient
 
 ---
 
@@ -360,7 +360,7 @@ All 44 v1.2 requirements mapped:
 |-------|-----------|----------------|--------|-----------|
 | 12. Foundation & Cleanup | v1.2 | 5/5 | Complete | 2026-01-21 |
 | 13. Protocol Definitions | v1.2 | 2/2 | Complete | 2026-01-21 |
-| 14. Implementation Conformance | v1.2 | 0/? | Not started | - |
+| 14. Implementation Conformance | v1.2 | 0/1 | Planned | - |
 | 15. SyncEngine DI Refactor | v1.2 | 0/? | Not started | - |
 | 16. Test Infrastructure | v1.2 | 0/? | Not started | - |
 | 17. Unit Tests - Circuit Breaker | v1.2 | 0/? | Not started | - |
@@ -372,4 +372,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 13 complete)*
+*Last updated: 2026-01-21 (Phase 14 planned)*
