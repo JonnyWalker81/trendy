@@ -33,7 +33,7 @@ enum LocalStoreError: LocalizedError {
 /// Utilities for local SwiftData operations with sync support.
 /// Provides idempotent upsert operations that prevent duplicates.
 /// Uses UUIDv7 as the canonical ID - same ID is used locally and on server.
-struct LocalStore {
+struct LocalStore: DataStoreProtocol {
     let modelContext: ModelContext
 
     // MARK: - Upsert Operations
