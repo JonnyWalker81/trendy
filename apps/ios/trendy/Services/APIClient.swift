@@ -590,6 +590,21 @@ class APIClient {
     }
 }
 
+// MARK: - Protocol Conformance
+
+/// NetworkClientProtocol conformance for dependency injection.
+/// APIClient's methods already match the protocol requirements exactly.
+///
+/// @unchecked Sendable rationale:
+/// - baseURL: String is Sendable (immutable)
+/// - session: URLSession is Sendable (thread-safe since iOS 15)
+/// - supabaseService: SupabaseService reference, only used for token retrieval
+/// - encoder/decoder: JSONEncoder/JSONDecoder are NOT Sendable, but they are:
+///   - Only accessed within async methods (serialized access)
+///   - Never escape the class instance
+///   - Not shared between concurrent operations
+extension APIClient: NetworkClientProtocol, @unchecked Sendable {}
+
 // MARK: - Error Types
 
 enum APIError: LocalizedError {
