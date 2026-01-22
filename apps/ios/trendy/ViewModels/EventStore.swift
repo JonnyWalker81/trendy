@@ -336,9 +336,10 @@ class EventStore {
 
         // Initialize SyncEngine if we have an API client
         if let apiClient = apiClient {
+            let dataStoreFactory = DefaultDataStoreFactory(modelContainer: context.container)
             self.syncEngine = SyncEngine(
-                apiClient: apiClient,
-                modelContainer: context.container,
+                networkClient: apiClient,
+                dataStoreFactory: dataStoreFactory,
                 syncHistoryStore: syncHistoryStore
             )
         }
