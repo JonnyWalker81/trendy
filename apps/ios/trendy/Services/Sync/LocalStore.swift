@@ -210,6 +210,66 @@ struct LocalStore: DataStoreProtocol {
         return try modelContext.fetch(descriptor).first
     }
 
+    // MARK: - Fetch All Operations
+
+    /// Fetch all Events
+    func fetchAllEvents() throws -> [Event] {
+        let descriptor = FetchDescriptor<Event>()
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Fetch all EventTypes
+    func fetchAllEventTypes() throws -> [EventType] {
+        let descriptor = FetchDescriptor<EventType>()
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Fetch all Geofences
+    func fetchAllGeofences() throws -> [Geofence] {
+        let descriptor = FetchDescriptor<Geofence>()
+        return try modelContext.fetch(descriptor)
+    }
+
+    /// Fetch all PropertyDefinitions
+    func fetchAllPropertyDefinitions() throws -> [PropertyDefinition] {
+        let descriptor = FetchDescriptor<PropertyDefinition>()
+        return try modelContext.fetch(descriptor)
+    }
+
+    // MARK: - Bulk Delete Operations
+
+    /// Delete all Events
+    func deleteAllEvents() throws {
+        let events = try fetchAllEvents()
+        for event in events {
+            modelContext.delete(event)
+        }
+    }
+
+    /// Delete all EventTypes
+    func deleteAllEventTypes() throws {
+        let eventTypes = try fetchAllEventTypes()
+        for eventType in eventTypes {
+            modelContext.delete(eventType)
+        }
+    }
+
+    /// Delete all Geofences
+    func deleteAllGeofences() throws {
+        let geofences = try fetchAllGeofences()
+        for geofence in geofences {
+            modelContext.delete(geofence)
+        }
+    }
+
+    /// Delete all PropertyDefinitions
+    func deleteAllPropertyDefinitions() throws {
+        let propertyDefinitions = try fetchAllPropertyDefinitions()
+        for propDef in propertyDefinitions {
+            modelContext.delete(propDef)
+        }
+    }
+
     // MARK: - Pending Operations
 
     /// Fetch all pending Events (not yet synced)
@@ -245,6 +305,30 @@ struct LocalStore: DataStoreProtocol {
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
         return try modelContext.fetch(descriptor)
+    }
+
+    /// Check if a pending mutation exists for given entity with same operation
+    func hasPendingMutation(entityId: String, entityType: MutationEntityType, operation: MutationOperation) throws -> Bool {
+        let entityTypeRaw = entityType.rawValue
+        let operationRaw = operation.rawValue
+        let descriptor = FetchDescriptor<PendingMutation>(
+            predicate: #Predicate {
+                $0.entityId == entityId &&
+                $0.entityTypeRaw == entityTypeRaw &&
+                $0.operationRaw == operationRaw
+            }
+        )
+        return try modelContext.fetchCount(descriptor) > 0
+    }
+
+    /// Insert a new PendingMutation
+    func insertPendingMutation(_ mutation: PendingMutation) throws {
+        modelContext.insert(mutation)
+    }
+
+    /// Delete a PendingMutation
+    func deletePendingMutation(_ mutation: PendingMutation) throws {
+        modelContext.delete(mutation)
     }
 
     // MARK: - Sync Status Updates

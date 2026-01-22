@@ -60,10 +60,47 @@ protocol DataStoreProtocol {
     /// Find a PropertyDefinition by ID
     func findPropertyDefinition(id: String) throws -> PropertyDefinition?
 
+    // MARK: - Fetch All Operations (for bootstrap and restoration)
+
+    /// Fetch all Events
+    func fetchAllEvents() throws -> [Event]
+
+    /// Fetch all EventTypes
+    func fetchAllEventTypes() throws -> [EventType]
+
+    /// Fetch all Geofences
+    func fetchAllGeofences() throws -> [Geofence]
+
+    /// Fetch all PropertyDefinitions
+    func fetchAllPropertyDefinitions() throws -> [PropertyDefinition]
+
+    // MARK: - Bulk Delete Operations (for bootstrap cleanup)
+
+    /// Delete all Events
+    func deleteAllEvents() throws
+
+    /// Delete all EventTypes
+    func deleteAllEventTypes() throws
+
+    /// Delete all Geofences
+    func deleteAllGeofences() throws
+
+    /// Delete all PropertyDefinitions
+    func deleteAllPropertyDefinitions() throws
+
     // MARK: - Pending Operations
 
     /// Fetch all pending mutations ordered by creation time
     func fetchPendingMutations() throws -> [PendingMutation]
+
+    /// Check if a pending mutation exists for given entity with same operation
+    func hasPendingMutation(entityId: String, entityType: MutationEntityType, operation: MutationOperation) throws -> Bool
+
+    /// Insert a new PendingMutation
+    func insertPendingMutation(_ mutation: PendingMutation) throws
+
+    /// Delete a PendingMutation
+    func deletePendingMutation(_ mutation: PendingMutation) throws
 
     // MARK: - Sync Status Updates
 

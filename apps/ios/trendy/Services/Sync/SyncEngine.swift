@@ -49,8 +49,8 @@ enum SyncState: Equatable {
 actor SyncEngine {
     // MARK: - Dependencies
 
-    private let apiClient: APIClient
-    private let modelContainer: ModelContainer
+    private let networkClient: any NetworkClientProtocol
+    private let dataStoreFactory: any DataStoreFactory
     private let syncHistoryStore: SyncHistoryStore?
 
     // MARK: - State
@@ -107,9 +107,9 @@ actor SyncEngine {
     /// Flag to track if initial state has been loaded
     private var initialStateLoaded = false
 
-    init(apiClient: APIClient, modelContainer: ModelContainer, syncHistoryStore: SyncHistoryStore? = nil) {
-        self.apiClient = apiClient
-        self.modelContainer = modelContainer
+    init(networkClient: any NetworkClientProtocol, dataStoreFactory: any DataStoreFactory, syncHistoryStore: SyncHistoryStore? = nil) {
+        self.networkClient = networkClient
+        self.dataStoreFactory = dataStoreFactory
         self.syncHistoryStore = syncHistoryStore
         // Use computed cursorKey which includes environment
         let cursorKeyValue = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
@@ -136,9 +136,8 @@ actor SyncEngine {
         initialStateLoaded = true
 
         // Load pending count from SwiftData
-        let context = ModelContext(modelContainer)
-        let descriptor = FetchDescriptor<PendingMutation>()
-        let count = (try? context.fetchCount(descriptor)) ?? 0
+        let dataStore = dataStoreFactory.makeDataStore()
+        let count = (try? dataStore.fetchPendingMutations().count) ?? 0
 
         await MainActor.run {
             pendingCount = count
@@ -197,18 +196,17 @@ actor SyncEngine {
                 ctx.add("is_first_sync", lastSyncCursor == 0)
             })
 
-            // Create a single context for pre-sync operations to avoid SQLite file locking issues.
+            // Create a single dataStore for pre-sync operations to avoid SQLite file locking issues.
             // Multiple concurrent ModelContexts can cause "default.store couldn't be opened" errors.
-            let preSyncContext = ModelContext(modelContainer)
+            let preSyncDataStore = dataStoreFactory.makeDataStore()
 
             // Count pending mutations before sync for history tracking
-            let pendingDescriptor = FetchDescriptor<PendingMutation>()
-            let initialPendingCount = (try? preSyncContext.fetchCount(pendingDescriptor)) ?? 0
+            let allMutations = try preSyncDataStore.fetchPendingMutations()
+            let initialPendingCount = allMutations.count
 
             // Capture IDs with pending DELETE mutations BEFORE flush
             // These should not be resurrected by pullChanges even if change_log has CREATE entries
-            let localStore = LocalStore(modelContext: preSyncContext)
-            let pendingDeletes = try localStore.fetchPendingMutations()
+            let pendingDeletes = allMutations
                 .filter { $0.operation == .delete }
                 .map { $0.entityId }
             pendingDeleteIds = Set(pendingDeletes)
@@ -256,7 +254,7 @@ actor SyncEngine {
                 // This ensures we skip ALL existing change_log entries, only pulling truly new changes.
                 do {
                     let previousCursor = lastSyncCursor
-                    let latestCursor = try await apiClient.getLatestCursor()
+                    let latestCursor = try await networkClient.getLatestCursor()
                     lastSyncCursor = latestCursor
                     UserDefaults.standard.set(Int(lastSyncCursor), forKey: cursorKey)
                     UserDefaults.standard.synchronize() // Force immediate persistence
@@ -312,7 +310,7 @@ actor SyncEngine {
 
             // Calculate sync duration and record to history
             let syncDurationMs = Int(Date().timeIntervalSince(syncStartTime) * 1000)
-            let finalPendingCount = (try? preSyncContext.fetchCount(pendingDescriptor)) ?? 0
+            let finalPendingCount = (try? preSyncDataStore.fetchPendingMutations().count) ?? 0
             let syncedCount = max(0, initialPendingCount - finalPendingCount)
 
             Log.sync.info("Sync completed successfully", context: .with { ctx in
@@ -435,14 +433,13 @@ actor SyncEngine {
     /// - Throws: Error if API call fails
     func skipToLatestCursor() async throws -> Int64 {
         // Log pending mutation count for informational purposes
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
-        let pendingMutations = try localStore.fetchPendingMutations()
+        let dataStore = dataStoreFactory.makeDataStore()
+        let pendingMutations = try dataStore.fetchPendingMutations()
         let pendingCount = pendingMutations.count
 
         // Get the latest cursor from the backend
         let previousCursor = lastSyncCursor
-        let latestCursor = try await apiClient.getLatestCursor()
+        let latestCursor = try await networkClient.getLatestCursor()
 
         // Update local cursor
         lastSyncCursor = latestCursor
@@ -462,11 +459,10 @@ actor SyncEngine {
     /// Call this if events show "Unknown" instead of their proper event type name.
     func restoreEventRelationships() async {
         Log.sync.info("Manual event relationship restoration requested")
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         do {
-            try restoreEventTypeRelationships(context: context, localStore: localStore)
+            try restoreEventTypeRelationships(dataStore: dataStore)
         } catch {
             Log.sync.error("Failed to restore event relationships", error: error)
         }
@@ -480,18 +476,17 @@ actor SyncEngine {
     func syncGeofences() async throws -> Int {
         Log.sync.info("Syncing geofences from server")
 
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         // Fetch geofences from API
-        let geofences = try await apiClient.getGeofences()
+        let geofences = try await networkClient.getGeofences(activeOnly: false)
         Log.sync.info("Fetched geofences from server", context: .with { ctx in
             ctx.add("count", geofences.count)
         })
 
         // Upsert each geofence
         for apiGeofence in geofences {
-            try localStore.upsertGeofence(id: apiGeofence.id) { geofence in
+            try dataStore.upsertGeofence(id: apiGeofence.id) { geofence in
                 geofence.name = apiGeofence.name
                 geofence.latitude = apiGeofence.latitude
                 geofence.longitude = apiGeofence.longitude
@@ -505,7 +500,7 @@ actor SyncEngine {
             }
         }
 
-        try context.save()
+        try dataStore.save()
         Log.sync.info("Saved geofences locally", context: .with { ctx in
             ctx.add("count", geofences.count)
         })
@@ -515,9 +510,8 @@ actor SyncEngine {
 
     /// Get the local geofence count
     func getLocalGeofenceCount() -> Int {
-        let context = ModelContext(modelContainer)
-        let descriptor = FetchDescriptor<Geofence>()
-        return (try? context.fetchCount(descriptor)) ?? 0
+        let dataStore = dataStoreFactory.makeDataStore()
+        return (try? dataStore.fetchAllGeofences().count) ?? 0
     }
 
     /// Queue a mutation for sync. The mutation will be flushed on the next sync.
@@ -529,29 +523,18 @@ actor SyncEngine {
         entityId: String,
         payload: Data
     ) async throws {
-        let context = ModelContext(modelContainer)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         // DEDUPLICATION: Check if a pending mutation already exists for this entity
         // This prevents duplicate mutations from being queued when multiple code paths
         // (e.g., syncEventToBackend, queueMutationsForUnsyncedEvents, resyncHealthKitEvents)
         // try to sync the same event.
-        let entityTypeRaw = entityType.rawValue
-        let operationRaw = operation.rawValue
-        let existingDescriptor = FetchDescriptor<PendingMutation>(
-            predicate: #Predicate {
-                $0.entityId == entityId &&
-                $0.entityTypeRaw == entityTypeRaw &&
-                $0.operationRaw == operationRaw
-            }
-        )
-
-        let existingCount = (try? context.fetchCount(existingDescriptor)) ?? 0
-        if existingCount > 0 {
+        let hasDuplicate = try dataStore.hasPendingMutation(entityId: entityId, entityType: entityType, operation: operation)
+        if hasDuplicate {
             Log.sync.debug("Skipping duplicate mutation (already pending)", context: .with { ctx in
                 ctx.add("entity_type", entityType.rawValue)
                 ctx.add("operation", operation.rawValue)
                 ctx.add("entity_id", entityId)
-                ctx.add("existing_count", existingCount)
             })
             return
         }
@@ -563,8 +546,8 @@ actor SyncEngine {
             payload: payload
         )
 
-        context.insert(mutation)
-        try context.save()
+        try dataStore.insertPendingMutation(mutation)
+        try dataStore.save()
 
         await updatePendingCount()
         Log.sync.debug("Queued mutation", context: .with { ctx in
@@ -576,15 +559,14 @@ actor SyncEngine {
 
     /// Get the current pending mutation count
     func getPendingCount() async -> Int {
-        let context = ModelContext(modelContainer)
-        return getPendingCountFromContext(context)
+        let dataStore = dataStoreFactory.makeDataStore()
+        return getPendingCountFromDataStore(dataStore)
     }
 
-    /// Get the current pending mutation count using an existing context.
+    /// Get the current pending mutation count using an existing dataStore.
     /// This avoids creating multiple ModelContexts which can cause SQLite file locking issues.
-    private func getPendingCountFromContext(_ context: ModelContext) -> Int {
-        let descriptor = FetchDescriptor<PendingMutation>()
-        return (try? context.fetchCount(descriptor)) ?? 0
+    private func getPendingCountFromDataStore(_ dataStore: any DataStoreProtocol) -> Int {
+        return (try? dataStore.fetchPendingMutations().count) ?? 0
     }
 
     /// Clear all pending mutations from the queue.
@@ -594,11 +576,10 @@ actor SyncEngine {
     /// - Returns: The number of mutations cleared
     @discardableResult
     func clearPendingMutations(markEntitiesFailed: Bool = true) async -> Int {
-        let context = ModelContext(modelContainer)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         do {
-            let descriptor = FetchDescriptor<PendingMutation>()
-            let mutations = try context.fetch(descriptor)
+            let mutations = try dataStore.fetchPendingMutations()
             let count = mutations.count
 
             guard count > 0 else {
@@ -613,12 +594,12 @@ actor SyncEngine {
 
             for mutation in mutations {
                 if markEntitiesFailed {
-                    try? markEntityFailed(mutation, context: context)
+                    try? markEntityFailed(mutation, dataStore: dataStore)
                 }
-                context.delete(mutation)
+                try dataStore.deletePendingMutation(mutation)
             }
 
-            try context.save()
+            try dataStore.save()
             await updatePendingCount()
 
             // Reset circuit breaker state
@@ -675,7 +656,7 @@ actor SyncEngine {
     /// - Lightweight payload compared to full event list
     private func performHealthCheck() async -> Bool {
         do {
-            let types = try await apiClient.getEventTypes()
+            let types = try await networkClient.getEventTypes()
             // If we get a response (even empty), connectivity is working
             Log.sync.debug("Health check passed", context: .with { ctx in
                 ctx.add("event_types_count", types.count)
@@ -699,10 +680,9 @@ actor SyncEngine {
     private let batchSize = 50
 
     private func flushPendingMutations() async throws {
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
+        let dataStore = dataStoreFactory.makeDataStore()
 
-        let mutations = try localStore.fetchPendingMutations()
+        let mutations = try dataStore.fetchPendingMutations()
         let totalPending = mutations.count
 
         // Check circuit breaker - if we're in backoff, skip flushing but update state
@@ -748,15 +728,15 @@ actor SyncEngine {
                 if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                     tripCircuitBreaker()
                     let remaining = circuitBreakerBackoffRemaining
-                    // Use existing context to get pending count - avoids creating concurrent ModelContext
-                    let pendingNow = getPendingCountFromContext(context)
+                    // Use existing dataStore to get pending count - avoids creating concurrent contexts
+                    let pendingNow = getPendingCountFromDataStore(dataStore)
                     Log.sync.warning("Circuit breaker tripped during batch flush", context: .with { ctx in
                         ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
                         ctx.add("backoff_seconds", Int(remaining))
                         ctx.add("pending_remaining", pendingNow)
                     })
                     await updateState(.rateLimited(retryAfter: remaining, pending: pendingNow))
-                    try context.save()
+                    try dataStore.save()
                     await updatePendingCount()
                     return
                 }
@@ -776,8 +756,7 @@ actor SyncEngine {
                 do {
                     let batchSyncedCount = try await flushEventCreateBatch(
                         batchMutations,
-                        localStore: localStore,
-                        context: context
+                        dataStore: dataStore
                     )
                     syncedCount += batchSyncedCount
                     await updateState(.syncing(synced: syncedCount, total: totalPending))
@@ -809,8 +788,8 @@ actor SyncEngine {
                                 ctx.add("entity_id", mutation.entityId)
                                 ctx.add("attempt_count", mutation.attempts)
                             })
-                            try? markEntityFailed(mutation, context: context)
-                            context.delete(mutation)
+                            try? markEntityFailed(mutation, dataStore: dataStore)
+                            try? dataStore.deletePendingMutation(mutation)
                         }
                     }
                 }
@@ -823,8 +802,8 @@ actor SyncEngine {
             if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                 tripCircuitBreaker()
                 let remaining = circuitBreakerBackoffRemaining
-                // Use existing context to get pending count - avoids creating concurrent ModelContext
-                let pendingNow = getPendingCountFromContext(context)
+                // Use existing dataStore to get pending count - avoids creating concurrent contexts
+                let pendingNow = getPendingCountFromDataStore(dataStore)
                 Log.sync.warning("Circuit breaker tripped during flush - aborting remaining mutations", context: .with { ctx in
                     ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
                     ctx.add("backoff_seconds", Int(remaining))
@@ -843,12 +822,12 @@ actor SyncEngine {
             })
 
             do {
-                try await flushMutation(mutation, localStore: localStore)
+                try await flushMutation(mutation, dataStore: dataStore)
                 Log.sync.info("Mutation flushed successfully", context: .with { ctx in
                     ctx.add("entity_type", mutation.entityType.rawValue)
                     ctx.add("entity_id", mutation.entityId)
                 })
-                context.delete(mutation)
+                try dataStore.deletePendingMutation(mutation)
                 syncedCount += 1
                 await updateState(.syncing(synced: syncedCount, total: totalPending))
 
@@ -866,8 +845,8 @@ actor SyncEngine {
                     ctx.add("error", error.localizedDescription ?? "unknown")
                 })
                 // Delete the local duplicate entity - the "real" one already exists and synced
-                try deleteLocalDuplicate(mutation, localStore: localStore)
-                context.delete(mutation)
+                try deleteLocalDuplicate(mutation, dataStore: dataStore)
+                try dataStore.deletePendingMutation(mutation)
                 syncedCount += 1
                 await updateState(.syncing(synced: syncedCount, total: totalPending))
 
@@ -904,8 +883,8 @@ actor SyncEngine {
                         ctx.add("entity_type", mutation.entityType.rawValue)
                         ctx.add("attempts", mutation.attempts)
                     })
-                    try markEntityFailed(mutation, context: context)
-                    context.delete(mutation)
+                    try markEntityFailed(mutation, dataStore: dataStore)
+                    try dataStore.deletePendingMutation(mutation)
                     syncedCount += 1
                     await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
@@ -932,8 +911,8 @@ actor SyncEngine {
                         ctx.add("attempts", mutation.attempts)
                     })
                     // Mark the entity as failed
-                    try markEntityFailed(mutation, context: context)
-                    context.delete(mutation)
+                    try markEntityFailed(mutation, dataStore: dataStore)
+                    try dataStore.deletePendingMutation(mutation)
                     syncedCount += 1
                     await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
@@ -944,7 +923,7 @@ actor SyncEngine {
             }
         }
 
-        try context.save()
+        try dataStore.save()
         await updatePendingCount()
     }
 
@@ -952,8 +931,7 @@ actor SyncEngine {
     /// Returns the number of successfully synced events.
     private func flushEventCreateBatch(
         _ mutations: [PendingMutation],
-        localStore: LocalStore,
-        context: ModelContext
+        dataStore: any DataStoreProtocol
     ) async throws -> Int {
         // Build batch request from mutation payloads
         // Also build a secondary lookup by healthKitSampleId for upsert matching
@@ -980,8 +958,8 @@ actor SyncEngine {
                 // Mark mutation as failed
                 mutation.recordFailure(error: "Failed to decode payload: \(error.localizedDescription)")
                 if mutation.hasExceededRetryLimit {
-                    try? markEntityFailed(mutation, context: context)
-                    context.delete(mutation)
+                    try? markEntityFailed(mutation, dataStore: dataStore)
+                    try? dataStore.deletePendingMutation(mutation)
                 }
             }
         }
@@ -996,7 +974,7 @@ actor SyncEngine {
         })
 
         // Call batch API
-        let response = try await apiClient.createEventsBatch(requests)
+        let response = try await networkClient.createEventsBatch(requests)
 
         Log.sync.info("Batch create response received", context: .with { ctx in
             ctx.add("total", response.total)
@@ -1014,8 +992,8 @@ actor SyncEngine {
             for (index, mutation) in mutationsByIndex {
                 if mutation.entityId == createdEvent.id {
                     do {
-                        try localStore.markEventSynced(id: createdEvent.id)
-                        context.delete(mutation)
+                        try dataStore.markEventSynced(id: createdEvent.id)
+                        try dataStore.deletePendingMutation(mutation)
                         syncedCount += 1
                         matched = true
                         // Only remove from tracking AFTER successful processing
@@ -1031,7 +1009,7 @@ actor SyncEngine {
                         })
                         // Event was created on server, so delete the mutation anyway
                         // The local event will be updated via pullChanges on next sync
-                        context.delete(mutation)
+                        try? dataStore.deletePendingMutation(mutation)
                         syncedCount += 1
                         matched = true
                         mutationsByIndex.removeValue(forKey: index)
@@ -1058,7 +1036,7 @@ actor SyncEngine {
                 // Delete the LOCAL duplicate event (the one with client-generated ID)
                 // The "real" event now has the server's ID
                 do {
-                    try localStore.deleteEvent(id: mutation.entityId)
+                    try dataStore.deleteEvent(id: mutation.entityId)
                     Log.sync.debug("Deleted local duplicate event", context: .with { ctx in
                         ctx.add("local_id", mutation.entityId)
                         ctx.add("server_id", createdEvent.id)
@@ -1071,7 +1049,7 @@ actor SyncEngine {
                     })
                 }
 
-                context.delete(mutation)
+                try? dataStore.deletePendingMutation(mutation)
                 syncedCount += 1
                 mutationsByIndex.removeValue(forKey: matchInfo.index)
                 mutationsBySampleId.removeValue(forKey: sampleId)
@@ -1092,8 +1070,8 @@ actor SyncEngine {
                         ctx.add("message", batchError.message)
                     })
                     // Delete local duplicate and mark as synced
-                    try? deleteLocalDuplicate(mutation, localStore: localStore)
-                    context.delete(mutation)
+                    try? deleteLocalDuplicate(mutation, dataStore: dataStore)
+                    try? dataStore.deletePendingMutation(mutation)
                     syncedCount += 1
                 } else {
                     // Other error - record failure
@@ -1104,8 +1082,8 @@ actor SyncEngine {
                     })
                     mutation.recordFailure(error: batchError.message)
                     if mutation.hasExceededRetryLimit {
-                        try? markEntityFailed(mutation, context: context)
-                        context.delete(mutation)
+                        try? markEntityFailed(mutation, dataStore: dataStore)
+                        try? dataStore.deletePendingMutation(mutation)
                         syncedCount += 1
                     }
                 }
@@ -1130,10 +1108,10 @@ actor SyncEngine {
         })
     }
 
-    private func flushMutation(_ mutation: PendingMutation, localStore: LocalStore) async throws {
+    private func flushMutation(_ mutation: PendingMutation, dataStore: any DataStoreProtocol) async throws {
         switch mutation.operation {
         case .create:
-            try await flushCreate(mutation, localStore: localStore)
+            try await flushCreate(mutation, dataStore: dataStore)
         case .update:
             try await flushUpdate(mutation)
         case .delete:
@@ -1141,43 +1119,43 @@ actor SyncEngine {
         }
     }
 
-    private func flushCreate(_ mutation: PendingMutation, localStore: LocalStore) async throws {
+    private func flushCreate(_ mutation: PendingMutation, dataStore: any DataStoreProtocol) async throws {
         switch mutation.entityType {
         case .event:
             let request = try JSONDecoder().decode(CreateEventRequest.self, from: mutation.payload)
-            _ = try await apiClient.createEventWithIdempotency(
+            _ = try await networkClient.createEventWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
             // With UUIDv7, no reconciliation needed - just mark as synced
-            try localStore.markEventSynced(id: mutation.entityId)
+            try dataStore.markEventSynced(id: mutation.entityId)
 
         case .eventType:
             let request = try JSONDecoder().decode(CreateEventTypeRequest.self, from: mutation.payload)
-            _ = try await apiClient.createEventTypeWithIdempotency(
+            _ = try await networkClient.createEventTypeWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.markEventTypeSynced(id: mutation.entityId)
+            try dataStore.markEventTypeSynced(id: mutation.entityId)
 
         case .geofence:
             let request = try JSONDecoder().decode(CreateGeofenceRequest.self, from: mutation.payload)
-            _ = try await apiClient.createGeofenceWithIdempotency(
+            _ = try await networkClient.createGeofenceWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.markGeofenceSynced(id: mutation.entityId)
+            try dataStore.markGeofenceSynced(id: mutation.entityId)
 
         case .propertyDefinition:
             let request = try JSONDecoder().decode(CreatePropertyDefinitionRequest.self, from: mutation.payload)
-            _ = try await apiClient.createPropertyDefinitionWithIdempotency(
+            _ = try await networkClient.createPropertyDefinitionWithIdempotency(
                 request,
                 idempotencyKey: mutation.clientRequestId
             )
-            try localStore.markPropertyDefinitionSynced(id: mutation.entityId)
+            try dataStore.markPropertyDefinitionSynced(id: mutation.entityId)
         }
 
-        try localStore.save()
+        try dataStore.save()
     }
 
     private func flushUpdate(_ mutation: PendingMutation) async throws {
@@ -1187,19 +1165,19 @@ actor SyncEngine {
         switch mutation.entityType {
         case .event:
             let request = try JSONDecoder().decode(UpdateEventRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateEvent(id: entityId, request)
+            _ = try await networkClient.updateEvent(id: entityId, request)
 
         case .eventType:
             let request = try JSONDecoder().decode(UpdateEventTypeRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateEventType(id: entityId, request)
+            _ = try await networkClient.updateEventType(id: entityId, request)
 
         case .geofence:
             let request = try JSONDecoder().decode(UpdateGeofenceRequest.self, from: mutation.payload)
-            _ = try await apiClient.updateGeofence(id: entityId, request)
+            _ = try await networkClient.updateGeofence(id: entityId, request)
 
         case .propertyDefinition:
             let request = try JSONDecoder().decode(UpdatePropertyDefinitionRequest.self, from: mutation.payload)
-            _ = try await apiClient.updatePropertyDefinition(id: entityId, request)
+            _ = try await networkClient.updatePropertyDefinition(id: entityId, request)
         }
     }
 
@@ -1209,49 +1187,37 @@ actor SyncEngine {
 
         switch mutation.entityType {
         case .event:
-            try await apiClient.deleteEvent(id: entityId)
+            try await networkClient.deleteEvent(id: entityId)
         case .eventType:
-            try await apiClient.deleteEventType(id: entityId)
+            try await networkClient.deleteEventType(id: entityId)
         case .geofence:
-            try await apiClient.deleteGeofence(id: entityId)
+            try await networkClient.deleteGeofence(id: entityId)
         case .propertyDefinition:
-            try await apiClient.deletePropertyDefinition(id: entityId)
+            try await networkClient.deletePropertyDefinition(id: entityId)
         }
     }
 
-    private func markEntityFailed(_ mutation: PendingMutation, context: ModelContext) throws {
+    private func markEntityFailed(_ mutation: PendingMutation, dataStore: any DataStoreProtocol) throws {
         let entityId = mutation.entityId
 
         switch mutation.entityType {
         case .event:
-            let descriptor = FetchDescriptor<Event>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let event = try context.fetch(descriptor).first {
+            if let event = try dataStore.findEvent(id: entityId) {
                 event.syncStatus = .failed
             }
 
         case .eventType:
-            let descriptor = FetchDescriptor<EventType>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let eventType = try context.fetch(descriptor).first {
+            if let eventType = try dataStore.findEventType(id: entityId) {
                 eventType.syncStatus = .failed
             }
 
         case .geofence:
-            let descriptor = FetchDescriptor<Geofence>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let geofence = try context.fetch(descriptor).first {
+            if let geofence = try dataStore.findGeofence(id: entityId) {
                 geofence.syncStatus = .failed
             }
 
         case .propertyDefinition:
-            let descriptor = FetchDescriptor<PropertyDefinition>(
-                predicate: #Predicate { $0.id == entityId }
-            )
-            if let propDef = try context.fetch(descriptor).first {
+            if let propDef = try dataStore.findPropertyDefinition(id: entityId) {
                 propDef.syncStatus = .failed
             }
         }
@@ -1259,16 +1225,16 @@ actor SyncEngine {
 
     /// Handle duplicate error by marking the entity as synced.
     /// With UUIDv7, the server has the same ID, so we just mark synced.
-    private func markEntitySynced(_ mutation: PendingMutation, localStore: LocalStore) throws {
+    private func markEntitySynced(_ mutation: PendingMutation, dataStore: any DataStoreProtocol) throws {
         switch mutation.entityType {
         case .event:
-            try localStore.markEventSynced(id: mutation.entityId)
+            try dataStore.markEventSynced(id: mutation.entityId)
         case .eventType:
-            try localStore.markEventTypeSynced(id: mutation.entityId)
+            try dataStore.markEventTypeSynced(id: mutation.entityId)
         case .geofence:
-            try localStore.markGeofenceSynced(id: mutation.entityId)
+            try dataStore.markGeofenceSynced(id: mutation.entityId)
         case .propertyDefinition:
-            try localStore.markPropertyDefinitionSynced(id: mutation.entityId)
+            try dataStore.markPropertyDefinitionSynced(id: mutation.entityId)
         }
     }
 
@@ -1276,7 +1242,7 @@ actor SyncEngine {
     /// This happens when a race condition creates multiple local entities with different IDs
     /// but the same unique constraint fields (e.g., healthKitSampleId). The "real" entity
     /// already synced successfully, so this duplicate should be removed.
-    private func deleteLocalDuplicate(_ mutation: PendingMutation, localStore: LocalStore) throws {
+    private func deleteLocalDuplicate(_ mutation: PendingMutation, dataStore: any DataStoreProtocol) throws {
         Log.sync.info("Deleting local duplicate entity", context: .with { ctx in
             ctx.add("entity_type", mutation.entityType.rawValue)
             ctx.add("entity_id", mutation.entityId)
@@ -1284,13 +1250,13 @@ actor SyncEngine {
 
         switch mutation.entityType {
         case .event:
-            try localStore.deleteEvent(id: mutation.entityId)
+            try dataStore.deleteEvent(id: mutation.entityId)
         case .eventType:
-            try localStore.deleteEventType(id: mutation.entityId)
+            try dataStore.deleteEventType(id: mutation.entityId)
         case .geofence:
-            try localStore.deleteGeofence(id: mutation.entityId)
+            try dataStore.deleteGeofence(id: mutation.entityId)
         case .propertyDefinition:
-            try localStore.deletePropertyDefinition(id: mutation.entityId)
+            try dataStore.deletePropertyDefinition(id: mutation.entityId)
         }
     }
 
@@ -1300,7 +1266,7 @@ actor SyncEngine {
         var hasMore = true
 
         while hasMore {
-            let response = try await apiClient.getChanges(
+            let response = try await networkClient.getChanges(
                 since: lastSyncCursor,
                 limit: changeFeedLimit
             )
@@ -1331,12 +1297,11 @@ actor SyncEngine {
     }
 
     private func applyChanges(_ changes: [ChangeEntry]) async throws {
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         for change in changes {
             do {
-                try applyChange(change, localStore: localStore)
+                try applyChange(change, dataStore: dataStore)
             } catch {
                 Log.sync.error("Failed to apply change", error: error, context: .with { ctx in
                     ctx.add("change_id", Int(change.id))
@@ -1347,15 +1312,15 @@ actor SyncEngine {
             }
         }
 
-        try context.save()
+        try dataStore.save()
     }
 
-    private func applyChange(_ change: ChangeEntry, localStore: LocalStore) throws {
+    private func applyChange(_ change: ChangeEntry, dataStore: any DataStoreProtocol) throws {
         switch change.operation {
         case "create", "update":
-            try applyUpsert(change, localStore: localStore)
+            try applyUpsert(change, dataStore: dataStore)
         case "delete":
-            try applyDelete(change, localStore: localStore)
+            try applyDelete(change, dataStore: dataStore)
         default:
             Log.sync.warning("Unknown operation", context: .with { ctx in
                 ctx.add("operation", change.operation)
@@ -1363,7 +1328,7 @@ actor SyncEngine {
         }
     }
 
-    private func applyUpsert(_ change: ChangeEntry, localStore: LocalStore) throws {
+    private func applyUpsert(_ change: ChangeEntry, dataStore: any DataStoreProtocol) throws {
         // Skip resurrection if this entity has a pending DELETE mutation
         // This prevents the race condition where pullChanges recreates a deleted entity
         // Check both in-memory set AND SwiftData for belt-and-suspenders approach
@@ -1377,7 +1342,7 @@ actor SyncEngine {
 
         // Fallback check: query PendingMutation table directly for pending deletes
         // This handles the case where pendingDeleteIds wasn't populated (e.g., crash before persist)
-        if hasPendingDeleteInSwiftData(entityId: change.entityId, localStore: localStore) {
+        if hasPendingDeleteInSwiftData(entityId: change.entityId, dataStore: dataStore) {
             Log.sync.debug("Skipping resurrection of pending-delete entity (from SwiftData)", context: .with { ctx in
                 ctx.add("entity_id", change.entityId)
                 ctx.add("entity_type", change.entityType)
@@ -1394,7 +1359,7 @@ actor SyncEngine {
 
         switch change.entityType {
         case "event":
-            try localStore.upsertEvent(id: change.entityId) { event in
+            try dataStore.upsertEvent(id: change.entityId) { event in
                 // Apply data from change
                 if let timestamp = data.timestamp {
                     event.timestamp = timestamp
@@ -1411,7 +1376,7 @@ actor SyncEngine {
                 // EventType ID - store for relationship recovery and establish relationship
                 if let eventTypeId = data.eventTypeId {
                     event.eventTypeId = eventTypeId  // Always store for recovery
-                    if let localEventType = try? localStore.findEventType(id: eventTypeId) {
+                    if let localEventType = try? dataStore.findEventType(id: eventTypeId) {
                         event.eventType = localEventType
                     } else {
                         Log.sync.warning("Could not find EventType during changefeed processing", context: .with { ctx in
@@ -1453,7 +1418,7 @@ actor SyncEngine {
             }
 
         case "event_type":
-            try localStore.upsertEventType(id: change.entityId) { eventType in
+            try dataStore.upsertEventType(id: change.entityId) { eventType in
                 if let name = data.name {
                     eventType.name = name
                 }
@@ -1466,7 +1431,7 @@ actor SyncEngine {
             }
 
         case "geofence":
-            try localStore.upsertGeofence(id: change.entityId) { geofence in
+            try dataStore.upsertGeofence(id: change.entityId) { geofence in
                 if let name = data.name {
                     geofence.name = name
                 }
@@ -1500,7 +1465,7 @@ actor SyncEngine {
         case "property_definition":
             // PropertyDefinitions need eventTypeId
             if let eventTypeId = data.eventTypeId {
-                try localStore.upsertPropertyDefinition(id: change.entityId, eventTypeId: eventTypeId) { propDef in
+                try dataStore.upsertPropertyDefinition(id: change.entityId, eventTypeId: eventTypeId) { propDef in
                     if let key = data.key {
                         propDef.key = key
                     }
@@ -1542,9 +1507,9 @@ actor SyncEngine {
     /// Check if there's a pending DELETE mutation for this entity in SwiftData.
     /// This is a fallback check for resurrection prevention when pendingDeleteIds
     /// may not have been populated (e.g., after app crash or restart).
-    private func hasPendingDeleteInSwiftData(entityId: String, localStore: LocalStore) -> Bool {
+    private func hasPendingDeleteInSwiftData(entityId: String, dataStore: any DataStoreProtocol) -> Bool {
         do {
-            let mutations = try localStore.fetchPendingMutations()
+            let mutations = try dataStore.fetchPendingMutations()
             return mutations.contains { $0.entityId == entityId && $0.operation == .delete }
         } catch {
             Log.sync.warning("Failed to check pending delete in SwiftData", context: .with { ctx in
@@ -1555,16 +1520,16 @@ actor SyncEngine {
         }
     }
 
-    private func applyDelete(_ change: ChangeEntry, localStore: LocalStore) throws {
+    private func applyDelete(_ change: ChangeEntry, dataStore: any DataStoreProtocol) throws {
         switch change.entityType {
         case "event":
-            try localStore.deleteEvent(id: change.entityId)
+            try dataStore.deleteEvent(id: change.entityId)
         case "event_type":
-            try localStore.deleteEventType(id: change.entityId)
+            try dataStore.deleteEventType(id: change.entityId)
         case "geofence":
-            try localStore.deleteGeofence(id: change.entityId)
+            try dataStore.deleteGeofence(id: change.entityId)
         case "property_definition":
-            try localStore.deletePropertyDefinition(id: change.entityId)
+            try dataStore.deletePropertyDefinition(id: change.entityId)
         default:
             Log.sync.warning("Unknown entity type for delete", context: .with { ctx in
                 ctx.add("entity_type", change.entityType)
@@ -1577,8 +1542,7 @@ actor SyncEngine {
     /// Fetch all data from the backend when cursor is 0 (first sync).
     /// This handles the case where data existed before the change_log was implemented.
     private func bootstrapFetch() async throws {
-        let context = ModelContext(modelContainer)
-        let localStore = LocalStore(modelContext: context)
+        let dataStore = dataStoreFactory.makeDataStore()
 
         // NUCLEAR CLEANUP: Delete ALL local data before repopulating from backend.
         // This ensures a completely clean slate and prevents any duplicate accumulation.
@@ -1586,52 +1550,40 @@ actor SyncEngine {
         Log.sync.info("Bootstrap: Starting nuclear cleanup of all local data")
 
         // Delete all Events first (they reference EventTypes)
-        let allEventsDescriptor = FetchDescriptor<Event>()
-        let allLocalEvents = try context.fetch(allEventsDescriptor)
+        let allLocalEvents = try dataStore.fetchAllEvents()
         Log.sync.info("Bootstrap: Deleting all local events", context: .with { ctx in
             ctx.add("count", allLocalEvents.count)
         })
-        for event in allLocalEvents {
-            context.delete(event)
-        }
+        try dataStore.deleteAllEvents()
 
         // Delete all Geofences
-        let allGeofencesDescriptor = FetchDescriptor<Geofence>()
-        let allLocalGeofences = try context.fetch(allGeofencesDescriptor)
+        let allLocalGeofences = try dataStore.fetchAllGeofences()
         Log.sync.info("Bootstrap: Deleting all local geofences", context: .with { ctx in
             ctx.add("count", allLocalGeofences.count)
         })
-        for geofence in allLocalGeofences {
-            context.delete(geofence)
-        }
+        try dataStore.deleteAllGeofences()
 
         // Delete all PropertyDefinitions
-        let allPropDefsDescriptor = FetchDescriptor<PropertyDefinition>()
-        let allLocalPropDefs = try context.fetch(allPropDefsDescriptor)
+        let allLocalPropDefs = try dataStore.fetchAllPropertyDefinitions()
         Log.sync.info("Bootstrap: Deleting all local property definitions", context: .with { ctx in
             ctx.add("count", allLocalPropDefs.count)
         })
-        for propDef in allLocalPropDefs {
-            context.delete(propDef)
-        }
+        try dataStore.deleteAllPropertyDefinitions()
 
         // Delete all EventTypes last (other entities may reference them)
-        let allEventTypesDescriptor = FetchDescriptor<EventType>()
-        let allLocalEventTypes = try context.fetch(allEventTypesDescriptor)
+        let allLocalEventTypes = try dataStore.fetchAllEventTypes()
         Log.sync.info("Bootstrap: Deleting all local event types", context: .with { ctx in
             ctx.add("count", allLocalEventTypes.count)
         })
-        for eventType in allLocalEventTypes {
-            context.delete(eventType)
-        }
+        try dataStore.deleteAllEventTypes()
 
         // Save the deletions
-        try context.save()
+        try dataStore.save()
         Log.sync.info("Bootstrap: Nuclear cleanup completed - all local data deleted")
 
         // Step 1: Fetch and upsert all EventTypes first (Events reference them)
         Log.sync.info("Bootstrap: fetching event types")
-        let eventTypes = try await apiClient.getEventTypes()
+        let eventTypes = try await networkClient.getEventTypes()
         Log.sync.info("Bootstrap: received event types", context: .with { ctx in
             ctx.add("count", eventTypes.count)
             for (index, et) in eventTypes.prefix(5).enumerated() {
@@ -1640,7 +1592,7 @@ actor SyncEngine {
         })
 
         for apiEventType in eventTypes {
-            try localStore.upsertEventType(id: apiEventType.id) { eventType in
+            try dataStore.upsertEventType(id: apiEventType.id) { eventType in
                 eventType.name = apiEventType.name
                 eventType.colorHex = apiEventType.color
                 eventType.iconName = apiEventType.icon
@@ -1648,20 +1600,20 @@ actor SyncEngine {
         }
 
         // Save EventTypes immediately to ensure they're persisted before Geofences reference them
-        try context.save()
+        try dataStore.save()
         Log.sync.info("Bootstrap: Saved event types", context: .with { ctx in
             ctx.add("count", eventTypes.count)
         })
 
         // Step 2: Fetch and upsert all Geofences (Events may reference them)
         Log.sync.info("Bootstrap: fetching geofences")
-        let geofences = try await apiClient.getGeofences()
+        let geofences = try await networkClient.getGeofences(activeOnly: false)
         Log.sync.info("Bootstrap: received geofences", context: .with { ctx in
             ctx.add("count", geofences.count)
         })
 
         for apiGeofence in geofences {
-            try localStore.upsertGeofence(id: apiGeofence.id) { geofence in
+            try dataStore.upsertGeofence(id: apiGeofence.id) { geofence in
                 geofence.name = apiGeofence.name
                 geofence.latitude = apiGeofence.latitude
                 geofence.longitude = apiGeofence.longitude
@@ -1676,14 +1628,14 @@ actor SyncEngine {
         }
 
         // Save Geofences immediately to ensure they're persisted before Events reference them
-        try context.save()
+        try dataStore.save()
         Log.sync.info("Bootstrap: Saved geofences", context: .with { ctx in
             ctx.add("count", geofences.count)
         })
 
         // Step 3: Fetch and upsert all Events
         Log.sync.info("Bootstrap: fetching events")
-        let events = try await apiClient.getAllEvents()
+        let events = try await networkClient.getAllEvents(batchSize: 50)
         Log.sync.info("Bootstrap: received events", context: .with { ctx in
             ctx.add("count", events.count)
             for (index, ev) in events.prefix(5).enumerated() {
@@ -1692,7 +1644,7 @@ actor SyncEngine {
         })
 
         for apiEvent in events {
-            let event = try localStore.upsertEvent(id: apiEvent.id) { event in
+            let event = try dataStore.upsertEvent(id: apiEvent.id) { event in
                 event.timestamp = apiEvent.timestamp
                 event.notes = apiEvent.notes
                 event.isAllDay = apiEvent.isAllDay
@@ -1715,7 +1667,7 @@ actor SyncEngine {
                 event.eventTypeId = apiEvent.eventTypeId
             }
             // Establish the SwiftData relationship to EventType
-            if let localEventType = try? localStore.findEventType(id: apiEvent.eventTypeId) {
+            if let localEventType = try? dataStore.findEventType(id: apiEvent.eventTypeId) {
                 event.eventType = localEventType
             } else {
                 Log.sync.warning("Bootstrap: Could not find EventType for event", context: .with { ctx in
@@ -1726,7 +1678,7 @@ actor SyncEngine {
         }
 
         // Save Events immediately to ensure they're persisted
-        try context.save()
+        try dataStore.save()
         Log.sync.info("Bootstrap: Saved events", context: .with { ctx in
             ctx.add("count", events.count)
         })
@@ -1736,9 +1688,9 @@ actor SyncEngine {
         var allPropertyDefinitionIds: [String] = []
         for apiEventType in eventTypes {
             do {
-                let propDefs = try await apiClient.getPropertyDefinitions(eventTypeId: apiEventType.id)
+                let propDefs = try await networkClient.getPropertyDefinitions(eventTypeId: apiEventType.id)
                 for apiPropDef in propDefs {
-                    try localStore.upsertPropertyDefinition(id: apiPropDef.id, eventTypeId: apiEventType.id) { propDef in
+                    try dataStore.upsertPropertyDefinition(id: apiPropDef.id, eventTypeId: apiEventType.id) { propDef in
                         propDef.key = apiPropDef.key
                         propDef.label = apiPropDef.label
                         if let parsedType = PropertyType(rawValue: apiPropDef.propertyType) {
@@ -1773,17 +1725,17 @@ actor SyncEngine {
         })
 
         // Save all upserts
-        try context.save()
+        try dataStore.save()
 
         // Restore any broken Event→EventType relationships
-        try restoreEventTypeRelationships(context: context, localStore: localStore)
+        try restoreEventTypeRelationships(dataStore: dataStore)
 
         // Verification: count remaining records after cleanup
-        let finalEventCount = try context.fetchCount(FetchDescriptor<Event>())
-        let finalEventTypeCount = try context.fetchCount(FetchDescriptor<EventType>())
-        let finalGeofenceCount = try context.fetchCount(FetchDescriptor<Geofence>())
+        let finalEventCount = try dataStore.fetchAllEvents().count
+        let finalEventTypeCount = try dataStore.fetchAllEventTypes().count
+        let finalGeofenceCount = try dataStore.fetchAllGeofences().count
 
-        Log.sync.info("🔧 Bootstrap fetch completed", context: .with { ctx in
+        Log.sync.info("Bootstrap fetch completed", context: .with { ctx in
             ctx.add("backend_event_types", eventTypes.count)
             ctx.add("backend_geofences", geofences.count)
             ctx.add("backend_events", events.count)
@@ -1793,12 +1745,11 @@ actor SyncEngine {
             ctx.add("final_local_geofences", finalGeofenceCount)
         })
 
-        // DIAGNOSTIC: Additional verification after save
-        Log.sync.info("🔧 Bootstrap verification after context.save()", context: .with { ctx in
-            // Create a fresh context to verify persistence
-            let verifyContext = ModelContext(modelContainer)
-            let verifyEventCount = (try? verifyContext.fetchCount(FetchDescriptor<Event>())) ?? -1
-            let verifyEventTypeCount = (try? verifyContext.fetchCount(FetchDescriptor<EventType>())) ?? -1
+        // DIAGNOSTIC: Additional verification after save (using fresh dataStore)
+        let verifyDataStore = dataStoreFactory.makeDataStore()
+        let verifyEventCount = (try? verifyDataStore.fetchAllEvents().count) ?? -1
+        let verifyEventTypeCount = (try? verifyDataStore.fetchAllEventTypes().count) ?? -1
+        Log.sync.info("Bootstrap verification after save", context: .with { ctx in
             ctx.add("verify_events_fresh_context", verifyEventCount)
             ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
         })
@@ -1816,8 +1767,8 @@ actor SyncEngine {
     /// Restore Event→EventType relationships for events with missing eventType relationship.
     /// This can happen when events are loaded from backend but the SwiftData relationship wasn't
     /// properly established during sync. Uses the stored eventTypeId field for recovery.
-    private func restoreEventTypeRelationships(context: ModelContext, localStore: LocalStore) throws {
-        let allEvents = try context.fetch(FetchDescriptor<Event>())
+    private func restoreEventTypeRelationships(dataStore: any DataStoreProtocol) throws {
+        let allEvents = try dataStore.fetchAllEvents()
         var restoredCount = 0
         var orphanedCount = 0
 
@@ -1827,7 +1778,7 @@ actor SyncEngine {
 
             // Try to restore using the stored eventTypeId
             if let eventTypeId = event.eventTypeId {
-                if let localEventType = try? localStore.findEventType(id: eventTypeId) {
+                if let localEventType = try? dataStore.findEventType(id: eventTypeId) {
                     event.eventType = localEventType
                     restoredCount += 1
                     Log.sync.info("Restored eventType relationship", context: .with { ctx in
@@ -1851,7 +1802,7 @@ actor SyncEngine {
         }
 
         if restoredCount > 0 || orphanedCount > 0 {
-            try context.save()
+            try dataStore.save()
             Log.sync.info("Event relationship restoration complete", context: .with { ctx in
                 ctx.add("restored", restoredCount)
                 ctx.add("orphaned", orphanedCount)
