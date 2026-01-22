@@ -134,7 +134,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 15-01-PLAN.md — Refactor SyncEngine to accept protocol-based dependencies
+- [x] 15-01-PLAN.md — Refactor SyncEngine to accept protocol-based dependencies
 
 ---
 
@@ -361,7 +361,7 @@ All 44 v1.2 requirements mapped:
 | 12. Foundation & Cleanup | v1.2 | 5/5 | Complete | 2026-01-21 |
 | 13. Protocol Definitions | v1.2 | 2/2 | Complete | 2026-01-21 |
 | 14. Implementation Conformance | v1.2 | 1/1 | Complete | 2026-01-21 |
-| 15. SyncEngine DI Refactor | v1.2 | 0/1 | Planned | - |
+| 15. SyncEngine DI Refactor | v1.2 | 1/1 | Complete | 2026-01-21 |
 | 16. Test Infrastructure | v1.2 | 0/? | Not started | - |
 | 17. Unit Tests - Circuit Breaker | v1.2 | 0/? | Not started | - |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 0/? | Not started | - |
@@ -372,4 +372,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 15 planned)*
+*Last updated: 2026-01-21 (Phase 15 complete)*
