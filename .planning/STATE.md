@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 13 of 22 (Protocol Definitions)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-21 — Phase 12 complete and verified
+Plan: 2 of 2 in current phase
+Status: Phase 13 complete
+Last activity: 2026-01-22 — Completed 13-02-PLAN.md (DataStoreProtocol & Factory)
 
-Progress: [█░░░░░░░░░] 9%
+Progress: [██░░░░░░░░] 10%
 
 ## Milestone History
 
@@ -39,6 +39,16 @@ Recent decisions affecting v1.2:
 - Factory pattern for ModelContext — handles non-Sendable limitation
 - Log.* category usage in UI views — data, auth, geofence, calendar, healthKit, ui, general
 - Private logger in model files — for widget extension compatibility
+- NetworkClientProtocol requires Sendable — for actor boundary crossing
+- Protocol methods require explicit parameters — no defaults in protocol definitions
+- DataStoreProtocol NOT Sendable — instances created and used within actor context
+- DataStoreFactory IS Sendable — factory passed into actor from outside
+
+### Phase 13 Completed
+
+**Protocol Definitions** (2 plans, 2026-01-22):
+- Plan 01: NetworkClientProtocol (24 methods, Sendable) - COMPLETE
+- Plan 02: DataStoreProtocol (18 methods), DataStoreFactory (Sendable), DefaultDataStoreFactory, LocalStore conformance - COMPLETE
 
 ### Phase 12 Completed
 
@@ -59,7 +69,7 @@ None
 
 ## Session Continuity
 
-Last session: 2026-01-21
-Stopped at: Phase 12 execution and verification complete
+Last session: 2026-01-22
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None
-Next: Plan Phase 13 (Protocol Definitions)
+Next: Phase 14 (Conformance Wiring)
