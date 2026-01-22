@@ -144,6 +144,215 @@ struct APIModelFixture {
             properties: properties
         )
     }
+
+    // MARK: - Change Feed Fixtures
+
+    /// Create a ChangeFeedResponse
+    static func makeChangeFeedResponse(
+        changes: [ChangeEntry] = [],
+        nextCursor: Int64 = 0,
+        hasMore: Bool = false
+    ) -> ChangeFeedResponse {
+        ChangeFeedResponse(
+            changes: changes,
+            nextCursor: nextCursor,
+            hasMore: hasMore
+        )
+    }
+
+    /// Create a ChangeEntry for create operation
+    static func makeChangeEntry(
+        id: Int64 = 1,
+        entityType: String = "event",
+        operation: String = "create",
+        entityId: String = "entity-1",
+        data: ChangeEntryData? = nil,
+        deletedAt: Date? = nil
+    ) -> ChangeEntry {
+        ChangeEntry(
+            id: id,
+            entityType: entityType,
+            operation: operation,
+            entityId: entityId,
+            data: data,
+            deletedAt: deletedAt,
+            createdAt: Date(timeIntervalSince1970: 1704067200)
+        )
+    }
+
+    // MARK: - Geofence Fixtures
+
+    /// Create an APIGeofence
+    static func makeAPIGeofence(
+        id: String = "geo-1",
+        userId: String = "user-1",
+        name: String = "Home",
+        latitude: Double = 37.7749,
+        longitude: Double = -122.4194,
+        radius: Double = 100.0,
+        eventTypeEntryId: String? = nil,
+        eventTypeExitId: String? = nil,
+        isActive: Bool = true,
+        notifyOnEntry: Bool = true,
+        notifyOnExit: Bool = false
+    ) -> APIGeofence {
+        // APIGeofence uses custom decoder, but we can create JSON and decode
+        // For simplicity, use a helper that creates the JSON and decodes
+        let json: [String: Any] = [
+            "id": id,
+            "user_id": userId,
+            "name": name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "radius": radius,
+            "event_type_entry_id": eventTypeEntryId as Any,
+            "event_type_exit_id": eventTypeExitId as Any,
+            "is_active": isActive,
+            "notify_on_entry": notifyOnEntry,
+            "notify_on_exit": notifyOnExit,
+            "ios_region_identifier": nil as Any?,
+            "created_at": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: 1704067200)),
+            "updated_at": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: 1704067200))
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: json.compactMapValues { $0 })
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(APIGeofence.self, from: data)
+    }
+
+    /// Create a CreateGeofenceRequest
+    static func makeCreateGeofenceRequest(
+        id: String? = nil,
+        name: String = "Test Geofence",
+        latitude: Double = 37.7749,
+        longitude: Double = -122.4194,
+        radius: Double = 100.0,
+        eventTypeEntryId: String? = nil,
+        eventTypeExitId: String? = nil,
+        isActive: Bool = true,
+        notifyOnEntry: Bool = true,
+        notifyOnExit: Bool = false
+    ) -> CreateGeofenceRequest {
+        CreateGeofenceRequest(
+            id: id,
+            name: name,
+            latitude: latitude,
+            longitude: longitude,
+            radius: radius,
+            eventTypeEntryId: eventTypeEntryId,
+            eventTypeExitId: eventTypeExitId,
+            isActive: isActive,
+            notifyOnEntry: notifyOnEntry,
+            notifyOnExit: notifyOnExit
+        )
+    }
+
+    // MARK: - Property Definition Fixtures
+
+    /// Create an APIPropertyDefinition
+    static func makeAPIPropertyDefinition(
+        id: String = "propdef-1",
+        eventTypeId: String = "type-1",
+        userId: String = "user-1",
+        key: String = "duration",
+        label: String = "Duration",
+        propertyType: String = "number",
+        options: [String]? = nil,
+        displayOrder: Int = 0
+    ) -> APIPropertyDefinition {
+        APIPropertyDefinition(
+            id: id,
+            eventTypeId: eventTypeId,
+            userId: userId,
+            key: key,
+            label: label,
+            propertyType: propertyType,
+            options: options,
+            defaultValue: nil,
+            displayOrder: displayOrder,
+            createdAt: Date(timeIntervalSince1970: 1704067200),
+            updatedAt: Date(timeIntervalSince1970: 1704067200)
+        )
+    }
+
+    /// Create a CreatePropertyDefinitionRequest
+    static func makeCreatePropertyDefinitionRequest(
+        id: String = "propdef-1",
+        eventTypeId: String = "type-1",
+        key: String = "duration",
+        label: String = "Duration",
+        propertyType: String = "number",
+        options: [String]? = nil,
+        displayOrder: Int = 0
+    ) -> CreatePropertyDefinitionRequest {
+        CreatePropertyDefinitionRequest(
+            id: id,
+            eventTypeId: eventTypeId,
+            key: key,
+            label: label,
+            propertyType: propertyType,
+            options: options,
+            defaultValue: nil,
+            displayOrder: displayOrder
+        )
+    }
+
+    // MARK: - Batch Response Fixtures
+
+    /// Create a BatchCreateEventsResponse
+    static func makeBatchCreateEventsResponse(
+        created: [APIEvent] = [],
+        errors: [BatchError]? = nil,
+        total: Int? = nil,
+        success: Int? = nil,
+        failed: Int? = nil
+    ) -> BatchCreateEventsResponse {
+        BatchCreateEventsResponse(
+            created: created,
+            errors: errors,
+            total: total ?? created.count,
+            success: success ?? created.count,
+            failed: failed ?? (errors?.count ?? 0)
+        )
+    }
+
+    /// Create a BatchError
+    static func makeBatchError(
+        index: Int = 0,
+        message: String = "Validation failed"
+    ) -> BatchError {
+        BatchError(index: index, message: message)
+    }
+
+    // MARK: - Event Type Request Fixtures
+
+    /// Create a CreateEventTypeRequest
+    static func makeCreateEventTypeRequest(
+        id: String = "type-1",
+        name: String = "Workout",
+        color: String = "#FF5733",
+        icon: String = "figure.run"
+    ) -> CreateEventTypeRequest {
+        CreateEventTypeRequest(
+            id: id,
+            name: name,
+            color: color,
+            icon: icon
+        )
+    }
+
+    /// Create an UpdateEventTypeRequest
+    static func makeUpdateEventTypeRequest(
+        name: String? = nil,
+        color: String? = nil,
+        icon: String? = nil
+    ) -> UpdateEventTypeRequest {
+        UpdateEventTypeRequest(
+            name: name,
+            color: color,
+            icon: icon
+        )
+    }
 }
 
 /// Factory for creating deterministic PropertyValue fixtures
