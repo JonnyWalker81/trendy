@@ -15,9 +15,9 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 - [x] **TEST-04**: APIClient conforms to NetworkClientProtocol
 - [x] **TEST-05**: LocalStore conforms to DataStoreProtocol
 - [x] **TEST-06**: SyncEngine accepts protocol-based dependencies via init
-- [ ] **TEST-07**: MockNetworkClient with spy pattern (tracks calls, configurable responses)
-- [ ] **TEST-08**: MockDataStore with spy pattern (in-memory state)
-- [ ] **TEST-09**: MockDataStoreFactory for test injection
+- [x] **TEST-07**: MockNetworkClient with spy pattern (tracks calls, configurable responses)
+- [x] **TEST-08**: MockDataStore with spy pattern (in-memory state)
+- [x] **TEST-09**: MockDataStoreFactory for test injection
 
 ### Unit Tests - Circuit Breaker
 

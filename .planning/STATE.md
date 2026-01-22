@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Effortless tracking — users set up tracking once and forget about it
-**Current focus:** Phase 16 - Test Infrastructure
+**Current focus:** Phase 17 - Unit Tests - Circuit Breaker
 
 ## Current Position
 
-Phase: 16 of 22 (Test Infrastructure)
-Plan: 1 of ? in current phase
-Status: In progress
-Last activity: 2026-01-22 — Completed Plan 16-01 (MockNetworkClient Creation)
+Phase: 17 of 22 (Unit Tests - Circuit Breaker)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-01-21 — Phase 16 complete and verified
 
-Progress: [████░░░░░░] 33%
+Progress: [█████░░░░░] 45%
 
 ## Milestone History
 
@@ -47,16 +47,16 @@ Recent decisions affecting v1.2:
 - Extended DataStoreProtocol with fetchAll/deleteAll methods — for bootstrap cleanup operations
 - Fresh DataStore per operation — thread safety and data freshness pattern
 - JSON construction for APIGeofence in mocks — workaround for custom init(from:) decoder
+- In-memory ModelContainer for MockDataStore — SwiftData @Model requires ModelContext
 
-### Phase 16 In Progress
+### Phase 16 Completed
 
-**MockNetworkClient Creation** (Plan 16-01, 2026-01-22):
-- MockNetworkClient with spy pattern (993 lines, all 24 methods)
-- Thread-safe call tracking with NSLock
-- Response queues for sequential testing (circuit breaker patterns)
-- JSON construction workaround for APIGeofence
-- 10 unit tests validating mock behavior
-- Requirements in progress: TEST-07
+**Test Infrastructure** (2 plans, 2026-01-21):
+- MockNetworkClient (993 lines, all 24 methods) with spy pattern and response queues
+- MockDataStore (576 lines, all 29 methods) with in-memory ModelContainer
+- MockDataStoreFactory for actor boundary crossing
+- TestSupport extended with 25+ fixture methods
+- Requirements completed: TEST-07, TEST-08, TEST-09
 
 ### Phase 15 Completed
 
@@ -103,11 +103,11 @@ None
 - FullDisclosureSDK local package reference broken (points to non-existent path)
 - Blocks full Xcode builds but not protocol conformance verification
 - Should be removed or fixed before production builds
-- Does not block Phase 16 development (SyncEngine testing)
+- Does not block Phase 17 development (SyncEngine unit testing)
 
 ## Session Continuity
 
-Last session: 2026-01-22
-Stopped at: Completed Plan 16-01 (MockNetworkClient Creation)
+Last session: 2026-01-21
+Stopped at: Phase 16 execution and verification complete
 Resume file: None
-Next: Plan 16-02 (In-Memory ModelContainer for MockDataStore)
+Next: Plan Phase 17 (Unit Tests - Circuit Breaker)

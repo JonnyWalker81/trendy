@@ -156,8 +156,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Create MockNetworkClient with spy pattern and response configuration
-- [ ] 16-02-PLAN.md — Create MockDataStore, MockDataStoreFactory, and extend test fixtures
+- [x] 16-01-PLAN.md — Create MockNetworkClient with spy pattern and response configuration
+- [x] 16-02-PLAN.md — Create MockDataStore, MockDataStoreFactory, and extend test fixtures
 
 ---
 
@@ -363,7 +363,7 @@ All 44 v1.2 requirements mapped:
 | 13. Protocol Definitions | v1.2 | 2/2 | Complete | 2026-01-21 |
 | 14. Implementation Conformance | v1.2 | 1/1 | Complete | 2026-01-21 |
 | 15. SyncEngine DI Refactor | v1.2 | 1/1 | Complete | 2026-01-21 |
-| 16. Test Infrastructure | v1.2 | 0/2 | Planned | - |
+| 16. Test Infrastructure | v1.2 | 2/2 | Complete | 2026-01-21 |
 | 17. Unit Tests - Circuit Breaker | v1.2 | 0/? | Not started | - |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 0/? | Not started | - |
 | 19. Unit Tests - Deduplication | v1.2 | 0/? | Not started | - |
@@ -373,4 +373,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 16 planned)*
+*Last updated: 2026-01-21 (Phase 16 complete)*
