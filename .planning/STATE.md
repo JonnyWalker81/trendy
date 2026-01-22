@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 16 of 22 (Test Infrastructure)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-21 — Phase 15 complete and verified
+Plan: 2 of ? in current phase
+Status: In progress
+Last activity: 2026-01-22 — Completed Plan 16-02 (Mock Data Infrastructure)
 
-Progress: [████░░░░░░] 32%
+Progress: [████░░░░░░] 33%
 
 ## Milestone History
 
@@ -46,6 +46,19 @@ Recent decisions affecting v1.2:
 - @unchecked Sendable for APIClient — encoder/decoder accessed via async serialization
 - Extended DataStoreProtocol with fetchAll/deleteAll methods — for bootstrap cleanup operations
 - Fresh DataStore per operation — thread safety and data freshness pattern
+- In-memory ModelContainer for mocks — SwiftData @Model classes require ModelContext
+- Dual storage in MockDataStore — ModelContext for realism, dictionaries for verification
+- MockDataStoreFactory returns same instance — unlike production factory (different testing needs)
+
+### Phase 16 In Progress
+
+**Mock Data Infrastructure** (Plan 16-02, 2026-01-22):
+- MockDataStore with in-memory ModelContainer (576 lines, all 29 methods)
+- MockDataStoreFactory for SyncEngine testing
+- Extended TestSupport with 10+ API model fixtures
+- Spy pattern for call recording and verification
+- State seeding helpers for test setup
+- Requirements in progress: TEST-07
 
 ### Phase 15 Completed
 
@@ -96,7 +109,7 @@ None
 
 ## Session Continuity
 
-Last session: 2026-01-21
-Stopped at: Phase 15 execution and verification complete
+Last session: 2026-01-22
+Stopped at: Completed Plan 16-02 (Mock Data Infrastructure)
 Resume file: None
-Next: Plan Phase 16 (Test Infrastructure)
+Next: Continue Phase 16 (likely Plan 16-03: MockNetworkClient)
