@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 15 of 22 (SyncEngine DI Refactor)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-21 — Phase 14 complete and verified
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-01-21 — Completed 15-01-PLAN.md (SyncEngine DI Refactor)
 
-Progress: [███░░░░░░░] 27%
+Progress: [████░░░░░░] 32%
 
 ## Milestone History
 
@@ -44,6 +44,17 @@ Recent decisions affecting v1.2:
 - DataStoreProtocol NOT Sendable — instances created and used within actor context
 - DataStoreFactory IS Sendable — factory passed into actor from outside
 - @unchecked Sendable for APIClient — encoder/decoder accessed via async serialization
+- Extended DataStoreProtocol with fetchAll/deleteAll methods — for bootstrap cleanup operations
+- Fresh DataStore per operation — thread safety and data freshness pattern
+
+### Phase 15 Completed
+
+**SyncEngine DI Refactor** (1 plan, 2026-01-21):
+- SyncEngine accepts NetworkClientProtocol and DataStoreFactory via init
+- All concrete APIClient/ModelContainer references replaced with protocol types
+- EventStore creates SyncEngine with DefaultDataStoreFactory
+- Extended DataStoreProtocol with 12 additional methods (deviation: required for full refactor)
+- Requirements completed: TEST-06
 
 ### Phase 14 Completed
 
@@ -81,11 +92,11 @@ None
 - FullDisclosureSDK local package reference broken (points to non-existent path)
 - Blocks full Xcode builds but not protocol conformance verification
 - Should be removed or fixed before production builds
-- Does not block Phase 15 development (protocol conformance verified)
+- Does not block Phase 16 development (SyncEngine testing)
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Phase 14 execution and verification complete
+Stopped at: Phase 15 execution complete
 Resume file: None
-Next: Plan Phase 15 (SyncEngine DI Refactor)
+Next: Phase 16 (SyncEngine Testing)
