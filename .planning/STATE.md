@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 16 of 22 (Test Infrastructure)
-Plan: 2 of ? in current phase
+Plan: 1 of ? in current phase
 Status: In progress
-Last activity: 2026-01-22 — Completed Plan 16-02 (Mock Data Infrastructure)
+Last activity: 2026-01-22 — Completed Plan 16-01 (MockNetworkClient Creation)
 
 Progress: [████░░░░░░] 33%
 
@@ -46,18 +46,16 @@ Recent decisions affecting v1.2:
 - @unchecked Sendable for APIClient — encoder/decoder accessed via async serialization
 - Extended DataStoreProtocol with fetchAll/deleteAll methods — for bootstrap cleanup operations
 - Fresh DataStore per operation — thread safety and data freshness pattern
-- In-memory ModelContainer for mocks — SwiftData @Model classes require ModelContext
-- Dual storage in MockDataStore — ModelContext for realism, dictionaries for verification
-- MockDataStoreFactory returns same instance — unlike production factory (different testing needs)
+- JSON construction for APIGeofence in mocks — workaround for custom init(from:) decoder
 
 ### Phase 16 In Progress
 
-**Mock Data Infrastructure** (Plan 16-02, 2026-01-22):
-- MockDataStore with in-memory ModelContainer (576 lines, all 29 methods)
-- MockDataStoreFactory for SyncEngine testing
-- Extended TestSupport with 10+ API model fixtures
-- Spy pattern for call recording and verification
-- State seeding helpers for test setup
+**MockNetworkClient Creation** (Plan 16-01, 2026-01-22):
+- MockNetworkClient with spy pattern (993 lines, all 24 methods)
+- Thread-safe call tracking with NSLock
+- Response queues for sequential testing (circuit breaker patterns)
+- JSON construction workaround for APIGeofence
+- 10 unit tests validating mock behavior
 - Requirements in progress: TEST-07
 
 ### Phase 15 Completed
@@ -110,6 +108,6 @@ None
 ## Session Continuity
 
 Last session: 2026-01-22
-Stopped at: Completed Plan 16-02 (Mock Data Infrastructure)
+Stopped at: Completed Plan 16-01 (MockNetworkClient Creation)
 Resume file: None
-Next: Continue Phase 16 (likely Plan 16-03: MockNetworkClient)
+Next: Plan 16-02 (In-Memory ModelContainer for MockDataStore)
