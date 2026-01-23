@@ -198,10 +198,10 @@ Plans:
 4. Test verifies cursor advances only after successful delete sync
 5. Test verifies pendingDeleteIds cleared after delete confirmed server-side
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 18-01: TBD
+- [ ] 18-01-PLAN.md — Create resurrection prevention tests covering skip, population, cursor, cleanup
 
 ---
 
@@ -365,7 +365,7 @@ All 44 v1.2 requirements mapped:
 | 15. SyncEngine DI Refactor | v1.2 | 1/1 | Complete | 2026-01-21 |
 | 16. Test Infrastructure | v1.2 | 2/2 | Complete | 2026-01-21 |
 | 17. Unit Tests - Circuit Breaker | v1.2 | 1/1 | Complete | 2026-01-22 |
-| 18. Unit Tests - Resurrection Prevention | v1.2 | 0/? | Not started | - |
+| 18. Unit Tests - Resurrection Prevention | v1.2 | 0/1 | Not started | - |
 | 19. Unit Tests - Deduplication | v1.2 | 0/? | Not started | - |
 | 20. Unit Tests - Additional Coverage | v1.2 | 0/? | Not started | - |
 | 21. Code Quality Refactoring | v1.2 | 0/? | Not started | - |
@@ -373,4 +373,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-22 (Phase 17 complete)*
+*Last updated: 2026-01-22 (Phase 18 planned)*
