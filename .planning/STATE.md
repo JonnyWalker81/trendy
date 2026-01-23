@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 20 of 22 (Unit Tests - Additional Coverage)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-23 — Phase 19 complete and verified
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-01-23 — Completed 20-01-PLAN.md
 
-Progress: [████████░░] 73%
+Progress: [████████░░] 77%
 
 ## Milestone History
 
@@ -52,6 +52,19 @@ Recent decisions affecting v1.2:
 - Manual resetCircuitBreaker for testing — no real time delays in unit tests
 - ChangeEntryData not needed for resurrection tests — resurrection check happens before data access
 - Response queue pattern for retry testing — extends MockNetworkClient for sequential error/success scenarios
+
+### Phase 20 Completed
+
+**Unit Tests - Additional Coverage** (1 plan, 2026-01-23):
+- SingleFlightTests.swift (213 lines, 6 tests, 2 suites) - VERIFIED
+- PaginationTests.swift (288 lines, 8 tests, 2 suites) - VERIFIED
+- BootstrapTests.swift (329 lines, 9 tests, 2 suites) - VERIFIED
+- BatchProcessingTests.swift (369 lines, 9 tests, 2 suites) - VERIFIED
+- HealthCheckTests.swift (309 lines, 10 tests, 2 suites) - VERIFIED
+- Test helpers: makeTestDependencies, configureForFlush, configureForBootstrap, seedEventMutation
+- All 5 SYNC requirements covered (SYNC-01 through SYNC-05)
+- Tests compile but can't run due to FullDisclosureSDK blocker
+- Requirements completed: SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05
 
 ### Phase 19 Completed
 
@@ -140,6 +153,6 @@ None
 ## Session Continuity
 
 Last session: 2026-01-23
-Stopped at: Phase 19 verified and complete
+Stopped at: Completed 20-01-PLAN.md (Phase 20 complete)
 Resume file: None
-Next: Plan Phase 20 (Unit Tests - Additional Coverage)
+Next: Phase 21 or milestone wrap-up
