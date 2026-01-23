@@ -37,11 +37,11 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 ### Unit Tests - Deduplication
 
-- [ ] **DUP-01**: Test same event not created twice with same idempotency key
-- [ ] **DUP-02**: Test retry after network error reuses same idempotency key
-- [ ] **DUP-03**: Test different mutations use different idempotency keys
-- [ ] **DUP-04**: Test server 409 Conflict response handled (duplicate detected)
-- [ ] **DUP-05**: Test mutation queue prevents duplicate pending entries
+- [x] **DUP-01**: Test same event not created twice with same idempotency key
+- [x] **DUP-02**: Test retry after network error reuses same idempotency key
+- [x] **DUP-03**: Test different mutations use different idempotency keys
+- [x] **DUP-04**: Test server 409 Conflict response handled (duplicate detected)
+- [x] **DUP-05**: Test mutation queue prevents duplicate pending entries
 
 ### Unit Tests - Additional Coverage
 
