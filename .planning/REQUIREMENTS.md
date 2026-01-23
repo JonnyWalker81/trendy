@@ -21,11 +21,11 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 ### Unit Tests - Circuit Breaker
 
-- [ ] **CB-01**: Test circuit breaker trips after 3 consecutive rate limit errors
-- [ ] **CB-02**: Test circuit breaker resets after backoff period expires
-- [ ] **CB-03**: Test sync blocked while circuit breaker tripped
-- [ ] **CB-04**: Test exponential backoff timing (30s → 60s → 120s → max 300s)
-- [ ] **CB-05**: Test rate limit counter resets on successful sync
+- [x] **CB-01**: Test circuit breaker trips after 3 consecutive rate limit errors
+- [x] **CB-02**: Test circuit breaker resets after backoff period expires
+- [x] **CB-03**: Test sync blocked while circuit breaker tripped
+- [x] **CB-04**: Test exponential backoff timing (30s → 60s → 120s → max 300s)
+- [x] **CB-05**: Test rate limit counter resets on successful sync
 
 ### Unit Tests - Resurrection Prevention
 
@@ -118,14 +118,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-04 | Phase 14 | Complete |
 | TEST-05 | Phase 14 | Complete |
 | TEST-06 | Phase 15 | Complete |
-| TEST-07 | Phase 16 | Pending |
-| TEST-08 | Phase 16 | Pending |
-| TEST-09 | Phase 16 | Pending |
-| CB-01 | Phase 17 | Pending |
-| CB-02 | Phase 17 | Pending |
-| CB-03 | Phase 17 | Pending |
-| CB-04 | Phase 17 | Pending |
-| CB-05 | Phase 17 | Pending |
+| TEST-07 | Phase 16 | Complete |
+| TEST-08 | Phase 16 | Complete |
+| TEST-09 | Phase 16 | Complete |
+| CB-01 | Phase 17 | Complete |
+| CB-02 | Phase 17 | Complete |
+| CB-03 | Phase 17 | Complete |
+| CB-04 | Phase 17 | Complete |
+| CB-05 | Phase 17 | Complete |
 | RES-01 | Phase 18 | Pending |
 | RES-02 | Phase 18 | Pending |
 | RES-03 | Phase 18 | Pending |
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 15 complete)*
+*Last updated: 2026-01-22 (Phase 17 complete)*

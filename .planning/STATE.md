@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Effortless tracking — users set up tracking once and forget about it
-**Current focus:** Phase 17 - Unit Tests - Circuit Breaker
+**Current focus:** Phase 18 - Unit Tests - Resurrection Prevention
 
 ## Current Position
 
-Phase: 17 of 22 (Unit Tests - Circuit Breaker)
-Plan: 1 of 1 in current phase
-Status: Plan 01 complete
-Last activity: 2026-01-22 — Completed 17-01 Circuit Breaker Tests
+Phase: 18 of 22 (Unit Tests - Resurrection Prevention)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-01-22 — Phase 17 complete and verified
 
-Progress: [█████░░░░░] 48%
+Progress: [██████░░░░] 55%
 
 ## Milestone History
 
@@ -51,10 +51,10 @@ Recent decisions affecting v1.2:
 - Wide timing tolerances for backoff assertions — avoid flaky tests (25-35s instead of exact 30s)
 - Manual resetCircuitBreaker for testing — no real time delays in unit tests
 
-### Phase 17 In Progress
+### Phase 17 Completed
 
 **Unit Tests - Circuit Breaker** (1 plan, 2026-01-22):
-- CircuitBreakerTests.swift (412 lines, 10 tests, 4 suites)
+- CircuitBreakerTests.swift (412 lines, 10 tests, 4 suites) - VERIFIED
 - Test helpers: makeTestDependencies, tripCircuitBreaker, seedEventMutation
 - All 5 CB requirements covered (CB-01 through CB-05)
 - Tests compile but can't run due to FullDisclosureSDK blocker
@@ -119,6 +119,6 @@ None
 ## Session Continuity
 
 Last session: 2026-01-22
-Stopped at: Phase 17 Plan 01 complete
+Stopped at: Phase 17 execution and verification complete
 Resume file: None
-Next: Phase 18 (Unit Tests - Conflict Resolution) or fix SDK blocker
+Next: Plan Phase 18 (Unit Tests - Resurrection Prevention)
