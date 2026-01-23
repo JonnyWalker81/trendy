@@ -29,11 +29,11 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 ### Unit Tests - Resurrection Prevention
 
-- [ ] **RES-01**: Test deleted items not re-created during bootstrap fetch
-- [ ] **RES-02**: Test pendingDeleteIds populated before pullChanges
-- [ ] **RES-03**: Test bootstrap skips items in pendingDeleteIds set
-- [ ] **RES-04**: Test cursor advances only after successful delete sync
-- [ ] **RES-05**: Test pendingDeleteIds cleared after delete confirmed server-side
+- [x] **RES-01**: Test deleted items not re-created during bootstrap fetch
+- [x] **RES-02**: Test pendingDeleteIds populated before pullChanges
+- [x] **RES-03**: Test bootstrap skips items in pendingDeleteIds set
+- [x] **RES-04**: Test cursor advances only after successful delete sync
+- [x] **RES-05**: Test pendingDeleteIds cleared after delete confirmed server-side
 
 ### Unit Tests - Deduplication
 
@@ -126,11 +126,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CB-03 | Phase 17 | Complete |
 | CB-04 | Phase 17 | Complete |
 | CB-05 | Phase 17 | Complete |
-| RES-01 | Phase 18 | Pending |
-| RES-02 | Phase 18 | Pending |
-| RES-03 | Phase 18 | Pending |
-| RES-04 | Phase 18 | Pending |
-| RES-05 | Phase 18 | Pending |
+| RES-01 | Phase 18 | Complete |
+| RES-02 | Phase 18 | Complete |
+| RES-03 | Phase 18 | Complete |
+| RES-04 | Phase 18 | Complete |
+| RES-05 | Phase 18 | Complete |
 | DUP-01 | Phase 19 | Pending |
 | DUP-02 | Phase 19 | Pending |
 | DUP-03 | Phase 19 | Pending |
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-22 (Phase 17 complete)*
+*Last updated: 2026-01-22 (Phase 18 complete)*
