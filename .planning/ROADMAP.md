@@ -176,10 +176,10 @@ Plans:
 4. Test verifies exponential backoff timing (30s -> 60s -> 120s -> max 300s)
 5. Test verifies rate limit counter resets on successful sync
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 17-01: TBD
+- [ ] 17-01-PLAN.md — Create circuit breaker unit tests covering trip, reset, blocking, backoff timing
 
 ---
 
@@ -364,7 +364,7 @@ All 44 v1.2 requirements mapped:
 | 14. Implementation Conformance | v1.2 | 1/1 | Complete | 2026-01-21 |
 | 15. SyncEngine DI Refactor | v1.2 | 1/1 | Complete | 2026-01-21 |
 | 16. Test Infrastructure | v1.2 | 2/2 | Complete | 2026-01-21 |
-| 17. Unit Tests - Circuit Breaker | v1.2 | 0/? | Not started | - |
+| 17. Unit Tests - Circuit Breaker | v1.2 | 0/1 | Planned | - |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 0/? | Not started | - |
 | 19. Unit Tests - Deduplication | v1.2 | 0/? | Not started | - |
 | 20. Unit Tests - Additional Coverage | v1.2 | 0/? | Not started | - |
@@ -373,4 +373,4 @@ All 44 v1.2 requirements mapped:
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-21 (Phase 16 complete)*
+*Last updated: 2026-01-22 (Phase 17 planned)*
