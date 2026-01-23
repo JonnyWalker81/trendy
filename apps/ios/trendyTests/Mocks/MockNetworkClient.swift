@@ -200,6 +200,7 @@ final class MockNetworkClient: NetworkClientProtocol, @unchecked Sendable {
     var getAllEventsResponses: [Result<[APIEvent], Error>] = []
     var createEventResponses: [Result<APIEvent, Error>] = []
     var createEventsBatchResponses: [Result<BatchCreateEventsResponse, Error>] = []
+    var createEventWithIdempotencyResponses: [Result<APIEvent, Error>] = []
     var updateEventResponses: [Result<APIEvent, Error>] = []
     var getGeofencesResponses: [Result<[APIGeofence], Error>] = []
     var createGeofenceResponses: [Result<APIGeofence, Error>] = []
@@ -460,8 +461,19 @@ final class MockNetworkClient: NetworkClientProtocol, @unchecked Sendable {
     func createEventWithIdempotency(_ request: CreateEventRequest, idempotencyKey: String) async throws -> APIEvent {
         lock.lock()
         createEventWithIdempotencyCalls.append(CreateEventWithIdempotencyCall(request: request, idempotencyKey: idempotencyKey, timestamp: Date()))
+
+        // Check response queue first (for sequential testing)
+        if !createEventWithIdempotencyResponses.isEmpty {
+            let result = createEventWithIdempotencyResponses.removeFirst()
+            lock.unlock()
+            switch result {
+            case .success(let event): return event
+            case .failure(let error): throw error
+            }
+        }
         lock.unlock()
 
+        // Check global error
         if let error = errorToThrow {
             throw error
         }
@@ -946,6 +958,7 @@ final class MockNetworkClient: NetworkClientProtocol, @unchecked Sendable {
         getAllEventsResponses.removeAll()
         createEventResponses.removeAll()
         createEventsBatchResponses.removeAll()
+        createEventWithIdempotencyResponses.removeAll()
         updateEventResponses.removeAll()
         getGeofencesResponses.removeAll()
         createGeofenceResponses.removeAll()
