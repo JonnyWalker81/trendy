@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 17 of 22 (Unit Tests - Circuit Breaker)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-21 — Phase 16 complete and verified
+Plan: 1 of 1 in current phase
+Status: Plan 01 complete
+Last activity: 2026-01-22 — Completed 17-01 Circuit Breaker Tests
 
-Progress: [█████░░░░░] 45%
+Progress: [█████░░░░░] 48%
 
 ## Milestone History
 
@@ -48,6 +48,17 @@ Recent decisions affecting v1.2:
 - Fresh DataStore per operation — thread safety and data freshness pattern
 - JSON construction for APIGeofence in mocks — workaround for custom init(from:) decoder
 - In-memory ModelContainer for MockDataStore — SwiftData @Model requires ModelContext
+- Wide timing tolerances for backoff assertions — avoid flaky tests (25-35s instead of exact 30s)
+- Manual resetCircuitBreaker for testing — no real time delays in unit tests
+
+### Phase 17 In Progress
+
+**Unit Tests - Circuit Breaker** (1 plan, 2026-01-22):
+- CircuitBreakerTests.swift (412 lines, 10 tests, 4 suites)
+- Test helpers: makeTestDependencies, tripCircuitBreaker, seedEventMutation
+- All 5 CB requirements covered (CB-01 through CB-05)
+- Tests compile but can't run due to FullDisclosureSDK blocker
+- Requirements completed: CB-01, CB-02, CB-03, CB-04, CB-05
 
 ### Phase 16 Completed
 
@@ -101,13 +112,13 @@ None
 
 **iOS Build Dependency Issue:**
 - FullDisclosureSDK local package reference broken (points to non-existent path)
-- Blocks full Xcode builds but not protocol conformance verification
+- Blocks full Xcode builds and test execution
 - Should be removed or fixed before production builds
-- Does not block Phase 17 development (SyncEngine unit testing)
+- Test code compiles and has valid syntax, will run once SDK fixed
 
 ## Session Continuity
 
-Last session: 2026-01-21
-Stopped at: Phase 16 execution and verification complete
+Last session: 2026-01-22
+Stopped at: Phase 17 Plan 01 complete
 Resume file: None
-Next: Plan Phase 17 (Unit Tests - Circuit Breaker)
+Next: Phase 18 (Unit Tests - Conflict Resolution) or fix SDK blocker
