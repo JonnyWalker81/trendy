@@ -242,10 +242,10 @@ Plans:
 4. Test verifies batch processing with 50-event batches and partial failure handling
 5. Test verifies health check detects captive portal (prevents false syncs)
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 20-01: TBD
+- [ ] 20-01-PLAN.md — Single-flight, pagination, bootstrap, batch processing, and health check tests
 
 ---
 
@@ -367,10 +367,10 @@ All 44 v1.2 requirements mapped:
 | 17. Unit Tests - Circuit Breaker | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 19. Unit Tests - Deduplication | v1.2 | 1/1 | Complete | 2026-01-23 |
-| 20. Unit Tests - Additional Coverage | v1.2 | 0/? | Not started | - |
+| 20. Unit Tests - Additional Coverage | v1.2 | 0/1 | Planned | - |
 | 21. Code Quality Refactoring | v1.2 | 0/? | Not started | - |
 | 22. Metrics & Documentation | v1.2 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-23 (Phase 19 complete)*
+*Last updated: 2026-01-23 (Phase 20 planned)*
