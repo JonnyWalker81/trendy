@@ -45,11 +45,11 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 ### Unit Tests - Additional Coverage
 
-- [ ] **SYNC-01**: Test single-flight pattern (concurrent sync calls coalesced)
-- [ ] **SYNC-02**: Test cursor pagination (hasMore flag, cursor advancement)
-- [ ] **SYNC-03**: Test bootstrap fetch (full data download, relationship restoration)
-- [ ] **SYNC-04**: Test batch processing (50-event batches, partial failure handling)
-- [ ] **SYNC-05**: Test health check detects captive portal (prevents false syncs)
+- [x] **SYNC-01**: Test single-flight pattern (concurrent sync calls coalesced)
+- [x] **SYNC-02**: Test cursor pagination (hasMore flag, cursor advancement)
+- [x] **SYNC-03**: Test bootstrap fetch (full data download, relationship restoration)
+- [x] **SYNC-04**: Test batch processing (50-event batches, partial failure handling)
+- [x] **SYNC-05**: Test health check detects captive portal (prevents false syncs)
 
 ### Code Quality
 
@@ -131,16 +131,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RES-03 | Phase 18 | Complete |
 | RES-04 | Phase 18 | Complete |
 | RES-05 | Phase 18 | Complete |
-| DUP-01 | Phase 19 | Pending |
-| DUP-02 | Phase 19 | Pending |
-| DUP-03 | Phase 19 | Pending |
-| DUP-04 | Phase 19 | Pending |
-| DUP-05 | Phase 19 | Pending |
-| SYNC-01 | Phase 20 | Pending |
-| SYNC-02 | Phase 20 | Pending |
-| SYNC-03 | Phase 20 | Pending |
-| SYNC-04 | Phase 20 | Pending |
-| SYNC-05 | Phase 20 | Pending |
+| DUP-01 | Phase 19 | Complete |
+| DUP-02 | Phase 19 | Complete |
+| DUP-03 | Phase 19 | Complete |
+| DUP-04 | Phase 19 | Complete |
+| DUP-05 | Phase 19 | Complete |
+| SYNC-01 | Phase 20 | Complete |
+| SYNC-02 | Phase 20 | Complete |
+| SYNC-03 | Phase 20 | Complete |
+| SYNC-04 | Phase 20 | Complete |
+| SYNC-05 | Phase 20 | Complete |
 | QUAL-01 | Phase 12 | Complete |
 | QUAL-02 | Phase 12 | Complete |
 | QUAL-03 | Phase 21 | Pending |
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-22 (Phase 18 complete)*
+*Last updated: 2026-01-23 (Phase 20 complete)*

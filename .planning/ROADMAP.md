@@ -245,7 +245,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 20-01-PLAN.md — Single-flight, pagination, bootstrap, batch processing, and health check tests
+- [x] 20-01-PLAN.md — Single-flight, pagination, bootstrap, batch processing, and health check tests
 
 ---
 
@@ -367,10 +367,10 @@ All 44 v1.2 requirements mapped:
 | 17. Unit Tests - Circuit Breaker | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 19. Unit Tests - Deduplication | v1.2 | 1/1 | Complete | 2026-01-23 |
-| 20. Unit Tests - Additional Coverage | v1.2 | 0/1 | Planned | - |
+| 20. Unit Tests - Additional Coverage | v1.2 | 1/1 | Complete | 2026-01-23 |
 | 21. Code Quality Refactoring | v1.2 | 0/? | Not started | - |
 | 22. Metrics & Documentation | v1.2 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-23 (Phase 20 planned)*
+*Last updated: 2026-01-23 (Phase 20 complete)*
