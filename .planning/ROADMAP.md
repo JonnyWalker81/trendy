@@ -220,10 +220,10 @@ Plans:
 4. Test verifies server 409 Conflict response handled correctly
 5. Test verifies mutation queue prevents duplicate pending entries
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 19-01: TBD
+- [ ] 19-01-PLAN.md — Deduplication tests covering queue prevention, idempotency keys, 409 handling
 
 ---
 
@@ -366,11 +366,11 @@ All 44 v1.2 requirements mapped:
 | 16. Test Infrastructure | v1.2 | 2/2 | Complete | 2026-01-21 |
 | 17. Unit Tests - Circuit Breaker | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 1/1 | Complete | 2026-01-22 |
-| 19. Unit Tests - Deduplication | v1.2 | 0/? | Not started | - |
+| 19. Unit Tests - Deduplication | v1.2 | 0/1 | Planned | - |
 | 20. Unit Tests - Additional Coverage | v1.2 | 0/? | Not started | - |
 | 21. Code Quality Refactoring | v1.2 | 0/? | Not started | - |
 | 22. Metrics & Documentation | v1.2 | 0/? | Not started | - |
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-22 (Phase 18 complete)*
+*Last updated: 2026-01-23 (Phase 19 planned)*
