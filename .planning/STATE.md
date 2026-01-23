@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 18 of 22 (Unit Tests - Resurrection Prevention)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-22 — Phase 17 complete and verified
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-01-22 — Completed 18-01-PLAN.md
 
-Progress: [██████░░░░] 55%
+Progress: [███████░░░] 60%
 
 ## Milestone History
 
@@ -50,6 +50,16 @@ Recent decisions affecting v1.2:
 - In-memory ModelContainer for MockDataStore — SwiftData @Model requires ModelContext
 - Wide timing tolerances for backoff assertions — avoid flaky tests (25-35s instead of exact 30s)
 - Manual resetCircuitBreaker for testing — no real time delays in unit tests
+- ChangeEntryData not needed for resurrection tests — resurrection check happens before data access
+
+### Phase 18 Completed
+
+**Unit Tests - Resurrection Prevention** (1 plan, 2026-01-22):
+- ResurrectionPreventionTests.swift (390 lines, 10 tests, 4 suites) - VERIFIED
+- Test helpers: makeTestDependencies, configureForPullChanges, seedDeleteMutation
+- All 5 RES requirements covered (RES-01 through RES-05)
+- Tests compile but can't run due to FullDisclosureSDK blocker
+- Requirements completed: RES-01, RES-02, RES-03, RES-04, RES-05
 
 ### Phase 17 Completed
 
@@ -119,6 +129,6 @@ None
 ## Session Continuity
 
 Last session: 2026-01-22
-Stopped at: Phase 17 execution and verification complete
+Stopped at: Phase 18 execution complete
 Resume file: None
-Next: Plan Phase 18 (Unit Tests - Resurrection Prevention)
+Next: Plan Phase 19 (Unit Tests - Cursor Synchronization)
