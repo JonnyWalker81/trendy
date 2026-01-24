@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-21)
 ## Current Position
 
 Phase: 21 of 22 (Code Quality Refactoring)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-23 — Phase 20 complete and verified
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-01-23 — Completed 21-01-PLAN.md
 
-Progress: [████████░░] 82%
+Progress: [████████░░] 83%
 
 ## Milestone History
 
@@ -52,6 +52,18 @@ Recent decisions affecting v1.2:
 - Manual resetCircuitBreaker for testing — no real time delays in unit tests
 - ChangeEntryData not needed for resurrection tests — resurrection check happens before data access
 - Response queue pattern for retry testing — extends MockNetworkClient for sequential error/success scenarios
+- 60 lines acceptable for coordinator method — under 70 with clear structure is acceptable
+- syncEventCreateBatches returns early on circuit breaker trip
+- syncOtherMutations takes startingSyncedCount to accumulate progress
+
+### Phase 21 In Progress
+
+**Code Quality Refactoring** (2 plans, 2026-01-23):
+- Plan 01 completed: flushPendingMutations refactored from 247 to 60 lines
+- Extracted syncEventCreateBatches (100 lines) for batch event CREATE processing
+- Extracted syncOtherMutations (99 lines) for updates/deletes/non-events
+- All behavior preserved exactly (circuit breaker, error handling, logging)
+- Requirements addressed: QUAL-03 (partial)
 
 ### Phase 20 Completed
 
@@ -153,6 +165,6 @@ None
 ## Session Continuity
 
 Last session: 2026-01-23
-Stopped at: Phase 20 verified and complete
+Stopped at: Completed 21-01-PLAN.md
 Resume file: None
-Next: Plan Phase 21 (Code Quality Refactoring)
+Next: Execute 21-02-PLAN.md (if exists)
