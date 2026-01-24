@@ -1600,42 +1600,8 @@ actor SyncEngine {
     private func bootstrapFetch() async throws {
         let dataStore = dataStoreFactory.makeDataStore()
 
-        // NUCLEAR CLEANUP: Delete ALL local data before repopulating from backend.
-        // This ensures a completely clean slate and prevents any duplicate accumulation.
-        // This is safe because bootstrap is only called when we want a fresh sync.
-        Log.sync.info("Bootstrap: Starting nuclear cleanup of all local data")
-
-        // Delete all Events first (they reference EventTypes)
-        let allLocalEvents = try dataStore.fetchAllEvents()
-        Log.sync.info("Bootstrap: Deleting all local events", context: .with { ctx in
-            ctx.add("count", allLocalEvents.count)
-        })
-        try dataStore.deleteAllEvents()
-
-        // Delete all Geofences
-        let allLocalGeofences = try dataStore.fetchAllGeofences()
-        Log.sync.info("Bootstrap: Deleting all local geofences", context: .with { ctx in
-            ctx.add("count", allLocalGeofences.count)
-        })
-        try dataStore.deleteAllGeofences()
-
-        // Delete all PropertyDefinitions
-        let allLocalPropDefs = try dataStore.fetchAllPropertyDefinitions()
-        Log.sync.info("Bootstrap: Deleting all local property definitions", context: .with { ctx in
-            ctx.add("count", allLocalPropDefs.count)
-        })
-        try dataStore.deleteAllPropertyDefinitions()
-
-        // Delete all EventTypes last (other entities may reference them)
-        let allLocalEventTypes = try dataStore.fetchAllEventTypes()
-        Log.sync.info("Bootstrap: Deleting all local event types", context: .with { ctx in
-            ctx.add("count", allLocalEventTypes.count)
-        })
-        try dataStore.deleteAllEventTypes()
-
-        // Save the deletions
-        try dataStore.save()
-        Log.sync.info("Bootstrap: Nuclear cleanup completed - all local data deleted")
+        // Nuclear cleanup: ensure clean slate before populating from backend
+        try performNuclearCleanup(dataStore: dataStore)
 
         // Step 1: Fetch and upsert all EventTypes first (Events reference them)
         Log.sync.info("Bootstrap: fetching event types")
@@ -1818,6 +1784,46 @@ actor SyncEngine {
         await MainActor.run {
             NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
         }
+    }
+
+    /// Delete all local data before repopulating from backend.
+    /// Called during bootstrap to ensure a clean slate.
+    /// - Parameter dataStore: Data store for persistence operations
+    /// - Throws: If deletion or save fails
+    private func performNuclearCleanup(dataStore: any DataStoreProtocol) throws {
+        Log.sync.info("Bootstrap: Starting nuclear cleanup of all local data")
+
+        // Delete all Events first (they reference EventTypes)
+        let allLocalEvents = try dataStore.fetchAllEvents()
+        Log.sync.info("Bootstrap: Deleting all local events", context: .with { ctx in
+            ctx.add("count", allLocalEvents.count)
+        })
+        try dataStore.deleteAllEvents()
+
+        // Delete all Geofences
+        let allLocalGeofences = try dataStore.fetchAllGeofences()
+        Log.sync.info("Bootstrap: Deleting all local geofences", context: .with { ctx in
+            ctx.add("count", allLocalGeofences.count)
+        })
+        try dataStore.deleteAllGeofences()
+
+        // Delete all PropertyDefinitions
+        let allLocalPropDefs = try dataStore.fetchAllPropertyDefinitions()
+        Log.sync.info("Bootstrap: Deleting all local property definitions", context: .with { ctx in
+            ctx.add("count", allLocalPropDefs.count)
+        })
+        try dataStore.deleteAllPropertyDefinitions()
+
+        // Delete all EventTypes last (other entities may reference them)
+        let allLocalEventTypes = try dataStore.fetchAllEventTypes()
+        Log.sync.info("Bootstrap: Deleting all local event types", context: .with { ctx in
+            ctx.add("count", allLocalEventTypes.count)
+        })
+        try dataStore.deleteAllEventTypes()
+
+        // Save the deletions
+        try dataStore.save()
+        Log.sync.info("Bootstrap: Nuclear cleanup completed - all local data deleted")
     }
 
     /// Restore Event→EventType relationships for events with missing eventType relationship.
