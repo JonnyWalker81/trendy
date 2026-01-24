@@ -1600,10 +1600,68 @@ actor SyncEngine {
     private func bootstrapFetch() async throws {
         let dataStore = dataStoreFactory.makeDataStore()
 
-        // Nuclear cleanup: ensure clean slate before populating from backend
+        // Step 0: Nuclear cleanup - ensure clean slate before populating from backend
         try performNuclearCleanup(dataStore: dataStore)
 
-        // Step 1: Fetch and upsert all EventTypes first (Events reference them)
+        // Step 1: Fetch EventTypes first (Events reference them)
+        let eventTypes = try await fetchEventTypesForBootstrap(dataStore: dataStore)
+
+        // Step 2: Fetch Geofences (Events may reference them)
+        try await fetchGeofencesForBootstrap(dataStore: dataStore)
+
+        // Step 3: Fetch Events
+        let eventCount = try await fetchEventsForBootstrap(dataStore: dataStore)
+
+        // Step 4: Fetch PropertyDefinitions for each EventType
+        let propDefCount = try await fetchPropertyDefinitionsForBootstrap(
+            eventTypes: eventTypes,
+            dataStore: dataStore
+        )
+
+        // Restore any broken Event->EventType relationships
+        try restoreEventTypeRelationships(dataStore: dataStore)
+
+        // Verification: count remaining records after bootstrap
+        let finalEventCount = try dataStore.fetchAllEvents().count
+        let finalEventTypeCount = try dataStore.fetchAllEventTypes().count
+        let finalGeofenceCount = try dataStore.fetchAllGeofences().count
+
+        Log.sync.info("Bootstrap fetch completed", context: .with { ctx in
+            ctx.add("backend_event_types", eventTypes.count)
+            ctx.add("backend_geofences", finalGeofenceCount)
+            ctx.add("backend_events", eventCount)
+            ctx.add("backend_property_definitions", propDefCount)
+            ctx.add("final_local_events", finalEventCount)
+            ctx.add("final_local_event_types", finalEventTypeCount)
+            ctx.add("final_local_geofences", finalGeofenceCount)
+        })
+
+        // DIAGNOSTIC: Additional verification after save (using fresh dataStore)
+        let verifyDataStore = dataStoreFactory.makeDataStore()
+        let verifyEventCount = (try? verifyDataStore.fetchAllEvents().count) ?? -1
+        let verifyEventTypeCount = (try? verifyDataStore.fetchAllEventTypes().count) ?? -1
+        Log.sync.info("Bootstrap verification after save", context: .with { ctx in
+            ctx.add("verify_events_fresh_context", verifyEventCount)
+            ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
+        })
+
+        // Notify HealthKitService to reload processedSampleIds from the database.
+        // This prevents duplicate event creation when HealthKit observer queries fire after bootstrap.
+        // The bootstrap downloaded events with healthKitSampleIds, but HealthKitService's in-memory
+        // processedSampleIds set doesn't include them yet.
+        Log.sync.info("Posting bootstrap completed notification for HealthKit")
+        await MainActor.run {
+            NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
+        }
+    }
+
+    /// Fetch and upsert all EventTypes from backend.
+    /// - Parameter dataStore: Data store for persistence operations
+    /// - Returns: Array of fetched API event types (needed for property definition fetch)
+    /// - Throws: Network or persistence errors
+    private func fetchEventTypesForBootstrap(
+        dataStore: any DataStoreProtocol
+    ) async throws -> [APIEventType] {
         Log.sync.info("Bootstrap: fetching event types")
         let eventTypes = try await networkClient.getEventTypes()
         Log.sync.info("Bootstrap: received event types", context: .with { ctx in
@@ -1627,7 +1685,15 @@ actor SyncEngine {
             ctx.add("count", eventTypes.count)
         })
 
-        // Step 2: Fetch and upsert all Geofences (Events may reference them)
+        return eventTypes
+    }
+
+    /// Fetch and upsert all Geofences from backend.
+    /// - Parameter dataStore: Data store for persistence operations
+    /// - Throws: Network or persistence errors
+    private func fetchGeofencesForBootstrap(
+        dataStore: any DataStoreProtocol
+    ) async throws {
         Log.sync.info("Bootstrap: fetching geofences")
         let geofences = try await networkClient.getGeofences(activeOnly: false)
         Log.sync.info("Bootstrap: received geofences", context: .with { ctx in
@@ -1654,8 +1720,15 @@ actor SyncEngine {
         Log.sync.info("Bootstrap: Saved geofences", context: .with { ctx in
             ctx.add("count", geofences.count)
         })
+    }
 
-        // Step 3: Fetch and upsert all Events
+    /// Fetch and upsert all Events from backend.
+    /// - Parameter dataStore: Data store for persistence operations
+    /// - Returns: Count of fetched events (for logging)
+    /// - Throws: Network or persistence errors
+    private func fetchEventsForBootstrap(
+        dataStore: any DataStoreProtocol
+    ) async throws -> Int {
         Log.sync.info("Bootstrap: fetching events")
         let events = try await networkClient.getAllEvents(batchSize: 50)
         Log.sync.info("Bootstrap: received events", context: .with { ctx in
@@ -1705,9 +1778,22 @@ actor SyncEngine {
             ctx.add("count", events.count)
         })
 
-        // Step 4: Fetch property definitions for each event type
+        return events.count
+    }
+
+    /// Fetch property definitions for all event types.
+    /// - Parameters:
+    ///   - eventTypes: Event types to fetch definitions for
+    ///   - dataStore: Data store for persistence operations
+    /// - Returns: Count of fetched property definitions (for logging)
+    /// - Throws: Persistence errors (network errors per-type are logged and continue)
+    private func fetchPropertyDefinitionsForBootstrap(
+        eventTypes: [APIEventType],
+        dataStore: any DataStoreProtocol
+    ) async throws -> Int {
         Log.sync.info("Bootstrap: fetching property definitions")
         var allPropertyDefinitionIds: [String] = []
+
         for apiEventType in eventTypes {
             do {
                 let propDefs = try await networkClient.getPropertyDefinitions(eventTypeId: apiEventType.id)
@@ -1742,6 +1828,7 @@ actor SyncEngine {
                 // Continue with other event types
             }
         }
+
         Log.sync.info("Bootstrap: received property definitions", context: .with { ctx in
             ctx.add("count", allPropertyDefinitionIds.count)
         })
@@ -1749,41 +1836,7 @@ actor SyncEngine {
         // Save all upserts
         try dataStore.save()
 
-        // Restore any broken Event→EventType relationships
-        try restoreEventTypeRelationships(dataStore: dataStore)
-
-        // Verification: count remaining records after cleanup
-        let finalEventCount = try dataStore.fetchAllEvents().count
-        let finalEventTypeCount = try dataStore.fetchAllEventTypes().count
-        let finalGeofenceCount = try dataStore.fetchAllGeofences().count
-
-        Log.sync.info("Bootstrap fetch completed", context: .with { ctx in
-            ctx.add("backend_event_types", eventTypes.count)
-            ctx.add("backend_geofences", geofences.count)
-            ctx.add("backend_events", events.count)
-            ctx.add("backend_property_definitions", allPropertyDefinitionIds.count)
-            ctx.add("final_local_events", finalEventCount)
-            ctx.add("final_local_event_types", finalEventTypeCount)
-            ctx.add("final_local_geofences", finalGeofenceCount)
-        })
-
-        // DIAGNOSTIC: Additional verification after save (using fresh dataStore)
-        let verifyDataStore = dataStoreFactory.makeDataStore()
-        let verifyEventCount = (try? verifyDataStore.fetchAllEvents().count) ?? -1
-        let verifyEventTypeCount = (try? verifyDataStore.fetchAllEventTypes().count) ?? -1
-        Log.sync.info("Bootstrap verification after save", context: .with { ctx in
-            ctx.add("verify_events_fresh_context", verifyEventCount)
-            ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
-        })
-
-        // Notify HealthKitService to reload processedSampleIds from the database.
-        // This prevents duplicate event creation when HealthKit observer queries fire after bootstrap.
-        // The bootstrap downloaded events with healthKitSampleIds, but HealthKitService's in-memory
-        // processedSampleIds set doesn't include them yet.
-        Log.sync.info("Posting bootstrap completed notification for HealthKit")
-        await MainActor.run {
-            NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
-        }
+        return allPropertyDefinitionIds.count
     }
 
     /// Delete all local data before repopulating from backend.
