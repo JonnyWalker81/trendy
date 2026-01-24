@@ -10,7 +10,7 @@ import SwiftData
 import WidgetKit
 import FoundationModels
 import PostHog
-import FullDisclosureSDK
+// import FullDisclosureSDK
 
 /// App Group identifier for sharing data with widgets
 let appGroupIdentifier = "group.com.memento.trendy"
@@ -300,6 +300,10 @@ struct trendyApp: App {
     // MARK: - Initialization
 
     init() {
+        // Initialize MetricKit subscriber for production telemetry.
+        // Must be done early to capture all metrics from app launch.
+        _ = MetricsSubscriber.shared
+
         // Initialize configuration from Info.plist
         do {
             self.appConfiguration = try AppConfiguration()
@@ -417,32 +421,32 @@ struct trendyApp: App {
                 }
 
                 // Identify user in FullDisclosure for feedback submissions
-                do {
-                    try await FullDisclosure.shared.identify(
-                        userId: userId,
-                        email: email
-                    )
-                    Log.general.debug("📝 FullDisclosure identify (session restore)", context: .with { ctx in
-                        ctx.add("user_id", userId)
-                        ctx.add("email", email)
-                    })
-                } catch {
-                    Log.general.warning("⚠️ FullDisclosure identify failed", error: error)
-                }
+//                do {
+//                    try await FullDisclosure.shared.identify(
+//                        userId: userId,
+//                        email: email
+//                    )
+//                    Log.general.debug("📝 FullDisclosure identify (session restore)", context: .with { ctx in
+//                        ctx.add("user_id", userId)
+//                        ctx.add("email", email)
+//                    })
+//                } catch {
+//                    Log.general.warning("⚠️ FullDisclosure identify failed", error: error)
+//                }
             }
         }
         
         
-        // Initialize FullDisclosure feedback SDK
-        let fdConfig = FullDisclosureSDK.Configuration.default
-            .with(baseURL: URL(string: "http://localhost:8080")!)  // Your local API
-            .with(showContactFields: false)  // Hide email/name fields - use identified user instead
-            .with(debugLogging: true)  // Enable logging to see requests
-
-        FullDisclosure.shared.initialize(
-            token: "sdk_565562e99899d6a5ede9f5e45d8a4d453630d401cb9a0d8a39e08073e4c73f7b",
-            configuration: fdConfig
-        )
+//        // Initialize FullDisclosure feedback SDK
+//        let fdConfig = FullDisclosureSDK.Configuration.default
+//            .with(baseURL: URL(string: "http://localhost:8080")!)  // Your local API
+//            .with(showContactFields: false)  // Hide email/name fields - use identified user instead
+//            .with(debugLogging: true)  // Enable logging to see requests
+//
+//        FullDisclosure.shared.initialize(
+//            token: "sdk_565562e99899d6a5ede9f5e45d8a4d453630d401cb9a0d8a39e08073e4c73f7b",
+//            configuration: fdConfig
+//        )
 
         // Register background tasks for AI insight generation
         AIBackgroundTaskScheduler.shared.registerTasks()

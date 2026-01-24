@@ -180,6 +180,9 @@ actor SyncEngine {
             return
         }
 
+        // Start metrics interval for full sync
+        let syncMetricsId = SyncMetrics.beginFullSync()
+
         isSyncing = true
         await updateState(.syncing(synced: 0, total: 0))
 
@@ -319,6 +322,10 @@ actor SyncEngine {
                 ctx.add("items_synced", syncedCount)
             })
 
+            // Record success metrics
+            SyncMetrics.recordSyncSuccess()
+            SyncMetrics.endFullSync(syncMetricsId)
+
             // Record success to sync history
             await recordSyncHistory(
                 eventsCount: syncedCount,
@@ -335,6 +342,10 @@ actor SyncEngine {
 
             Log.sync.error("Sync failed", error: error)
             await updateState(.error(error.localizedDescription))
+
+            // Record failure metrics
+            SyncMetrics.recordSyncFailure()
+            SyncMetrics.endFullSync(syncMetricsId)
 
             // Record failure to sync history
             await recordSyncHistory(
@@ -655,6 +666,9 @@ actor SyncEngine {
     /// - Empty response would indicate a problem, not a valid state
     /// - Lightweight payload compared to full event list
     private func performHealthCheck() async -> Bool {
+        let healthCheckMetricsId = SyncMetrics.beginHealthCheck()
+        defer { SyncMetrics.endHealthCheck(healthCheckMetricsId) }
+
         do {
             let types = try await networkClient.getEventTypes()
             // If we get a response (even empty), connectivity is working
@@ -680,6 +694,9 @@ actor SyncEngine {
     private let batchSize = 50
 
     private func flushPendingMutations() async throws {
+        let flushMetricsId = SyncMetrics.beginFlushMutations()
+        defer { SyncMetrics.endFlushMutations(flushMetricsId) }
+
         let dataStore = dataStoreFactory.makeDataStore()
 
         let mutations = try dataStore.fetchPendingMutations()
@@ -807,6 +824,7 @@ actor SyncEngine {
             } catch let error as APIError where error.isRateLimitError {
                 // Rate limit error - increment counter
                 consecutiveRateLimitErrors += 1
+                SyncMetrics.recordRateLimitHit()
                 Log.sync.warning("Rate limit error during batch flush", context: .with { ctx in
                     ctx.add("batch_size", batchMutations.count)
                     ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
@@ -913,6 +931,7 @@ actor SyncEngine {
             } catch let error as APIError where error.isRateLimitError {
                 // Rate limit error - increment counter but DON'T count against mutation retry limit
                 consecutiveRateLimitErrors += 1
+                SyncMetrics.recordRateLimitHit()
                 Log.sync.warning("Rate limit error during mutation flush", context: .with { ctx in
                     ctx.add("entity_type", mutation.entityType.rawValue)
                     ctx.add("entity_id", mutation.entityId)
@@ -945,6 +964,7 @@ actor SyncEngine {
                     syncedCount += 1
                     await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
+                    SyncMetrics.recordRetry()
                     Log.sync.info("Mutation will retry", context: .with { ctx in
                         ctx.add("attempts_after", mutation.attempts)
                     })
@@ -973,6 +993,7 @@ actor SyncEngine {
                     syncedCount += 1
                     await updateState(.syncing(synced: syncedCount, total: totalPending))
                 } else {
+                    SyncMetrics.recordRetry()
                     Log.sync.info("Mutation will retry", context: .with { ctx in
                         ctx.add("attempts_after", mutation.attempts)
                     })
@@ -1157,6 +1178,9 @@ actor SyncEngine {
         // Increase multiplier for next time (exponential backoff)
         rateLimitBackoffMultiplier = min(rateLimitBackoffMultiplier * 2.0, 10.0)
 
+        // Record circuit breaker trip in metrics
+        SyncMetrics.recordCircuitBreakerTrip()
+
         Log.sync.warning("Circuit breaker tripped", context: .with { ctx in
             ctx.add("backoff_duration_seconds", Int(backoffDuration))
             ctx.add("backoff_multiplier", rateLimitBackoffMultiplier)
@@ -1319,6 +1343,9 @@ actor SyncEngine {
     // MARK: - Private: Pull Changes
 
     private func pullChanges() async throws {
+        let pullMetricsId = SyncMetrics.beginPullChanges()
+        defer { SyncMetrics.endPullChanges(pullMetricsId) }
+
         var hasMore = true
 
         while hasMore {
@@ -1598,6 +1625,9 @@ actor SyncEngine {
     /// Fetch all data from the backend when cursor is 0 (first sync).
     /// This handles the case where data existed before the change_log was implemented.
     private func bootstrapFetch() async throws {
+        let bootstrapMetricsId = SyncMetrics.beginBootstrapFetch()
+        defer { SyncMetrics.endBootstrapFetch(bootstrapMetricsId) }
+
         let dataStore = dataStoreFactory.makeDataStore()
 
         // Step 0: Nuclear cleanup - ensure clean slate before populating from backend
