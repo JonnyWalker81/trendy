@@ -55,27 +55,27 @@ Requirements for SyncEngine quality milestone. Each maps to roadmap phases.
 
 - [x] **QUAL-01**: Replace all print() statements with structured Log.sync logging
 - [x] **QUAL-02**: Audit HealthKit completion handlers called in all code paths
-- [ ] **QUAL-03**: Split flushPendingMutations into smaller focused methods
-- [ ] **QUAL-04**: Split bootstrapFetch into entity-specific methods
+- [x] **QUAL-03**: Split flushPendingMutations into smaller focused methods
+- [x] **QUAL-04**: Split bootstrapFetch into entity-specific methods
 - [x] **QUAL-05**: Replace busy-wait polling with continuation-based waiting
 - [x] **QUAL-06**: Use safer cursor fallback (Int64.max/2 instead of 1B)
 - [x] **QUAL-07**: Add logging for property type fallback (silent error fix)
 
 ### Metrics
 
-- [ ] **METR-01**: Track sync operation duration (start to completion)
-- [ ] **METR-02**: Track sync success/failure rates
-- [ ] **METR-03**: Track rate limit hit counts
-- [ ] **METR-04**: Track retry patterns (count per operation, total per sync)
-- [ ] **METR-05**: Implement os.signpost instrumentation for development profiling
-- [ ] **METR-06**: Implement MetricKit subscriber for production telemetry
+- [x] **METR-01**: Track sync operation duration (start to completion)
+- [x] **METR-02**: Track sync success/failure rates
+- [x] **METR-03**: Track rate limit hit counts
+- [x] **METR-04**: Track retry patterns (count per operation, total per sync)
+- [x] **METR-05**: Implement os.signpost instrumentation for development profiling
+- [x] **METR-06**: Implement MetricKit subscriber for production telemetry
 
 ### Documentation
 
-- [ ] **DOC-01**: Document sync state machine with Mermaid diagram (org-mode)
-- [ ] **DOC-02**: Document error recovery flows with sequence diagram
-- [ ] **DOC-03**: Document data flow (create event, sync cycle, bootstrap)
-- [ ] **DOC-04**: Document DI architecture and protocol relationships
+- [x] **DOC-01**: Document sync state machine with Mermaid diagram (org-mode)
+- [x] **DOC-02**: Document error recovery flows with sequence diagram
+- [x] **DOC-03**: Document data flow (create event, sync cycle, bootstrap)
+- [x] **DOC-04**: Document DI architecture and protocol relationships
 
 ## Future Requirements
 
@@ -143,21 +143,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-05 | Phase 20 | Complete |
 | QUAL-01 | Phase 12 | Complete |
 | QUAL-02 | Phase 12 | Complete |
-| QUAL-03 | Phase 21 | Pending |
-| QUAL-04 | Phase 21 | Pending |
+| QUAL-03 | Phase 21 | Complete |
+| QUAL-04 | Phase 21 | Complete |
 | QUAL-05 | Phase 12 | Complete |
 | QUAL-06 | Phase 12 | Complete |
 | QUAL-07 | Phase 12 | Complete |
-| METR-01 | Phase 22 | Pending |
-| METR-02 | Phase 22 | Pending |
-| METR-03 | Phase 22 | Pending |
-| METR-04 | Phase 22 | Pending |
-| METR-05 | Phase 22 | Pending |
-| METR-06 | Phase 22 | Pending |
-| DOC-01 | Phase 22 | Pending |
-| DOC-02 | Phase 22 | Pending |
-| DOC-03 | Phase 22 | Pending |
-| DOC-04 | Phase 22 | Pending |
+| METR-01 | Phase 22 | Complete |
+| METR-02 | Phase 22 | Complete |
+| METR-03 | Phase 22 | Complete |
+| METR-04 | Phase 22 | Complete |
+| METR-05 | Phase 22 | Complete |
+| METR-06 | Phase 22 | Complete |
+| DOC-01 | Phase 22 | Complete |
+| DOC-02 | Phase 22 | Complete |
+| DOC-03 | Phase 22 | Complete |
+| DOC-04 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 44 total
@@ -166,4 +166,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-21*
-*Last updated: 2026-01-23 (Phase 20 complete)*
+*Last updated: 2026-01-24 (Phase 22 complete, v1.2 shipped)*

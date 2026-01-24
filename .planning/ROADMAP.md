@@ -9,7 +9,7 @@
 
 - v1.0 iOS Data Infrastructure - Phases 1-7 (shipped 2026-01-18)
 - v1.1 Onboarding Overhaul - Phases 8-11 (shipped 2026-01-21)
-- v1.2 SyncEngine Quality - Phases 12-22 (in progress)
+- v1.2 SyncEngine Quality - Phases 12-22 (SHIPPED 2026-01-24)
 
 ## Overview
 
@@ -39,7 +39,7 @@ See MILESTONES.md for v1.1 details (4 phases, 12 plans, 21 requirements).
 
 ---
 
-### v1.2 SyncEngine Quality (In Progress)
+### v1.2 SyncEngine Quality (SHIPPED 2026-01-24)
 
 **Milestone Goal:** Production-ready sync infrastructure with comprehensive test coverage, code quality improvements, and observability
 
@@ -293,8 +293,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 22-01-PLAN.md — SyncMetrics and MetricsSubscriber infrastructure (METR-01 to METR-06)
-- [ ] 22-02-PLAN.md — Architecture documentation with Mermaid diagrams (DOC-01 to DOC-04)
+- [x] 22-01-PLAN.md — SyncMetrics and MetricsSubscriber infrastructure (METR-01 to METR-06)
+- [x] 22-02-PLAN.md — Architecture documentation with Mermaid diagrams (DOC-01 to DOC-04)
 
 ---
 
@@ -371,8 +371,8 @@ All 44 v1.2 requirements mapped:
 | 19. Unit Tests - Deduplication | v1.2 | 1/1 | Complete | 2026-01-23 |
 | 20. Unit Tests - Additional Coverage | v1.2 | 1/1 | Complete | 2026-01-23 |
 | 21. Code Quality Refactoring | v1.2 | 2/2 | Complete | 2026-01-24 |
-| 22. Metrics & Documentation | v1.2 | 0/2 | Not started | - |
+| 22. Metrics & Documentation | v1.2 | 2/2 | Complete | 2026-01-24 |
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-24 (Phase 22 planned)*
+*Last updated: 2026-01-24 (Phase 22 complete, v1.2 shipped)*
