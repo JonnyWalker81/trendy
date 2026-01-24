@@ -5,18 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-01-21)
 
 **Core value:** Effortless tracking — users set up tracking once and forget about it
-**Current focus:** Phase 21 - Code Quality Refactoring
+**Current focus:** Phase 22 - Metrics & Documentation (COMPLETE)
 
 ## Current Position
 
-Phase: 21 of 22 (Code Quality Refactoring)
+Phase: 22 of 22 (Metrics & Documentation)
 Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-01-23 — Completed 21-02-PLAN.md
+Status: Phase complete - v1.2 milestone complete
+Last activity: 2026-01-24 — Completed 22-02-PLAN.md
 
-Progress: [█████████░] 95%
+Progress: [██████████] 100%
 
 ## Milestone History
+
+- v1.2 Testing & Quality — SHIPPED 2026-01-24
+  - 11 phases (12-22), 15 plans, 35 requirements
+  - Archive: .planning/milestones/v1.2-*.md (when created)
 
 - v1.1 Onboarding Overhaul — SHIPPED 2026-01-21
   - 4 phases (8-11), 12 plans, 21 requirements
@@ -57,6 +61,19 @@ Recent decisions affecting v1.2:
 - syncOtherMutations takes startingSyncedCount to accumulate progress
 - Entity-specific methods named with ForBootstrap suffix for clarity
 - fetchEventTypesForBootstrap returns array for downstream PropertyDefinitions fetch
+- Architecture documentation in .planning/docs/ with Mermaid diagrams
+
+### Phase 22 Completed
+
+**Metrics & Documentation** (2 plans, 2026-01-24):
+- Plan 01: Requirements compliance matrix (DOC-05)
+- Plan 02: SyncEngine architecture diagrams
+  - sync-state-machine.md (143 lines, 1 state diagram)
+  - error-recovery.md (242 lines, 4 sequence diagrams)
+  - data-flows.md (334 lines, 5 sequence diagrams)
+  - di-architecture.md (453 lines, 1 class diagram)
+- Total: 1,172 lines of living documentation
+- Requirements completed: DOC-01, DOC-02, DOC-03, DOC-04
 
 ### Phase 21 Completed
 
@@ -172,7 +189,7 @@ None
 
 ## Session Continuity
 
-Last session: 2026-01-23
-Stopped at: Completed 21-02-PLAN.md (Phase 21 complete)
+Last session: 2026-01-24
+Stopped at: Completed 22-02-PLAN.md (Phase 22 complete, v1.2 complete)
 Resume file: None
-Next: Phase 22 (Final Polish) when needed
+Next: v1.3 milestone planning when needed
