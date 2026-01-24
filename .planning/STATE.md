@@ -66,14 +66,18 @@ Recent decisions affecting v1.2:
 ### Phase 22 Completed
 
 **Metrics & Documentation** (2 plans, 2026-01-24):
-- Plan 01: Requirements compliance matrix (DOC-05)
+- Plan 01: Sync Metrics Infrastructure
+  - SyncMetrics.swift (309 lines) - OSSignposter + MetricKit instrumentation
+  - MetricsSubscriber.swift (182 lines) - MXMetricManagerSubscriber for production telemetry
+  - SyncEngine instrumented: 5 operation intervals, 5 event types
+  - Requirements completed: METR-01, METR-02, METR-03, METR-04, METR-05, METR-06
 - Plan 02: SyncEngine architecture diagrams
   - sync-state-machine.md (143 lines, 1 state diagram)
   - error-recovery.md (242 lines, 4 sequence diagrams)
   - data-flows.md (334 lines, 5 sequence diagrams)
   - di-architecture.md (453 lines, 1 class diagram)
-- Total: 1,172 lines of living documentation
-- Requirements completed: DOC-01, DOC-02, DOC-03, DOC-04
+- Total: 1,172 lines of living documentation + 491 lines of metrics infrastructure
+- Requirements completed: DOC-01, DOC-02, DOC-03, DOC-04, METR-01-06
 
 ### Phase 21 Completed
 
