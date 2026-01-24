@@ -267,8 +267,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 21-01-PLAN.md — Refactor flushPendingMutations into focused methods
-- [ ] 21-02-PLAN.md — Refactor bootstrapFetch into entity-specific methods
+- [x] 21-01-PLAN.md — Refactor flushPendingMutations into focused methods
+- [x] 21-02-PLAN.md — Refactor bootstrapFetch into entity-specific methods
 
 ---
 
@@ -290,10 +290,11 @@ Plans:
 7. DI architecture and protocol relationships documented
 8. Documentation includes runnable code examples
 
-**Plans:** TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 22-01: TBD
+- [ ] 22-01-PLAN.md — SyncMetrics and MetricsSubscriber infrastructure (METR-01 to METR-06)
+- [ ] 22-02-PLAN.md — Architecture documentation with Mermaid diagrams (DOC-01 to DOC-04)
 
 ---
 
@@ -369,9 +370,9 @@ All 44 v1.2 requirements mapped:
 | 18. Unit Tests - Resurrection Prevention | v1.2 | 1/1 | Complete | 2026-01-22 |
 | 19. Unit Tests - Deduplication | v1.2 | 1/1 | Complete | 2026-01-23 |
 | 20. Unit Tests - Additional Coverage | v1.2 | 1/1 | Complete | 2026-01-23 |
-| 21. Code Quality Refactoring | v1.2 | 0/? | Not started | - |
-| 22. Metrics & Documentation | v1.2 | 0/? | Not started | - |
+| 21. Code Quality Refactoring | v1.2 | 2/2 | Complete | 2026-01-24 |
+| 22. Metrics & Documentation | v1.2 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-21*
-*Last updated: 2026-01-23 (Phase 20 complete)*
+*Last updated: 2026-01-24 (Phase 22 planned)*
