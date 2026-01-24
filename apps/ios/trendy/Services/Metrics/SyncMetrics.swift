@@ -58,7 +58,7 @@ final class SyncMetrics {
     // MARK: - Interval Tracking - FullSync
 
     /// Active intervals for fullSync operations
-    private static var fullSyncIntervals: [UInt64: OSSignposter.IntervalState] = [:]
+    private static var fullSyncIntervals: [UInt64: OSSignpostIntervalState] = [:]
     private static let fullSyncLock = NSLock()
 
     /// Begin tracking a full sync operation.
@@ -102,7 +102,7 @@ final class SyncMetrics {
 
     // MARK: - Interval Tracking - FlushMutations
 
-    private static var flushMutationsIntervals: [UInt64: OSSignposter.IntervalState] = [:]
+    private static var flushMutationsIntervals: [UInt64: OSSignpostIntervalState] = [:]
     private static let flushMutationsLock = NSLock()
 
     /// Begin tracking a flush mutations operation.
@@ -142,7 +142,7 @@ final class SyncMetrics {
 
     // MARK: - Interval Tracking - PullChanges
 
-    private static var pullChangesIntervals: [UInt64: OSSignposter.IntervalState] = [:]
+    private static var pullChangesIntervals: [UInt64: OSSignpostIntervalState] = [:]
     private static let pullChangesLock = NSLock()
 
     /// Begin tracking a pull changes operation.
@@ -182,7 +182,7 @@ final class SyncMetrics {
 
     // MARK: - Interval Tracking - BootstrapFetch
 
-    private static var bootstrapFetchIntervals: [UInt64: OSSignposter.IntervalState] = [:]
+    private static var bootstrapFetchIntervals: [UInt64: OSSignpostIntervalState] = [:]
     private static let bootstrapFetchLock = NSLock()
 
     /// Begin tracking a bootstrap fetch operation.
@@ -222,7 +222,7 @@ final class SyncMetrics {
 
     // MARK: - Interval Tracking - HealthCheck
 
-    private static var healthCheckIntervals: [UInt64: OSSignposter.IntervalState] = [:]
+    private static var healthCheckIntervals: [UInt64: OSSignpostIntervalState] = [:]
     private static let healthCheckLock = NSLock()
 
     /// Begin tracking a health check operation.
