@@ -264,10 +264,11 @@ Plans:
 4. Cyclomatic complexity reduced (measurable improvement)
 5. No new TODO or FIXME comments introduced
 
-**Plans:** TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 21-01: TBD
+- [ ] 21-01-PLAN.md — Refactor flushPendingMutations into focused methods
+- [ ] 21-02-PLAN.md — Refactor bootstrapFetch into entity-specific methods
 
 ---
 
