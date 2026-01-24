@@ -729,7 +729,132 @@ actor SyncEngine {
         }
 
         // Step 2: Process other mutations one by one (updates, deletes, non-events)
-        for mutation in otherMutations {
+        syncedCount = try await syncOtherMutations(
+            otherMutations,
+            dataStore: dataStore,
+            startingSyncedCount: syncedCount,
+            totalPending: totalPending
+        )
+
+        try dataStore.save()
+        await updatePendingCount()
+    }
+
+    /// Process event CREATE mutations in batches of 50.
+    /// - Parameters:
+    ///   - mutations: Event CREATE mutations to process
+    ///   - dataStore: Data store for persistence operations
+    ///   - totalPending: Total pending mutations (for progress updates)
+    /// - Returns: Number of successfully synced events
+    /// - Throws: Propagates network errors (rate limits handled internally)
+    private func syncEventCreateBatches(
+        _ mutations: [PendingMutation],
+        dataStore: any DataStoreProtocol,
+        totalPending: Int
+    ) async throws -> Int {
+        guard !mutations.isEmpty else { return 0 }
+
+        Log.sync.info("Batch processing event creates", context: .with { ctx in
+            ctx.add("event_creates", mutations.count)
+            ctx.add("batch_size", batchSize)
+            ctx.add("num_batches", (mutations.count + batchSize - 1) / batchSize)
+        })
+
+        var syncedCount = 0
+
+        // Process in batches of batchSize
+        for batchStart in stride(from: 0, to: mutations.count, by: batchSize) {
+            // Check circuit breaker before each batch
+            if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
+                tripCircuitBreaker()
+                let remaining = circuitBreakerBackoffRemaining
+                // Use existing dataStore to get pending count - avoids creating concurrent contexts
+                let pendingNow = getPendingCountFromDataStore(dataStore)
+                Log.sync.warning("Circuit breaker tripped during batch flush", context: .with { ctx in
+                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                    ctx.add("backoff_seconds", Int(remaining))
+                    ctx.add("pending_remaining", pendingNow)
+                })
+                await updateState(.rateLimited(retryAfter: remaining, pending: pendingNow))
+                try dataStore.save()
+                await updatePendingCount()
+                return syncedCount
+            }
+
+            let batchEnd = min(batchStart + batchSize, mutations.count)
+            let batchMutations = Array(mutations[batchStart..<batchEnd])
+
+            // Update progress before attempting batch (so UI shows progress even if batch fails)
+            let attemptedCount = batchStart
+            await updateState(.syncing(synced: attemptedCount, total: totalPending))
+
+            Log.sync.debug("Processing event batch", context: .with { ctx in
+                ctx.add("batch_start", batchStart)
+                ctx.add("batch_size", batchMutations.count)
+            })
+
+            do {
+                let batchSyncedCount = try await flushEventCreateBatch(
+                    batchMutations,
+                    dataStore: dataStore
+                )
+                syncedCount += batchSyncedCount
+                await updateState(.syncing(synced: syncedCount, total: totalPending))
+
+                // Reset consecutive rate limit counter on success
+                consecutiveRateLimitErrors = 0
+
+            } catch let error as APIError where error.isRateLimitError {
+                // Rate limit error - increment counter
+                consecutiveRateLimitErrors += 1
+                Log.sync.warning("Rate limit error during batch flush", context: .with { ctx in
+                    ctx.add("batch_size", batchMutations.count)
+                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
+                })
+                // Don't fail the batch - will retry on next sync cycle
+
+            } catch {
+                // Other error (timeout, network, etc.) - record failure on each mutation
+                Log.sync.error("Error during batch flush", error: error, context: .with { ctx in
+                    ctx.add("batch_size", batchMutations.count)
+                    ctx.add("error_type", String(describing: type(of: error)))
+                })
+
+                // Record failure for each mutation in the batch so they're retried with backoff
+                for mutation in batchMutations {
+                    mutation.recordFailure(error: "Batch operation failed: \(error.localizedDescription)")
+                    if mutation.hasExceededRetryLimit {
+                        Log.sync.warning("Mutation exceeded retry limit, marking entity as failed", context: .with { ctx in
+                            ctx.add("entity_id", mutation.entityId)
+                            ctx.add("attempt_count", mutation.attempts)
+                        })
+                        try? markEntityFailed(mutation, dataStore: dataStore)
+                        try? dataStore.deletePendingMutation(mutation)
+                    }
+                }
+            }
+        }
+
+        return syncedCount
+    }
+
+    /// Process non-event-CREATE mutations one by one.
+    /// - Parameters:
+    ///   - mutations: Mutations to process (updates, deletes, non-events)
+    ///   - dataStore: Data store for persistence operations
+    ///   - startingSyncedCount: Count of already synced mutations
+    ///   - totalPending: Total pending mutations (for progress updates)
+    /// - Returns: Final synced count after processing
+    /// - Throws: Propagates unexpected errors (rate limits handled internally)
+    private func syncOtherMutations(
+        _ mutations: [PendingMutation],
+        dataStore: any DataStoreProtocol,
+        startingSyncedCount: Int,
+        totalPending: Int
+    ) async throws -> Int {
+        var syncedCount = startingSyncedCount
+
+        for mutation in mutations {
             // Check circuit breaker before each mutation
             if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
                 tripCircuitBreaker()
@@ -851,105 +976,6 @@ actor SyncEngine {
                     Log.sync.info("Mutation will retry", context: .with { ctx in
                         ctx.add("attempts_after", mutation.attempts)
                     })
-                }
-            }
-        }
-
-        try dataStore.save()
-        await updatePendingCount()
-    }
-
-    /// Process event CREATE mutations in batches of 50.
-    /// - Parameters:
-    ///   - mutations: Event CREATE mutations to process
-    ///   - dataStore: Data store for persistence operations
-    ///   - totalPending: Total pending mutations (for progress updates)
-    /// - Returns: Number of successfully synced events
-    /// - Throws: Propagates network errors (rate limits handled internally)
-    private func syncEventCreateBatches(
-        _ mutations: [PendingMutation],
-        dataStore: any DataStoreProtocol,
-        totalPending: Int
-    ) async throws -> Int {
-        guard !mutations.isEmpty else { return 0 }
-
-        Log.sync.info("Batch processing event creates", context: .with { ctx in
-            ctx.add("event_creates", mutations.count)
-            ctx.add("batch_size", batchSize)
-            ctx.add("num_batches", (mutations.count + batchSize - 1) / batchSize)
-        })
-
-        var syncedCount = 0
-
-        // Process in batches of batchSize
-        for batchStart in stride(from: 0, to: mutations.count, by: batchSize) {
-            // Check circuit breaker before each batch
-            if consecutiveRateLimitErrors >= rateLimitCircuitBreakerThreshold {
-                tripCircuitBreaker()
-                let remaining = circuitBreakerBackoffRemaining
-                // Use existing dataStore to get pending count - avoids creating concurrent contexts
-                let pendingNow = getPendingCountFromDataStore(dataStore)
-                Log.sync.warning("Circuit breaker tripped during batch flush", context: .with { ctx in
-                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
-                    ctx.add("backoff_seconds", Int(remaining))
-                    ctx.add("pending_remaining", pendingNow)
-                })
-                await updateState(.rateLimited(retryAfter: remaining, pending: pendingNow))
-                try dataStore.save()
-                await updatePendingCount()
-                return syncedCount
-            }
-
-            let batchEnd = min(batchStart + batchSize, mutations.count)
-            let batchMutations = Array(mutations[batchStart..<batchEnd])
-
-            // Update progress before attempting batch (so UI shows progress even if batch fails)
-            let attemptedCount = batchStart
-            await updateState(.syncing(synced: attemptedCount, total: totalPending))
-
-            Log.sync.debug("Processing event batch", context: .with { ctx in
-                ctx.add("batch_start", batchStart)
-                ctx.add("batch_size", batchMutations.count)
-            })
-
-            do {
-                let batchSyncedCount = try await flushEventCreateBatch(
-                    batchMutations,
-                    dataStore: dataStore
-                )
-                syncedCount += batchSyncedCount
-                await updateState(.syncing(synced: syncedCount, total: totalPending))
-
-                // Reset consecutive rate limit counter on success
-                consecutiveRateLimitErrors = 0
-
-            } catch let error as APIError where error.isRateLimitError {
-                // Rate limit error - increment counter
-                consecutiveRateLimitErrors += 1
-                Log.sync.warning("Rate limit error during batch flush", context: .with { ctx in
-                    ctx.add("batch_size", batchMutations.count)
-                    ctx.add("consecutive_rate_limits", consecutiveRateLimitErrors)
-                })
-                // Don't fail the batch - will retry on next sync cycle
-
-            } catch {
-                // Other error (timeout, network, etc.) - record failure on each mutation
-                Log.sync.error("Error during batch flush", error: error, context: .with { ctx in
-                    ctx.add("batch_size", batchMutations.count)
-                    ctx.add("error_type", String(describing: type(of: error)))
-                })
-
-                // Record failure for each mutation in the batch so they're retried with backoff
-                for mutation in batchMutations {
-                    mutation.recordFailure(error: "Batch operation failed: \(error.localizedDescription)")
-                    if mutation.hasExceededRetryLimit {
-                        Log.sync.warning("Mutation exceeded retry limit, marking entity as failed", context: .with { ctx in
-                            ctx.add("entity_id", mutation.entityId)
-                            ctx.add("attempt_count", mutation.attempts)
-                        })
-                        try? markEntityFailed(mutation, dataStore: dataStore)
-                        try? dataStore.deletePendingMutation(mutation)
-                    }
                 }
             }
         }
