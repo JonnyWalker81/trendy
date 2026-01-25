@@ -1,5 +1,31 @@
 # Project Milestones: Trendy
 
+## v1.2 SyncEngine Quality (Shipped: 2026-01-24)
+
+**Delivered:** Production-ready sync infrastructure with comprehensive unit test coverage, protocol-based dependency injection, code quality refactoring, and production observability
+
+**Phases completed:** 12-22 (19 plans total)
+
+**Key accomplishments:**
+- Protocol-based dependency injection for SyncEngine testability (NetworkClientProtocol 24 methods, DataStoreProtocol 29 methods)
+- Comprehensive unit test infrastructure: MockNetworkClient (993 lines), MockDataStore (576 lines), 72 tests across 8 test files
+- Code quality refactoring: flushPendingMutations 247->60 lines (76% reduction), bootstrapFetch 223->62 lines (72% reduction)
+- Production observability: OSSignposter + MetricKit with 5 operation intervals, 5 event types
+- Architecture documentation: 4 Mermaid diagrams (state machine, error recovery, data flows, DI architecture)
+- Foundation cleanup: 191 print() statements converted to structured Log.* logging
+
+**Stats:**
+- 108 files created/modified
+- +21,421 / -704 lines (~20,700 net)
+- 11 phases, 19 plans, 44 requirements (100% coverage)
+- 4 days execution (2026-01-21 -> 2026-01-24)
+
+**Git range:** `feat(12-01)` -> `docs(22-02)`
+
+**What's next:** TBD — planning next milestone
+
+---
+
 ## v1.1 Onboarding Overhaul (Shipped: 2026-01-21)
 
 **Delivered:** Fixed the confusing onboarding experience — returning users never see onboarding screens flash, and new users have a polished, accessible first-run flow
@@ -20,9 +46,9 @@
 - 4 phases, 12 plans, 21 requirements (100% coverage)
 - 1 day execution (2026-01-20)
 
-**Git range:** `docs(08): capture phase context` → `docs(11): complete accessibility phase`
+**Git range:** `docs(08): capture phase context` -> `docs(11): complete accessibility phase`
 
-**What's next:** TBD — planning next milestone
+**What's next:** v1.2 SyncEngine Quality (completed)
 
 ---
 
@@ -44,10 +70,10 @@
 - 166 files created/modified
 - ~87,000 lines of code (76k Swift + 10k Go)
 - 7 phases, 27 plans, 25 requirements (100% coverage)
-- 3 days from start to ship (2026-01-15 → 2026-01-18)
+- 3 days from start to ship (2026-01-15 -> 2026-01-18)
 
-**Git range:** `feat(01-01)` → `feat(07-04)`
+**Git range:** `feat(01-01)` -> `feat(07-04)`
 
-**What's next:** TBD — planning next milestone
+**What's next:** v1.1 Onboarding Overhaul (completed)
 
 ---
