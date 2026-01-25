@@ -125,6 +125,12 @@ class HealthKitService: NSObject {
     /// Processed sample identifiers to prevent duplicates
     var processedSampleIds: Set<String> = []
 
+    /// Workout timestamps currently being processed - prevents race condition when same workout
+    /// is reported with different sample IDs from different sources (Apple Watch vs iPhone).
+    /// Key is workout start timestamp truncated to the second (ISO8601 format).
+    /// This acts as a mutex at the workout level rather than sample ID level.
+    var processingWorkoutTimestamps: Set<String> = []
+
     /// Last processed date for daily step aggregation
     var lastStepDate: Date?
 

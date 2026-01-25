@@ -13,6 +13,16 @@ import SwiftData
 
 extension HealthKitService {
 
+    /// Generate a unique key for a workout based on its timestamps.
+    /// Used to prevent concurrent processing of the same workout from different sources.
+    /// Truncates start time to the second to handle minor timestamp variations.
+    private func workoutTimestampKey(start: Date, end: Date) -> String {
+        // Truncate to second precision to catch workouts with minor timestamp differences
+        let startTruncated = start.timeIntervalSince1970.rounded(.down)
+        let endTruncated = end.timeIntervalSince1970.rounded(.down)
+        return "workout-\(Int(startTruncated))-\(Int(endTruncated))"
+    }
+
     /// Process a workout sample
     ///
     /// - Parameters:
@@ -30,10 +40,32 @@ extension HealthKitService {
         // resulting in duplicate events with different UUIDv7 IDs.
         guard !processedSampleIds.contains(sampleId) else { return }
 
-        // RACE CONDITION FIX: Immediately claim this sampleId before async operations.
+        // RACE CONDITION FIX #1: Immediately claim this sampleId before async operations.
         // This acts as a synchronous mutex - only the first call to reach this point
         // will proceed, subsequent concurrent calls will exit at the guard above.
         processedSampleIds.insert(sampleId)
+
+        // RACE CONDITION FIX #2: Workout-level mutex using timestamp as key.
+        // The same physical workout can be reported by HealthKit with DIFFERENT sample IDs
+        // from different sources (Apple Watch vs iPhone, or different apps).
+        // Without this, concurrent calls with different sampleIds but same workout timestamps
+        // would both pass the sampleId check and race through the async checks below.
+        // By claiming the timestamp SYNCHRONOUSLY here, we ensure only one concurrent call proceeds.
+        let timestampKey = workoutTimestampKey(start: workout.startDate, end: workout.endDate)
+        guard !processingWorkoutTimestamps.contains(timestampKey) else {
+            Log.healthKit.debug("Workout with same timestamps already being processed, skipping", context: .with { ctx in
+                ctx.add("sampleId", sampleId)
+                ctx.add("timestampKey", timestampKey)
+                ctx.add("workoutType", workout.workoutActivityType.name)
+            })
+            // Keep sampleId in processedSampleIds to prevent reprocessing later
+            saveProcessedSampleIds()
+            return
+        }
+        processingWorkoutTimestamps.insert(timestampKey)
+
+        // Ensure we release the timestamp lock when done (success or failure)
+        defer { processingWorkoutTimestamps.remove(timestampKey) }
 
         // Database-level duplicate check (handles app restarts where in-memory set is reset)
         // Use fresh context during reconciliation to see events saved by SyncEngine's context
