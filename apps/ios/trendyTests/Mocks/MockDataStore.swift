@@ -171,7 +171,7 @@ final class MockDataStore: DataStoreProtocol {
         if let existing = storedGeofences[id] {
             geofence = existing
         } else {
-            geofence = Geofence(name: "Placeholder", latitude: 0, longitude: 0, radius: 100)
+            geofence = Geofence(id: UUIDv7.generate(), name: "Placeholder", latitude: 0, longitude: 0, radius: 100, eventTypeEntryID: nil, eventTypeExitID: nil, isActive: true, notifyOnEntry: false, notifyOnExit: false, syncStatus: .pending)
             geofence.id = id
             modelContext.insert(geofence)
         }
@@ -551,7 +551,7 @@ final class MockDataStore: DataStoreProtocol {
     }
 
     func seedGeofence(_ configure: (Geofence) -> Void) -> Geofence {
-        let geofence = Geofence(name: "Seeded", latitude: 0, longitude: 0, radius: 100)
+        let geofence = Geofence(id: UUIDv7.generate(), name: "Seeded", latitude: 0, longitude: 0, radius: 100, eventTypeEntryID: nil, eventTypeExitID: nil, isActive: true, notifyOnEntry: false, notifyOnExit: false, syncStatus: .pending)
         modelContext.insert(geofence)
         configure(geofence)
         storedGeofences[geofence.id] = geofence
@@ -568,7 +568,7 @@ final class MockDataStore: DataStoreProtocol {
     }
 
     func seedPendingMutation(entityType: MutationEntityType, entityId: String, operation: MutationOperation, payload: Data? = nil) -> PendingMutation {
-        let mutation = PendingMutation(entityType: entityType, entityId: entityId, operation: operation, payload: payload ?? Data())
+        let mutation = PendingMutation(entityType: entityType, operation: operation, entityId: entityId, payload: payload ?? Data())
         modelContext.insert(mutation)
         storedPendingMutations.append(mutation)
         return mutation

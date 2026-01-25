@@ -56,7 +56,7 @@ struct HealthCheckTests {
 
         // Configure health check to fail with decoding error (simulates captive portal HTML response)
         mockNetwork.getEventTypesResponses = [
-            .failure(APIError.decodingError("Expected array, got HTML login page"))
+            .failure(APIError.decodingError(TestError("Expected array, got HTML login page")))
         ]
 
         // Record network call count before sync
@@ -175,7 +175,7 @@ struct HealthCheckTests {
 
         // Configure health check to return decoding error (captive portal HTML)
         mockNetwork.getEventTypesResponses = [
-            .failure(APIError.decodingError("Unexpected character '<' at position 0"))
+            .failure(APIError.decodingError(TestError("Unexpected character '<' at position 0")))
         ]
 
         await engine.performSync()

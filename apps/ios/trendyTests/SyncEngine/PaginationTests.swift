@@ -194,40 +194,15 @@ struct CursorEdgeCasesTests {
         // Configure for incremental sync
         configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 1000)
 
-        // Create change entry data for an event type
-        let changeData = ChangeEntryData(
+        // Create change entry data for an event type using factory
+        guard let changeData = APIModelFixture.makeChangeEntryDataForEventType(
             name: "New Event Type",
             color: "#FF0000",
-            icon: "star",
-            timestamp: nil,
-            notes: nil,
-            isAllDay: nil,
-            endDate: nil,
-            eventTypeId: nil,
-            sourceType: nil,
-            externalId: nil,
-            originalTitle: nil,
-            geofenceId: nil,
-            locationLatitude: nil,
-            locationLongitude: nil,
-            locationName: nil,
-            healthKitSampleId: nil,
-            healthKitCategory: nil,
-            properties: nil,
-            latitude: nil,
-            longitude: nil,
-            radius: nil,
-            isActive: nil,
-            notifyOnEntry: nil,
-            notifyOnExit: nil,
-            eventTypeEntryId: nil,
-            eventTypeExitId: nil,
-            key: nil,
-            label: nil,
-            propertyType: nil,
-            displayOrder: nil,
-            options: nil
-        )
+            icon: "star"
+        ) else {
+            Issue.record("Failed to create change entry data")
+            return
+        }
 
         let change = ChangeEntry(
             id: 1001,

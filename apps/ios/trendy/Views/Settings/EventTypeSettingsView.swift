@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import FullDisclosureSDK
+// import FullDisclosureSDK
 
 struct EventTypeSettingsView: View {
     @Environment(EventStore.self) private var eventStore
@@ -160,16 +160,16 @@ struct EventTypeSettingsView: View {
                 }
                 .accessibilityIdentifier("accountSection")
 
-                Section {
-                    Button {
-                        FullDisclosure.shared.showFeedbackDialog()
-                    } label: {
-                        Label("Send Feedback", systemImage: "bubble.left.and.exclamationmark.bubble.right.fill")
-                    }
-                    .accessibilityIdentifier("sendFeedbackButton")
-                } header: {
-                    Text("Feedback & Support")
-                }
+//                Section {
+//                    Button {
+//                        FullDisclosure.shared.showFeedbackDialog()
+//                    } label: {
+//                        Label("Send Feedback", systemImage: "bubble.left.and.exclamationmark.bubble.right.fill")
+//                    }
+//                    .accessibilityIdentifier("sendFeedbackButton")
+//                } header: {
+//                    Text("Feedback & Support")
+//                }
 
                 // TODO: Re-add #if DEBUG after cleanup
                 Section {

@@ -97,6 +97,12 @@ struct APIModelFixture {
         eventTypeId: String = "type-1",
         timestamp: Date = Date(timeIntervalSince1970: 1704067200),
         notes: String? = "Test event",
+        geofenceId: String? = nil,
+        locationLatitude: Double? = nil,
+        locationLongitude: Double? = nil,
+        locationName: String? = nil,
+        healthKitSampleId: String? = nil,
+        healthKitCategory: String? = nil,
         eventType: APIEventType? = nil
     ) -> APIEvent {
         APIEvent(
@@ -110,6 +116,12 @@ struct APIModelFixture {
             sourceType: "manual",
             externalId: nil,
             originalTitle: nil,
+            geofenceId: geofenceId,
+            locationLatitude: locationLatitude,
+            locationLongitude: locationLongitude,
+            locationName: locationName,
+            healthKitSampleId: healthKitSampleId,
+            healthKitCategory: healthKitCategory,
             properties: nil,
             createdAt: timestamp,
             updatedAt: timestamp,
@@ -459,6 +471,67 @@ struct JSONHelper {
     enum JSONError: Error {
         case invalidString
     }
+}
+
+// MARK: - Test Errors
+
+/// Simple error type for testing API error handling
+struct TestError: Error, LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? { message }
+}
+
+// MARK: - ChangeEntryData Factory
+
+extension APIModelFixture {
+
+    /// Create ChangeEntryData for an event type (for change feed tests)
+    static func makeChangeEntryDataForEventType(
+        name: String = "Test Type",
+        color: String = "#FF0000",
+        icon: String = "star"
+    ) -> ChangeEntryData? {
+        let dict: [String: Any] = [
+            "name": name,
+            "color": color,
+            "icon": icon
+        ]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        return try? JSONDecoder().decode(ChangeEntryData.self, from: jsonData)
+    }
+
+    /// Create ChangeEntryData for an event (for change feed tests)
+    static func makeChangeEntryDataForEvent(
+        eventTypeId: String = "type-1",
+        timestamp: Date = Date(timeIntervalSince1970: 1704067200),
+        notes: String? = nil
+    ) -> ChangeEntryData? {
+        var dict: [String: Any] = [
+            "event_type_id": eventTypeId,
+            "timestamp": ISO8601DateFormatter().string(from: timestamp),
+            "is_all_day": false,
+            "source_type": "manual"
+        ]
+        if let notes = notes {
+            dict["notes"] = notes
+        }
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        return try? JSONDecoder().decode(ChangeEntryData.self, from: jsonData)
+    }
+}
+
+/// Helper to create ChangeEntryData from dictionary (uses JSON round-trip)
+func makeChangeEntryData(from dict: [String: AnyCodableValue]) -> ChangeEntryData? {
+    // ChangeEntryData uses custom Codable, so we need to JSON round-trip
+    guard let jsonData = try? JSONEncoder().encode(dict) else { return nil }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return try? decoder.decode(ChangeEntryData.self, from: jsonData)
 }
 
 // MARK: - Assertion Helpers

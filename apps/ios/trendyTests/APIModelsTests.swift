@@ -52,6 +52,7 @@ struct APIModelsTests {
     @Test("CreateEventTypeRequest encodes with snake_case keys")
     func test_createEventTypeRequest_encodesWithSnakeCase() throws {
         let request = CreateEventTypeRequest(
+            id: "type-test-1",
             name: "Workout",
             color: "#FF5733",
             icon: "figure.run"
@@ -68,6 +69,7 @@ struct APIModelsTests {
     @Test("CreateEventTypeRequest roundtrips correctly")
     func test_createEventTypeRequest_roundtripsCorrectly() throws {
         let original = CreateEventTypeRequest(
+            id: "type-test-2",
             name: "Reading",
             color: "#00AAFF",
             icon: "book.fill"

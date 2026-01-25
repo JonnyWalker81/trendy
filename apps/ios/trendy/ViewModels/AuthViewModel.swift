@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 import PostHog
-import FullDisclosureSDK
+// import FullDisclosureSDK
 
 @Observable
 class AuthViewModel {
@@ -91,18 +91,18 @@ class AuthViewModel {
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             // Identify user in FullDisclosure for feedback submissions
-            do {
-                try await FullDisclosure.shared.identify(
-                    userId: session.user.id.uuidString,
-                    email: session.user.email
-                )
-                Log.auth.debug("📝 FullDisclosure identify (signUp)", context: .with { ctx in
-                    ctx.add("user_id", session.user.id.uuidString)
-                    ctx.add("email", session.user.email)
-                })
-            } catch {
-                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
-            }
+//            do {
+//                try await FullDisclosure.shared.identify(
+//                    userId: session.user.id.uuidString,
+//                    email: session.user.email
+//                )
+//                Log.auth.debug("📝 FullDisclosure identify (signUp)", context: .with { ctx in
+//                    ctx.add("user_id", session.user.id.uuidString)
+//                    ctx.add("email", session.user.email)
+//                })
+//            } catch {
+//                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
+//            }
 
             await MainActor.run {
                 self.isAuthenticated = true
@@ -155,18 +155,18 @@ class AuthViewModel {
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
             // Identify user in FullDisclosure for feedback submissions
-            do {
-                try await FullDisclosure.shared.identify(
-                    userId: session.user.id.uuidString,
-                    email: session.user.email
-                )
-                Log.auth.debug("📝 FullDisclosure identify (signIn)", context: .with { ctx in
-                    ctx.add("user_id", session.user.id.uuidString)
-                    ctx.add("email", session.user.email)
-                })
-            } catch {
-                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
-            }
+//            do {
+//                try await FullDisclosure.shared.identify(
+//                    userId: session.user.id.uuidString,
+//                    email: session.user.email
+//                )
+//                Log.auth.debug("📝 FullDisclosure identify (signIn)", context: .with { ctx in
+//                    ctx.add("user_id", session.user.id.uuidString)
+//                    ctx.add("email", session.user.email)
+//                })
+//            } catch {
+//                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
+//            }
 
             await MainActor.run {
                 self.isAuthenticated = true
@@ -194,7 +194,7 @@ class AuthViewModel {
         PostHogSDK.shared.reset()
 
         // Clear FullDisclosure user identity
-        await FullDisclosure.shared.clearIdentity()
+        // await FullDisclosure.shared.clearIdentity()
 
         do {
             try await supabaseService.signOut()

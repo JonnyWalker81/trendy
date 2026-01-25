@@ -186,13 +186,13 @@ struct PropertyTypeInPropertyDefinitionTests {
     @Test("PropertyDefinition with text type initializes correctly")
     func test_propertyDefinition_textType_initializesCorrectly() {
         let propDef = PropertyDefinition(
-            eventTypeId: UUID(),
+            eventTypeId: "type-test-1",
             key: "notes",
             label: "Notes",
             propertyType: .text
         )
 
-        #expect(propDef.propertyType == .text, "propertyType should be .text")
+        #expect(propDef.propertyType == PropertyType.text, "propertyType should be .text")
         #expect(propDef.propertyType.rawValue == "text", "propertyType raw value should be 'text'")
         #expect(propDef.propertyType.displayName == "Text", "propertyType displayName should be 'Text'")
     }
@@ -200,14 +200,14 @@ struct PropertyTypeInPropertyDefinitionTests {
     @Test("PropertyDefinition with select type has options")
     func test_propertyDefinition_selectType_hasOptions() {
         let propDef = PropertyDefinition(
-            eventTypeId: UUID(),
+            eventTypeId: "type-test-1",
             key: "priority",
             label: "Priority",
             propertyType: .select,
             options: ["Low", "Medium", "High"]
         )
 
-        #expect(propDef.propertyType == .select, "propertyType should be .select")
+        #expect(propDef.propertyType == PropertyType.select, "propertyType should be .select")
         #expect(propDef.options == ["Low", "Medium", "High"], "options should be set")
     }
 
@@ -215,7 +215,7 @@ struct PropertyTypeInPropertyDefinitionTests {
     func test_propertyDefinition_supportsAllPropertyTypes() {
         for type in PropertyType.allCases {
             let propDef = PropertyDefinition(
-                eventTypeId: UUID(),
+                eventTypeId: "type-test-1",
                 key: "test_\(type.rawValue)",
                 label: "Test \(type.displayName)",
                 propertyType: type
@@ -249,6 +249,7 @@ struct PropertyTypeAPICompatibilityTests {
     ])
     func test_createPropertyDefinitionRequest_encodesPropertyType(rawValue: String, type: PropertyType) throws {
         let request = CreatePropertyDefinitionRequest(
+            id: "propdef-test-1",
             eventTypeId: "type-1",
             key: "test",
             label: "Test",

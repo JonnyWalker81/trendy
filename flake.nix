@@ -50,6 +50,7 @@
 
             # Development utilities
             git
+            gh
             curl
             jq
 

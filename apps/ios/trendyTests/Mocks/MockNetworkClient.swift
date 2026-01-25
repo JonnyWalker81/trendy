@@ -978,29 +978,25 @@ final class MockNetworkClient: NetworkClientProtocol, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        return getEventTypesCalls.count +
-               createEventTypeCalls.count +
-               createEventTypeWithIdempotencyCalls.count +
-               updateEventTypeCalls.count +
-               deleteEventTypeCalls.count +
-               getEventsCalls.count +
-               getAllEventsCalls.count +
-               createEventCalls.count +
-               createEventWithIdempotencyCalls.count +
-               createEventsBatchCalls.count +
-               updateEventCalls.count +
-               deleteEventCalls.count +
-               getGeofencesCalls.count +
-               createGeofenceCalls.count +
-               createGeofenceWithIdempotencyCalls.count +
-               updateGeofenceCalls.count +
-               deleteGeofenceCalls.count +
-               getPropertyDefinitionsCalls.count +
-               createPropertyDefinitionCalls.count +
-               createPropertyDefinitionWithIdempotencyCalls.count +
-               updatePropertyDefinitionCalls.count +
-               deletePropertyDefinitionCalls.count +
-               getChangesCalls.count +
-               getLatestCursorCalls.count
+        // Break up expression to help Swift type-checker
+        let eventTypeCounts = getEventTypesCalls.count + createEventTypeCalls.count +
+                              createEventTypeWithIdempotencyCalls.count + updateEventTypeCalls.count +
+                              deleteEventTypeCalls.count
+
+        let eventCounts = getEventsCalls.count + getAllEventsCalls.count +
+                          createEventCalls.count + createEventWithIdempotencyCalls.count +
+                          createEventsBatchCalls.count + updateEventCalls.count + deleteEventCalls.count
+
+        let geofenceCounts = getGeofencesCalls.count + createGeofenceCalls.count +
+                             createGeofenceWithIdempotencyCalls.count + updateGeofenceCalls.count +
+                             deleteGeofenceCalls.count
+
+        let propDefCounts = getPropertyDefinitionsCalls.count + createPropertyDefinitionCalls.count +
+                            createPropertyDefinitionWithIdempotencyCalls.count + updatePropertyDefinitionCalls.count +
+                            deletePropertyDefinitionCalls.count
+
+        let changeCounts = getChangesCalls.count + getLatestCursorCalls.count
+
+        return eventTypeCounts + eventCounts + geofenceCounts + propDefCounts + changeCounts
     }
 }
