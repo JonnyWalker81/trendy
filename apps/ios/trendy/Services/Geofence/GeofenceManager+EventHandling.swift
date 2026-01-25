@@ -31,6 +31,50 @@ extension GeofenceManager {
     func activeEvent(for geofenceId: String) -> String? {
         return activeGeofenceEvents[geofenceId]
     }
+
+    /// Database-level duplicate check: looks for recent geofence events with the same
+    /// geofenceId that don't have an exit time (endDate == nil), indicating an active
+    /// visit that wasn't properly tracked in activeGeofenceEvents.
+    ///
+    /// This handles scenarios where:
+    /// - App was killed before activeGeofenceEvents could be persisted
+    /// - activeGeofenceEvents was cleared by a sync/reset
+    /// - Region re-registration triggers didDetermineState while user is still inside
+    ///
+    /// - Parameters:
+    ///   - geofenceId: The geofence ID to check
+    ///   - tolerance: Maximum time in seconds to consider an event "recent" (default 60)
+    /// - Returns: true if a duplicate entry event would be created
+    func recentGeofenceEntryExists(geofenceId: String, tolerance: TimeInterval = 60) -> Bool {
+        let geoId = geofenceId
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.geofenceId == geoId &&
+                event.sourceTypeRaw == "geofence" &&
+                event.endDate == nil  // No exit recorded = still "active"
+            },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+
+        guard let events = try? modelContext.fetch(descriptor), let mostRecent = events.first else {
+            return false
+        }
+
+        // Check if the most recent entry is within tolerance window
+        let timeSinceEntry = Date().timeIntervalSince(mostRecent.timestamp)
+        let isDuplicate = timeSinceEntry <= tolerance
+
+        if isDuplicate {
+            Log.geofence.debug("Database-level duplicate detected", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+                ctx.add("existingEventId", mostRecent.id)
+                ctx.add("timeSinceEntry", Int(timeSinceEntry))
+                ctx.add("tolerance", Int(tolerance))
+            })
+        }
+
+        return isDuplicate
+    }
 }
 
 // MARK: - Launch and Background Event Handlers
@@ -92,6 +136,40 @@ extension GeofenceManager {
             ctx.add("geofenceId", geofenceId)
         })
 
+        // RACE CONDITION FIX: Early claim pattern to prevent concurrent calls from creating duplicates.
+        // If another call is already processing this geofence, skip this one.
+        // This handles scenarios where didEnterRegion and didDetermineState both fire,
+        // or background notification and delegate both receive the same event.
+        guard !Self.processingGeofenceIds.contains(geofenceId) else {
+            Log.geofence.debug("Geofence already being processed, skipping duplicate call", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+            })
+            return
+        }
+        Self.processingGeofenceIds.insert(geofenceId)
+        defer { Self.processingGeofenceIds.remove(geofenceId) }
+
+        // Check if already has an active event (in-memory check)
+        if let existingEventId = activeGeofenceEvents[geofenceId] {
+            Log.geofence.warning("Geofence already has an active event (in-memory)", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+                ctx.add("existingEventId", existingEventId)
+            })
+            return
+        }
+
+        // DATABASE-LEVEL DUPLICATE CHECK: Look for recent geofence entries in the database
+        // that don't have an exit time. This catches duplicates when:
+        // - activeGeofenceEvents was cleared/lost
+        // - App was restarted and region re-registration triggered didDetermineState
+        // - Multiple rapid calls slipped through before activeGeofenceEvents was updated
+        if recentGeofenceEntryExists(geofenceId: geofenceId, tolerance: 60) {
+            Log.geofence.warning("Recent geofence entry exists in database, skipping duplicate", context: .with { ctx in
+                ctx.add("geofenceId", geofenceId)
+            })
+            return
+        }
+
         let descriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }
         )
@@ -104,15 +182,6 @@ extension GeofenceManager {
         Log.geofence.debug("Found geofence", context: .with { ctx in
             ctx.add("name", geofence.name)
         })
-
-        // Check if already has an active event
-        if let existingEventId = activeGeofenceEvents[geofenceId] {
-            Log.geofence.warning("Geofence already has an active event", context: .with { ctx in
-                ctx.add("name", geofence.name)
-                ctx.add("existingEventId", existingEventId)
-            })
-            return
-        }
 
         // Get the entry event type by ID
         guard let eventTypeEntryID = geofence.eventTypeEntryID else {
