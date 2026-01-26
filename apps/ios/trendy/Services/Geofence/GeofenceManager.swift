@@ -108,6 +108,54 @@ class GeofenceManager: NSObject {
         )
 
         Log.geofence.debug("GeofenceManager initialized with background and launch event observers")
+
+        // Process any pending events that arrived before we were initialized.
+        // This handles the race condition where iOS delivers geofence events
+        // during background launch before GeofenceManager is ready.
+        processPendingBackgroundEvents()
+    }
+
+    /// Process any pending geofence events that arrived before initialization.
+    /// This drains the AppDelegate's pending events queue and processes each event.
+    private func processPendingBackgroundEvents() {
+        let pendingEvents = AppDelegate.drainPendingEvents()
+
+        guard !pendingEvents.isEmpty else {
+            Log.geofence.debug("No pending background events to process")
+            return
+        }
+
+        Log.geofence.info("Processing pending background events", context: .with { ctx in
+            ctx.add("count", pendingEvents.count)
+        })
+
+        for event in pendingEvents {
+            Task { @MainActor in
+                guard let localId = eventStore.lookupLocalGeofenceId(from: event.regionIdentifier) else {
+                    Log.geofence.warning("Unknown region identifier in pending event", context: .with { ctx in
+                        ctx.add("identifier", event.regionIdentifier)
+                        ctx.add("type", event.type == .entry ? "entry" : "exit")
+                        ctx.add("age_seconds", Int(Date().timeIntervalSince(event.timestamp)))
+                    })
+                    return
+                }
+
+                switch event.type {
+                case .entry:
+                    Log.geofence.info("Processing pending entry event", context: .with { ctx in
+                        ctx.add("identifier", event.regionIdentifier)
+                        ctx.add("age_seconds", Int(Date().timeIntervalSince(event.timestamp)))
+                    })
+                    handleGeofenceEntry(geofenceId: localId)
+                case .exit:
+                    Log.geofence.info("Processing pending exit event", context: .with { ctx in
+                        ctx.add("identifier", event.regionIdentifier)
+                        ctx.add("age_seconds", Int(Date().timeIntervalSince(event.timestamp)))
+                    })
+                    handleGeofenceExit(geofenceId: localId)
+                }
+            }
+        }
     }
 
     // MARK: - Lifecycle

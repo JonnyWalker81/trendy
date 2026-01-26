@@ -51,13 +51,16 @@ extension GeofenceManager: CLLocationManagerDelegate {
 
         Log.geofence.info("ENTERED geofence region", context: .with { ctx in
             ctx.add("identifier", identifier)
+            ctx.add("monitoredRegionsCount", manager.monitoredRegions.count)
         })
 
         // Dispatch to main actor since EventStore is MainActor-isolated
         Task { @MainActor in
             guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
-                Log.geofence.warning("Unknown region identifier on entry", context: .with { ctx in
+                // Enhanced logging for troubleshooting lookup failures
+                Log.geofence.warning("Unknown region identifier on entry - geofence not found in local database", context: .with { ctx in
                     ctx.add("identifier", identifier)
+                    ctx.add("hint", "Geofence may not be synced yet, or was deleted. Check if backend sync is complete.")
                 })
                 return
             }
@@ -70,13 +73,16 @@ extension GeofenceManager: CLLocationManagerDelegate {
 
         Log.geofence.info("EXITED geofence region", context: .with { ctx in
             ctx.add("identifier", identifier)
+            ctx.add("monitoredRegionsCount", manager.monitoredRegions.count)
         })
 
         // Dispatch to main actor since EventStore is MainActor-isolated
         Task { @MainActor in
             guard let localId = eventStore.lookupLocalGeofenceId(from: identifier) else {
-                Log.geofence.warning("Unknown region identifier on exit", context: .with { ctx in
+                // Enhanced logging for troubleshooting lookup failures
+                Log.geofence.warning("Unknown region identifier on exit - geofence not found in local database", context: .with { ctx in
                     ctx.add("identifier", identifier)
+                    ctx.add("hint", "Geofence may not be synced yet, or was deleted. Check if backend sync is complete.")
                 })
                 return
             }
