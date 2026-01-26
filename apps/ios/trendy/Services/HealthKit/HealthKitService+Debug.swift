@@ -343,7 +343,8 @@ extension HealthKitService {
         )
 
         do {
-            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            // Use mainContext when fresh data needed to avoid SQLite file locking issues.
+            let context = useFreshContext ? modelContainer.mainContext : modelContext
             let events = try context.fetch(descriptor)
             return Set(events.compactMap { $0.healthKitSampleId })
         } catch {

@@ -595,9 +595,11 @@ class EventStore {
     private func fetchFromLocal() async throws {
         guard let modelContainer else { return }
 
-        // Create a fresh context to ensure we see the latest persisted data
-        // This is necessary because SyncEngine uses its own context for sync operations
-        let freshContext = ModelContext(modelContainer)
+        // Use mainContext instead of creating a fresh ModelContext to avoid SQLite file locking issues.
+        // Creating multiple ModelContext(modelContainer) instances can cause "default.store couldn't be opened"
+        // errors when concurrent contexts try to access the same SQLite file.
+        // Since EventStore is @MainActor, using mainContext is the correct pattern.
+        let context = modelContainer.mainContext
 
         let eventDescriptor = FetchDescriptor<Event>(
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
@@ -606,8 +608,8 @@ class EventStore {
             sortBy: [SortDescriptor(\.name)]
         )
 
-        events = try freshContext.fetch(eventDescriptor)
-        eventTypes = try freshContext.fetch(typeDescriptor)
+        events = try context.fetch(eventDescriptor)
+        eventTypes = try context.fetch(typeDescriptor)
 
         // Restore broken Event→EventType relationships that can occur
         // when fetching from a fresh ModelContext (SwiftData relationship detachment)
@@ -1779,8 +1781,8 @@ class EventStore {
             return DeduplicationResult(duplicatesFound: 0, duplicatesRemoved: 0, groupsProcessed: 0, details: ["Error: modelContainer is nil"])
         }
 
-        // Use a fresh context to ensure we see the latest data
-        let freshContext = ModelContext(modelContainer)
+        // Use mainContext to avoid SQLite file locking issues with concurrent ModelContext instances
+        let context = modelContainer.mainContext
         var details: [String] = []
         var totalDuplicatesFound = 0
         var totalDuplicatesRemoved = 0
@@ -1791,7 +1793,7 @@ class EventStore {
             let descriptor = FetchDescriptor<Event>(
                 predicate: #Predicate { $0.healthKitSampleId != nil }
             )
-            let allHealthKitEvents = try freshContext.fetch(descriptor)
+            let allHealthKitEvents = try context.fetch(descriptor)
 
             Log.sync.info("Deduplication: scanning HealthKit events", context: .with { ctx in
                 ctx.add("total_healthkit_events", allHealthKitEvents.count)
@@ -1861,13 +1863,13 @@ class EventStore {
                         }
                     }
 
-                    freshContext.delete(event)
+                    context.delete(event)
                     totalDuplicatesRemoved += 1
                 }
             }
 
             // Save all deletions
-            try freshContext.save()
+            try context.save()
 
             Log.sync.info("Deduplication complete", context: .with { ctx in
                 ctx.add("groups_processed", groupsProcessed)
@@ -1903,7 +1905,8 @@ class EventStore {
             return DeduplicationResult(duplicatesFound: 0, duplicatesRemoved: 0, groupsProcessed: 0, details: ["Error: modelContainer is nil"])
         }
 
-        let freshContext = ModelContext(modelContainer)
+        // Use mainContext to avoid SQLite file locking issues with concurrent ModelContext instances
+        let context = modelContainer.mainContext
         var details: [String] = []
         var totalDuplicates = 0
 
@@ -1912,7 +1915,7 @@ class EventStore {
             let descriptor = FetchDescriptor<Event>(
                 predicate: #Predicate { $0.healthKitSampleId != nil }
             )
-            let allHealthKitEvents = try freshContext.fetch(descriptor)
+            let allHealthKitEvents = try context.fetch(descriptor)
 
             // Group by healthKitSampleId
             let groupedBySampleId = Dictionary(grouping: allHealthKitEvents) { $0.healthKitSampleId! }

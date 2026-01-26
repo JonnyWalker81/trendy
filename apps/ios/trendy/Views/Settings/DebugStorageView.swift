@@ -689,10 +689,9 @@ struct DebugStorageView: View {
     }
 
     private func loadSwiftDataCounts() async {
-        // Create a fresh context to ensure we see the latest persisted data
-        // This is necessary because SyncEngine uses its own context, and the
-        // Environment's modelContext may have stale cached data
-        let freshContext = ModelContext(modelContext.container)
+        // Use mainContext to avoid SQLite file locking issues with concurrent ModelContext instances.
+        // Creating new ModelContext(container) can cause "default.store couldn't be opened" errors.
+        let context = modelContext.container.mainContext
 
         // Clear previous errors
         modelErrors.removeAll()
@@ -700,7 +699,7 @@ struct DebugStorageView: View {
         // Helper to safely get count and capture errors
         func safeCount<T: PersistentModel>(_ type: T.Type, name: String) -> Int {
             do {
-                let count = try freshContext.fetchCount(FetchDescriptor<T>())
+                let count = try context.fetchCount(FetchDescriptor<T>())
                 guard count >= 0 && count < 10_000_000 else {
                     modelErrors[name] = "Invalid count: \(count)"
                     return -1
@@ -858,12 +857,13 @@ extension DebugStorageView {
         isAnalyzingSyncStatus = true
         defer { isAnalyzingSyncStatus = false }
 
-        let freshContext = ModelContext(modelContext.container)
+        // Use mainContext to avoid SQLite file locking issues with concurrent ModelContext instances.
+        let context = modelContext.container.mainContext
         var info = SyncStatusInfo()
 
         do {
             // Fetch all events
-            let allEvents = try freshContext.fetch(FetchDescriptor<Event>())
+            let allEvents = try context.fetch(FetchDescriptor<Event>())
 
             // Count by sync status
             let pendingStatus = SyncStatus.pending.rawValue
@@ -892,7 +892,7 @@ extension DebugStorageView {
             }
 
             // Fetch all event types
-            let allEventTypes = try freshContext.fetch(FetchDescriptor<EventType>())
+            let allEventTypes = try context.fetch(FetchDescriptor<EventType>())
 
             info.eventTypesPending = allEventTypes.filter { $0.syncStatusRaw == pendingStatus }.count
             info.eventTypesSynced = allEventTypes.filter { $0.syncStatusRaw == syncedStatus }.count

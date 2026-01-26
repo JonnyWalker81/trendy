@@ -154,9 +154,9 @@ extension HealthKitService {
     func reloadProcessedSampleIdsFromDatabase() {
         Log.healthKit.info("Reloading processedSampleIds from database after resync")
 
-        // Create a fresh context to see the latest persisted data
-        // This is critical because SyncEngine uses a different context for bootstrap
-        let freshContext = ModelContext(modelContainer)
+        // Use mainContext to avoid SQLite file locking issues with concurrent ModelContext instances.
+        // This is @MainActor so mainContext is the correct choice.
+        let context = modelContainer.mainContext
 
         // Query all events with healthKitSampleId from the database
         let descriptor = FetchDescriptor<Event>(
@@ -166,7 +166,7 @@ extension HealthKitService {
         )
 
         do {
-            let events = try freshContext.fetch(descriptor)
+            let events = try context.fetch(descriptor)
             var newSampleIds = Set<String>()
             for event in events {
                 if let sampleId = event.healthKitSampleId {

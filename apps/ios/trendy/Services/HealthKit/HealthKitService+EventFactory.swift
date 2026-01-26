@@ -83,7 +83,9 @@ extension HealthKitService {
         )
 
         do {
-            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            // Use mainContext when fresh data needed to avoid SQLite file locking issues.
+            // Creating new ModelContext(modelContainer) can cause "default.store couldn't be opened" errors.
+            let context = useFreshContext ? modelContainer.mainContext : modelContext
             let existingEvents = try context.fetch(descriptor)
             return !existingEvents.isEmpty
         } catch {
@@ -101,7 +103,7 @@ extension HealthKitService {
     ///   - startDate: The workout start timestamp
     ///   - endDate: The workout end timestamp (optional)
     ///   - tolerance: Maximum time difference in seconds to consider a match (default 1.0)
-    ///   - useFreshContext: If true, creates a fresh ModelContext to see the latest persisted data.
+    ///   - useFreshContext: If true, uses mainContext to see the latest persisted data.
     ///                      Use this during reconciliation flows after bootstrap when modelContext may be stale.
     @MainActor
     func eventExistsWithMatchingWorkoutTimestamp(
@@ -117,7 +119,8 @@ extension HealthKitService {
         )
 
         do {
-            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            // Use mainContext when fresh data needed to avoid SQLite file locking issues.
+            let context = useFreshContext ? modelContainer.mainContext : modelContext
             let events = try context.fetch(descriptor)
 
             // DIAGNOSTIC: Log search parameters and candidate count
@@ -206,7 +209,8 @@ extension HealthKitService {
         )
 
         do {
-            let context = useFreshContext ? ModelContext(modelContainer) : modelContext
+            // Use mainContext when fresh data needed to avoid SQLite file locking issues.
+            let context = useFreshContext ? modelContainer.mainContext : modelContext
             let events = try context.fetch(descriptor)
 
             // Check for content match: eventTypeId + timestamp (within tolerance)
