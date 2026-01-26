@@ -43,7 +43,7 @@ Summary of all milestones:
 
 ### Pending Todos
 
-1. **Add iOS file logging with device retrieval** (ios) — `.planning/todos/pending/2026-01-26-ios-file-logging-retrieval.md`
+None
 
 ### Blockers/Concerns
 
