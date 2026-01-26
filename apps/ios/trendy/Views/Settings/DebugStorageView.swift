@@ -169,10 +169,31 @@ struct DebugStorageView: View {
         appGroupSection(info)
         swiftDataCountsSection
         syncStatusDiagnosticsSection
+        logsSection
         filesSection(info)
         noteSection
         syncActionsSection
         dangerZoneSection
+    }
+
+    private var logsSection: some View {
+        Section {
+            NavigationLink {
+                LogExportView()
+            } label: {
+                HStack {
+                    Image(systemName: "doc.text.magnifyingglass")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("App Logs")
+                        Text("View and export logs for debugging")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Diagnostics")
+        }
     }
 
     private func appGroupSection(_ info: ContainerInfo) -> some View {

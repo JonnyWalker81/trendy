@@ -4,7 +4,7 @@
 //
 //  Structured logging utility using Apple's unified logging system (os.Logger).
 //  Provides consistent, categorized logging across the app with environment-aware
-//  verbosity levels.
+//  verbosity levels. Also writes to persistent files via FileLogger for debugging.
 //
 
 import Foundation
@@ -13,6 +13,7 @@ import os
 /// Centralized logging utility for the Trendy app.
 /// Uses Apple's unified logging system (os.Logger) for native integration
 /// with Console.app and performance-optimized log collection.
+/// Also writes to file via FileLogger for persistent storage and export.
 enum Log {
 
     // MARK: - Log Categories
@@ -50,6 +51,13 @@ enum Log {
     // MARK: - Private Properties
 
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.trendy.app"
+
+    // MARK: - File Logging Control
+
+    /// Enable or disable file logging (useful for performance-sensitive scenarios)
+    static func setFileLoggingEnabled(_ enabled: Bool) {
+        FileLogger.shared.setEnabled(enabled)
+    }
 
     // MARK: - Helper Types
 
@@ -110,40 +118,53 @@ enum Log {
 
 extension Logger {
 
+    /// The category name extracted from the logger (for file logging)
+    private var category: String {
+        // Logger doesn't expose category directly, but we can use a workaround
+        // by storing category in a computed way or using the description
+        String(describing: self).components(separatedBy: "category: ").last?.components(separatedBy: ")").first ?? "general"
+    }
+
     /// Log at debug level with optional context
     func debug(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .debug, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .debug, category: category, message: message, context: context.description)
     }
 
     /// Log at info level with optional context
     func info(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .info, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .info, category: category, message: message, context: context.description)
     }
 
     /// Log at notice level with optional context (default level)
     func notice(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .default, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .notice, category: category, message: message, context: context.description)
     }
 
     /// Log at warning level with optional context
     func warning(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .error, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .warning, category: category, message: message, context: context.description)
     }
 
     /// Log at error level with optional context
     func error(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .error, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .error, category: category, message: message, context: context.description)
     }
 
     /// Log at fault level with optional context (critical errors)
     func fault(_ message: String, context: Log.Context = Log.Context()) {
         let fullMessage = "\(message)\(context.description)"
         self.log(level: .fault, "\(fullMessage, privacy: .public)")
+        FileLogger.shared.log(level: .fault, category: category, message: message, context: context.description)
     }
 
     // MARK: - Convenience Methods
