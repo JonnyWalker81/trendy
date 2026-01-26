@@ -386,6 +386,10 @@ struct trendyApp: App {
         // Uses CACHE-FIRST strategy - does not wait for session restore
         appRouter.determineInitialRoute()
 
+        // Start listening to auth state changes for session events
+        // This handles: session restore completion, sign out, token refresh
+        appRouter.startAuthStateListener()
+
         // Initialize AuthViewModel with Supabase service
         _authViewModel = State(initialValue: AuthViewModel(supabaseService: supabaseService))
 
@@ -397,42 +401,33 @@ struct trendyApp: App {
         insights.configure(with: apiClient)
         _insightsViewModel = State(initialValue: insights)
 
-        // Identify user in PostHog and FullDisclosure if already authenticated (session restore)
+        // Identify user in PostHog after session restore (via auth state listener)
         let supabase = supabaseService
         let hasPostHog = appConfiguration.posthogConfiguration != nil
         Task {
-            await supabase.restoreSession()
-            // Get session directly from auth client to avoid race condition
-            if let session = try? await supabase.client.auth.session {
-                let userId = session.user.id.uuidString
-                let email = session.user.email
+            // Wait for initial session to be restored via auth state listener
+            // This is reliable - uses Supabase SDK events, not arbitrary timeouts
+            for await event in supabase.authStateChanges {
+                if case .initialSession(let session) = event {
+                    if let session = session {
+                        let userId = session.user.id.uuidString
+                        let email = session.user.email
 
-                // Identify user in PostHog (if configured)
-                if hasPostHog {
-                    var userProperties: [String: Any] = [:]
-                    if let email = email {
-                        userProperties["email"] = email
+                        // Identify user in PostHog (if configured)
+                        if hasPostHog {
+                            var userProperties: [String: Any] = [:]
+                            if let email = email {
+                                userProperties["email"] = email
+                            }
+                            Log.general.debug("PostHog identify (session restore)", context: .with { ctx in
+                                ctx.add("user_id", userId)
+                                ctx.add("email", email)
+                            })
+                            PostHogSDK.shared.identify(userId, userProperties: userProperties)
+                        }
                     }
-                    Log.general.debug("📊 PostHog identify (session restore)", context: .with { ctx in
-                        ctx.add("user_id", userId)
-                        ctx.add("email", email)
-                    })
-                    PostHogSDK.shared.identify(userId, userProperties: userProperties)
+                    break
                 }
-
-                // Identify user in FullDisclosure for feedback submissions
-//                do {
-//                    try await FullDisclosure.shared.identify(
-//                        userId: userId,
-//                        email: email
-//                    )
-//                    Log.general.debug("📝 FullDisclosure identify (session restore)", context: .with { ctx in
-//                        ctx.add("user_id", userId)
-//                        ctx.add("email", email)
-//                    })
-//                } catch {
-//                    Log.general.warning("⚠️ FullDisclosure identify failed", error: error)
-//                }
             }
         }
         

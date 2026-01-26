@@ -38,11 +38,19 @@ class AppRouter {
     private let supabaseService: SupabaseService
     private let onboardingService: OnboardingStatusService
 
+    /// Task for listening to auth state changes
+    /// Note: Using nonisolated(unsafe) because Task.cancel() is safe to call from any context
+    nonisolated(unsafe) private var authListenerTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     init(supabaseService: SupabaseService, onboardingService: OnboardingStatusService) {
         self.supabaseService = supabaseService
         self.onboardingService = onboardingService
+    }
+
+    deinit {
+        authListenerTask?.cancel()
     }
 
     // MARK: - Route Determination
@@ -140,19 +148,82 @@ class AppRouter {
     }
 
     /// Verify session is valid in background after cache-based routing
-    /// If session is invalid, transition to login
+    /// Uses Supabase auth state listener instead of arbitrary timeout
     private func verifySessionInBackground() async {
-        // Give SupabaseService time to restore session
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+        // If initial session already restored, check immediately
+        if supabaseService.initialSessionRestored {
+            await handleSessionVerification()
+            return
+        }
 
-        // Now check if session was restored
+        // Wait for initial session event from Supabase auth state listener
+        // This is reliable - no arbitrary timeouts
+        for await event in supabaseService.authStateChanges {
+            if case .initialSession(let session) = event {
+                Log.auth.debug("Received initialSession event", context: .with { ctx in
+                    ctx.add("has_session", session != nil ? "true" : "false")
+                })
+                await handleSessionVerification()
+                break
+            }
+        }
+    }
+
+    /// Handle session verification after initial session event
+    private func handleSessionVerification() async {
         if supabaseService.currentSession == nil {
-            Log.auth.warning("Session not restored, transitioning to login")
+            Log.auth.warning("Session not restored after initialSession event, transitioning to login")
             transitionToLogin()
         } else {
             // Session valid - sync from backend in background
             _ = await onboardingService.syncFromBackend(timeout: 3.0)
             Log.auth.debug("Background session verification complete")
+        }
+    }
+
+    /// Start listening to auth state changes for session expiration/logout
+    /// Call this after initial route is determined
+    func startAuthStateListener() {
+        authListenerTask = Task { [weak self] in
+            guard let self = self else { return }
+
+            // Skip the initial session event since we handle it in verifySessionInBackground
+            var isFirstEvent = true
+
+            for await event in self.supabaseService.authStateChanges {
+                guard !Task.isCancelled else { break }
+
+                // Skip first event (initial session) as it's handled separately
+                if isFirstEvent {
+                    isFirstEvent = false
+                    continue
+                }
+
+                switch event {
+                case .signedOut:
+                    Log.auth.info("Auth state: signed out, transitioning to login")
+                    await MainActor.run {
+                        self.transitionToLogin()
+                    }
+
+                case .signedIn(let session):
+                    Log.auth.info("Auth state: signed in", context: .with { ctx in
+                        ctx.add("user_id", session.user.id.uuidString)
+                    })
+                    // If currently on login screen, handle the login
+                    if case .login = self.currentRoute {
+                        await self.handleLogin()
+                    }
+
+                case .tokenRefreshed:
+                    Log.auth.debug("Auth state: token refreshed")
+                    // No action needed - session is still valid
+
+                case .initialSession:
+                    // Handled in verifySessionInBackground
+                    break
+                }
+            }
         }
     }
 
