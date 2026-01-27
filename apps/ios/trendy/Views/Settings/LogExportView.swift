@@ -13,6 +13,7 @@ struct LogExportView: View {
     @State private var logFiles: [LogFileInfo] = []
     @State private var selectedFile: LogFileInfo?
     @State private var isLoading = true
+    @State private var isExporting = false
     @State private var showingShareSheet = false
     @State private var exportURL: URL?
     @State private var showingDeleteAllConfirmation = false
@@ -129,13 +130,20 @@ struct LogExportView: View {
     private var actionsSection: some View {
         Section {
             Button {
-                exportAllLogs()
+                Task {
+                    await exportAllLogs()
+                }
             } label: {
                 HStack {
                     Image(systemName: "square.and.arrow.up")
-                    Text("Export All Logs")
+                    Text("Export Bug Report")
+                    Spacer()
+                    if isExporting {
+                        ProgressView()
+                    }
                 }
             }
+            .disabled(isExporting)
 
             Button(role: .destructive) {
                 showingDeleteAllConfirmation = true
@@ -148,7 +156,7 @@ struct LogExportView: View {
         } header: {
             Text("Actions")
         } footer: {
-            Text("Export creates a single file combining all logs for easy sharing with support.")
+            Text("Export creates a bug report with device info, app state, and all logs for easy sharing with support.")
         }
     }
 
@@ -160,8 +168,11 @@ struct LogExportView: View {
         isLoading = false
     }
 
-    private func exportAllLogs() {
-        if let url = FileLogger.shared.createExportFile() {
+    private func exportAllLogs() async {
+        isExporting = true
+        defer { isExporting = false }
+
+        if let url = await FileLogger.shared.createExportFile(includeDeviceInfo: true) {
             exportURL = url
             showingShareSheet = true
         }

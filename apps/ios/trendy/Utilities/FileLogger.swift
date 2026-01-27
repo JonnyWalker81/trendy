@@ -148,19 +148,64 @@ final class FileLogger: @unchecked Sendable {
     }
 
     /// Create a combined log file for export (all logs concatenated)
+    /// - Parameter includeDeviceInfo: Whether to include comprehensive device info header
+    func createExportFile(includeDeviceInfo: Bool = true) async -> URL? {
+        let exportURL = logDirectory.appendingPathComponent("trendy-bug-report.txt")
+
+        // Remove existing export file
+        try? FileManager.default.removeItem(at: exportURL)
+
+        var combinedContent = ""
+
+        // Add comprehensive device info header
+        if includeDeviceInfo {
+            let header = await DeviceInfoCollector.shared.collectBugReportHeader()
+            combinedContent += header
+            combinedContent += "\n\n"
+        } else {
+            // Fallback to simple header
+            combinedContent += "Trendy App Logs Export\n"
+            combinedContent += "Generated: \(timestampFormatter.string(from: Date()))\n"
+            combinedContent += "Device: \(UIDevice.current.name)\n"
+            combinedContent += "iOS: \(UIDevice.current.systemVersion)\n"
+            combinedContent += String(repeating: "═", count: 60) + "\n\n"
+        }
+
+        // Add log files (oldest first for chronological order)
+        let files = getLogFiles().reversed()
+        for file in files {
+            if let content = readLogFile(at: file.url) {
+                combinedContent += "┌─ \(file.url.lastPathComponent) ─────────────────────────────────\n"
+                combinedContent += content
+                if !content.hasSuffix("\n") {
+                    combinedContent += "\n"
+                }
+                combinedContent += "└" + String(repeating: "─", count: 59) + "\n\n"
+            }
+        }
+
+        do {
+            try combinedContent.write(to: exportURL, atomically: true, encoding: .utf8)
+            return exportURL
+        } catch {
+            return nil
+        }
+    }
+
+    /// Synchronous version for backward compatibility (without full device info)
     func createExportFile() -> URL? {
         let exportURL = logDirectory.appendingPathComponent("trendy-logs-export.txt")
 
         // Remove existing export file
         try? FileManager.default.removeItem(at: exportURL)
 
-        let files = getLogFiles().reversed() // Oldest first for chronological order
         var combinedContent = "Trendy App Logs Export\n"
         combinedContent += "Generated: \(timestampFormatter.string(from: Date()))\n"
         combinedContent += "Device: \(UIDevice.current.name)\n"
         combinedContent += "iOS: \(UIDevice.current.systemVersion)\n"
-        combinedContent += String(repeating: "=", count: 60) + "\n\n"
+        combinedContent += String(repeating: "═", count: 60) + "\n\n"
 
+        let files = getLogFiles().reversed()
         for file in files {
             if let content = readLogFile(at: file.url) {
                 combinedContent += "--- \(file.url.lastPathComponent) ---\n"
