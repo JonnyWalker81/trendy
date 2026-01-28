@@ -53,6 +53,14 @@ actor SyncEngine {
     private let dataStoreFactory: any DataStoreFactory
     private let syncHistoryStore: SyncHistoryStore?
 
+    /// Cached DataStore instance reused across all SyncEngine operations.
+    /// Since SyncEngine is an actor, all access is serialized, making it safe
+    /// to reuse a single ModelContext. This prevents "default.store couldn't be opened"
+    /// errors caused by creating too many concurrent ModelContext/SQLite connections.
+    private lazy var cachedDataStore: any DataStoreProtocol = {
+        dataStoreFactory.makeDataStore()
+    }()
+
     // MARK: - State
 
     private var lastSyncCursor: Int64 = 0
@@ -136,7 +144,7 @@ actor SyncEngine {
         initialStateLoaded = true
 
         // Load pending count from SwiftData
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
         let count = (try? dataStore.fetchPendingMutations().count) ?? 0
 
         await MainActor.run {
@@ -201,7 +209,7 @@ actor SyncEngine {
 
             // Create a single dataStore for pre-sync operations to avoid SQLite file locking issues.
             // Multiple concurrent ModelContexts can cause "default.store couldn't be opened" errors.
-            let preSyncDataStore = dataStoreFactory.makeDataStore()
+            let preSyncDataStore = cachedDataStore
 
             // Count pending mutations before sync for history tracking
             let allMutations = try preSyncDataStore.fetchPendingMutations()
@@ -444,7 +452,7 @@ actor SyncEngine {
     /// - Throws: Error if API call fails
     func skipToLatestCursor() async throws -> Int64 {
         // Log pending mutation count for informational purposes
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
         let pendingMutations = try dataStore.fetchPendingMutations()
         let pendingCount = pendingMutations.count
 
@@ -470,7 +478,7 @@ actor SyncEngine {
     /// Call this if events show "Unknown" instead of their proper event type name.
     func restoreEventRelationships() async {
         Log.sync.info("Manual event relationship restoration requested")
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         do {
             try restoreEventTypeRelationships(dataStore: dataStore)
@@ -487,7 +495,7 @@ actor SyncEngine {
     func syncGeofences() async throws -> Int {
         Log.sync.info("Syncing geofences from server")
 
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         // Fetch geofences from API
         let geofences = try await networkClient.getGeofences(activeOnly: false)
@@ -521,7 +529,7 @@ actor SyncEngine {
 
     /// Get the local geofence count
     func getLocalGeofenceCount() -> Int {
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
         return (try? dataStore.fetchAllGeofences().count) ?? 0
     }
 
@@ -534,7 +542,7 @@ actor SyncEngine {
         entityId: String,
         payload: Data
     ) async throws {
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         // DEDUPLICATION: Check if a pending mutation already exists for this entity
         // This prevents duplicate mutations from being queued when multiple code paths
@@ -570,7 +578,7 @@ actor SyncEngine {
 
     /// Get the current pending mutation count
     func getPendingCount() async -> Int {
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
         return getPendingCountFromDataStore(dataStore)
     }
 
@@ -587,7 +595,7 @@ actor SyncEngine {
     /// - Returns: The number of mutations cleared
     @discardableResult
     func clearPendingMutations(markEntitiesFailed: Bool = true) async -> Int {
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         do {
             let mutations = try dataStore.fetchPendingMutations()
@@ -697,7 +705,7 @@ actor SyncEngine {
         let flushMetricsId = SyncMetrics.beginFlushMutations()
         defer { SyncMetrics.endFlushMutations(flushMetricsId) }
 
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         let mutations = try dataStore.fetchPendingMutations()
         let totalPending = mutations.count
@@ -1380,7 +1388,7 @@ actor SyncEngine {
     }
 
     private func applyChanges(_ changes: [ChangeEntry]) async throws {
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         for change in changes {
             do {
@@ -1628,7 +1636,7 @@ actor SyncEngine {
         let bootstrapMetricsId = SyncMetrics.beginBootstrapFetch()
         defer { SyncMetrics.endBootstrapFetch(bootstrapMetricsId) }
 
-        let dataStore = dataStoreFactory.makeDataStore()
+        let dataStore = cachedDataStore
 
         // Step 0: Nuclear cleanup - ensure clean slate before populating from backend
         try performNuclearCleanup(dataStore: dataStore)
@@ -1667,7 +1675,7 @@ actor SyncEngine {
         })
 
         // DIAGNOSTIC: Additional verification after save (using fresh dataStore)
-        let verifyDataStore = dataStoreFactory.makeDataStore()
+        let verifyDataStore = cachedDataStore
         let verifyEventCount = (try? verifyDataStore.fetchAllEvents().count) ?? -1
         let verifyEventTypeCount = (try? verifyDataStore.fetchAllEventTypes().count) ?? -1
         Log.sync.info("Bootstrap verification after save", context: .with { ctx in
