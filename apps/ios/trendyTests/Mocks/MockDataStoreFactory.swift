@@ -19,8 +19,8 @@ import Foundation
 /// let syncEngine = SyncEngine(networkClient: mockNetwork, dataStoreFactory: factory)
 /// ```
 final class MockDataStoreFactory: DataStoreFactory, @unchecked Sendable {
-    /// The mock store instance returned by makeDataStore()
-    private let mockStore: MockDataStore
+    /// The store instance returned by makeDataStore()
+    private let store: any DataStoreProtocol
 
     /// Whether makeDataStore() has been called
     private(set) var makeDataStoreCalled = false
@@ -28,17 +28,23 @@ final class MockDataStoreFactory: DataStoreFactory, @unchecked Sendable {
     /// Number of times makeDataStore() was called
     private(set) var makeDataStoreCallCount = 0
 
+    /// Initialize with a MockDataStore
     init(mockStore: MockDataStore) {
-        self.mockStore = mockStore
+        self.store = mockStore
     }
 
-    /// Returns the mock store instance.
+    /// Initialize with any DataStoreProtocol (for custom mocks like TrackingMockDataStore)
+    init(returning store: any DataStoreProtocol) {
+        self.store = store
+    }
+
+    /// Returns the store instance.
     /// Note: Unlike production factory which creates fresh ModelContext,
     /// this returns the same mock instance for test verification.
     func makeDataStore() -> any DataStoreProtocol {
         makeDataStoreCalled = true
         makeDataStoreCallCount += 1
-        return mockStore
+        return store
     }
 
     /// Reset call tracking state

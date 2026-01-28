@@ -344,6 +344,17 @@ actor SyncEngine {
 
             pendingDeleteIds.removeAll()  // Clear tracking after successful sync
             savePendingDeleteIds()
+
+            // Post bootstrap completed notification AFTER all sync operations are done.
+            // This was previously posted inside bootstrapFetch() which caused a race condition:
+            // HealthKitService would start reconciliation while SyncEngine was still doing
+            // cursor updates and history recording, causing "default.store couldn't be opened" errors.
+            if shouldBootstrap {
+                Log.sync.info("Posting bootstrap completed notification after sync complete")
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
+                }
+            }
         } catch {
             // Calculate duration even on failure
             let syncDurationMs = Int(Date().timeIntervalSince(syncStartTime) * 1000)
@@ -1683,14 +1694,10 @@ actor SyncEngine {
             ctx.add("verify_event_types_fresh_context", verifyEventTypeCount)
         })
 
-        // Notify HealthKitService to reload processedSampleIds from the database.
-        // This prevents duplicate event creation when HealthKit observer queries fire after bootstrap.
-        // The bootstrap downloaded events with healthKitSampleIds, but HealthKitService's in-memory
-        // processedSampleIds set doesn't include them yet.
-        Log.sync.info("Posting bootstrap completed notification for HealthKit")
-        await MainActor.run {
-            NotificationCenter.default.post(name: .syncEngineBootstrapCompleted, object: nil)
-        }
+        // NOTE: Bootstrap completed notification is now posted AFTER sync completes in performSync().
+        // Previously it was posted here, which caused a race condition where HealthKitService would
+        // start reconciliation while SyncEngine was still doing cursor updates and history recording.
+        // This led to "default.store couldn't be opened" errors due to concurrent ModelContext access.
     }
 
     /// Fetch and upsert all EventTypes from backend.

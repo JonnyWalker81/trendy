@@ -235,6 +235,13 @@ class HealthKitService: NSObject {
     @objc private func handleBootstrapCompleted() {
         Log.healthKit.info("Received bootstrap completed notification - resetting HealthKit import state")
         Task { @MainActor in
+            // Brief delay to ensure any pending I/O operations from sync have settled.
+            // This provides a safety buffer against race conditions where EventStore.fetchFromLocal()
+            // or other MainActor operations might access the database concurrently.
+            // The notification is now posted after sync completes (not during bootstrapFetch),
+            // but this delay adds defense-in-depth against edge cases.
+            try? await Task.sleep(for: .milliseconds(100))
+
             // Step 1: Clear all anchors so HealthKit will re-query from scratch
             // This allows re-import of data that exists in HealthKit but not on server
             clearAllAnchors()
