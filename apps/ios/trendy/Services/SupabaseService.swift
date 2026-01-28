@@ -28,7 +28,7 @@ class SupabaseService {
     private(set) var initialSessionRestored = false
 
     /// Task for auth state change listener
-    private var authStateTask: Task<Void, Never>?
+    nonisolated(unsafe) private var authStateTask: Task<Void, Never>?
 
     /// Continuation for auth state change stream
     private var authStateContinuation: AsyncStream<AuthStateEvent>.Continuation?

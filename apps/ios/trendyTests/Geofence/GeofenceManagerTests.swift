@@ -554,7 +554,7 @@ struct RegionReconciliationLogicTests {
 struct ProcessingLockTests {
 
     @Test("Static processingGeofenceIds prevents concurrent processing")
-    func processingLockPreventsRace() async throws {
+    @MainActor func processingLockPreventsRace() async throws {
         // Access the static set directly
         let geofenceId = "test-geo-\(UUID().uuidString)"
 

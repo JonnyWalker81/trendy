@@ -221,7 +221,7 @@ extension GeofenceManager {
     #if DEBUG
     /// Simulate a geofence entry for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate entry for
-    func simulateEntry(geofenceId: String) {
+    @MainActor func simulateEntry(geofenceId: String) {
         Log.geofence.debug("DEBUG: Simulating geofence entry", context: .with { ctx in
             ctx.add("geofenceId", geofenceId)
         })
@@ -230,7 +230,7 @@ extension GeofenceManager {
 
     /// Simulate a geofence exit for testing purposes
     /// - Parameter geofenceId: The geofence ID to simulate exit for
-    func simulateExit(geofenceId: String) {
+    @MainActor func simulateExit(geofenceId: String) {
         Log.geofence.debug("DEBUG: Simulating geofence exit", context: .with { ctx in
             ctx.add("geofenceId", geofenceId)
         })
