@@ -12,6 +12,7 @@ import Foundation
 /// Manages HealthKit integration settings using UserDefaults (App Group).
 /// This provides reliable, immediate persistence for configuration data.
 @Observable
+@MainActor
 final class HealthKitSettings {
     // MARK: - Singleton
 

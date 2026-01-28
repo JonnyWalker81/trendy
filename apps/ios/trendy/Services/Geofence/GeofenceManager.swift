@@ -12,15 +12,16 @@ import Observation
 
 /// Manages geofence monitoring using CoreLocation
 @Observable
+@MainActor
 class GeofenceManager: NSObject {
 
     // MARK: - Notification Names
 
     /// Notification posted by AppDelegate when a geofence entry event is received during background launch
-    static let backgroundEntryNotification = Notification.Name("GeofenceManager.backgroundEntry")
+    nonisolated static let backgroundEntryNotification = Notification.Name("GeofenceManager.backgroundEntry")
 
     /// Notification posted by AppDelegate when a geofence exit event is received during background launch
-    static let backgroundExitNotification = Notification.Name("GeofenceManager.backgroundExit")
+    nonisolated static let backgroundExitNotification = Notification.Name("GeofenceManager.backgroundExit")
 
     // MARK: - Properties
 
@@ -54,9 +55,8 @@ class GeofenceManager: NSObject {
 
     /// Set of geofence IDs currently being processed (for race condition prevention)
     /// This is the "early claim" pattern used in HealthKit processing.
-    /// @MainActor ensures thread-safe access since all geofence event handling
-    /// is dispatched to the main actor.
-    @MainActor internal static var processingGeofenceIds: Set<String> = []
+    /// Thread-safe access is guaranteed by the class-level @MainActor isolation.
+    internal static var processingGeofenceIds: Set<String> = []
 
     /// Timestamp of last geofence event (for debugging)
     var lastEventTimestamp: Date?

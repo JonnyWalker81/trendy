@@ -53,6 +53,7 @@ struct SyncHistoryEntry: Codable, Identifiable {
 
 /// Persistent store for sync history with bounded storage
 @Observable
+@MainActor
 final class SyncHistoryStore {
 
     // MARK: - Constants

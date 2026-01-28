@@ -9,6 +9,7 @@ import SwiftUI
 
 /// Manages the app's theme state and persistence
 @Observable
+@MainActor
 final class ThemeManager {
     private static let themeKey = "app_theme"
 

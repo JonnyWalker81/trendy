@@ -11,6 +11,7 @@ import Observation
 
 /// Manages local notifications for geofence entry/exit events
 @Observable
+@MainActor
 class NotificationManager: NSObject {
 
     // MARK: - Properties
