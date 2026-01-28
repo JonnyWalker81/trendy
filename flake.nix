@@ -48,6 +48,9 @@
             firebase-tools
             docker
 
+            # Ruby (for Fastlane / CocoaPods)
+            ruby_3_3
+
             # Development utilities
             git
             gh
@@ -62,9 +65,9 @@
           ];
 
           shellHook = ''
-            # Add Homebrew Ruby to PATH (required for Fastlane, avoids Xcode SDK conflicts)
-            export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
-            export PATH="$(/opt/homebrew/opt/ruby/bin/gem environment gemdir 2>/dev/null)/bin:$PATH"
+            # Add gem bin directory to PATH (for bundler/fastlane executables)
+            export GEM_HOME="$HOME/.gem/ruby/$(ruby -e 'puts RUBY_VERSION')"
+            export PATH="$GEM_HOME/bin:$PATH"
 
             # Set Xcode path for fastlane/xcodebuild
             export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
