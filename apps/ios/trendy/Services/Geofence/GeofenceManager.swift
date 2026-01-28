@@ -53,8 +53,10 @@ class GeofenceManager: NSObject {
     internal var activeGeofenceEvents: [String: String] = [:] // geofenceId -> eventId
 
     /// Set of geofence IDs currently being processed (for race condition prevention)
-    /// This is the "early claim" pattern used in HealthKit processing
-    internal static var processingGeofenceIds: Set<String> = []
+    /// This is the "early claim" pattern used in HealthKit processing.
+    /// @MainActor ensures thread-safe access since all geofence event handling
+    /// is dispatched to the main actor.
+    @MainActor internal static var processingGeofenceIds: Set<String> = []
 
     /// Timestamp of last geofence event (for debugging)
     var lastEventTimestamp: Date?

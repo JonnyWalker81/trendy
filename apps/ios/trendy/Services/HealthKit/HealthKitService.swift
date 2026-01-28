@@ -10,8 +10,11 @@ import HealthKit
 import SwiftData
 import Observation
 
-/// Manages HealthKit data monitoring and automatic event creation
+/// Manages HealthKit data monitoring and automatic event creation.
+/// @MainActor ensures all mutable state (processedSampleIds, processingWorkoutTimestamps,
+/// observerQueries, etc.) is safely accessed from a single isolation domain.
 @Observable
+@MainActor
 class HealthKitService: NSObject {
 
     // MARK: - Properties

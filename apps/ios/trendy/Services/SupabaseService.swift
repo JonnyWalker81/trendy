@@ -18,6 +18,7 @@ enum AuthStateEvent {
 
 /// Service class for managing Supabase authentication
 @Observable
+@MainActor
 class SupabaseService {
     private(set) var client: SupabaseClient
     var currentSession: Session?
@@ -52,7 +53,7 @@ class SupabaseService {
     private func cacheUserId(_ userId: String) {
         UserDefaults.standard.set(userId, forKey: Self.cachedUserIdKey)
         #if DEBUG
-        Log.auth.debug("🔑 Cached userId for synchronous access", context: .with { ctx in
+        Log.auth.debug("Cached userId for synchronous access", context: .with { ctx in
             ctx.add("user_id", userId)
         })
         #endif
@@ -62,7 +63,7 @@ class SupabaseService {
     private func clearCachedUserId() {
         UserDefaults.standard.removeObject(forKey: Self.cachedUserIdKey)
         #if DEBUG
-        Log.auth.debug("🔑 Cleared cached userId")
+        Log.auth.debug("Cleared cached userId")
         #endif
     }
 
@@ -108,42 +109,40 @@ class SupabaseService {
                     ctx.add("has_session", session != nil ? "true" : "false")
                 })
 
-                await MainActor.run {
-                    switch event {
-                    case .initialSession:
-                        self.initialSessionRestored = true
-                        self.currentSession = session
-                        self.isAuthenticated = session != nil
-                        if let session = session {
-                            self.cacheUserId(session.user.id.uuidString)
-                        }
-                        self.authStateContinuation?.yield(.initialSession(session))
-
-                    case .signedIn:
-                        if let session = session {
-                            self.currentSession = session
-                            self.isAuthenticated = true
-                            self.cacheUserId(session.user.id.uuidString)
-                            self.authStateContinuation?.yield(.signedIn(session))
-                        }
-
-                    case .signedOut:
-                        self.currentSession = nil
-                        self.isAuthenticated = false
-                        self.clearCachedUserId()
-                        self.authStateContinuation?.yield(.signedOut)
-
-                    case .tokenRefreshed:
-                        if let session = session {
-                            self.currentSession = session
-                            self.isAuthenticated = true
-                            self.authStateContinuation?.yield(.tokenRefreshed(session))
-                        }
-
-                    case .userUpdated, .userDeleted, .passwordRecovery, .mfaChallengeVerified:
-                        // Handle other events if needed in the future
-                        break
+                switch event {
+                case .initialSession:
+                    self.initialSessionRestored = true
+                    self.currentSession = session
+                    self.isAuthenticated = session != nil
+                    if let session = session {
+                        self.cacheUserId(session.user.id.uuidString)
                     }
+                    self.authStateContinuation?.yield(.initialSession(session))
+
+                case .signedIn:
+                    if let session = session {
+                        self.currentSession = session
+                        self.isAuthenticated = true
+                        self.cacheUserId(session.user.id.uuidString)
+                        self.authStateContinuation?.yield(.signedIn(session))
+                    }
+
+                case .signedOut:
+                    self.currentSession = nil
+                    self.isAuthenticated = false
+                    self.clearCachedUserId()
+                    self.authStateContinuation?.yield(.signedOut)
+
+                case .tokenRefreshed:
+                    if let session = session {
+                        self.currentSession = session
+                        self.isAuthenticated = true
+                        self.authStateContinuation?.yield(.tokenRefreshed(session))
+                    }
+
+                case .userUpdated, .userDeleted, .passwordRecovery, .mfaChallengeVerified:
+                    // Handle other events if needed in the future
+                    break
                 }
             }
         }
@@ -156,18 +155,14 @@ class SupabaseService {
     func restoreSession() async {
         do {
             let session = try await client.auth.session
-            await MainActor.run {
-                self.currentSession = session
-                self.isAuthenticated = true
-            }
+            self.currentSession = session
+            self.isAuthenticated = true
             Log.auth.info("Session restored manually", context: .with { ctx in
                 ctx.add("email", session.user.email)
             })
         } catch {
             Log.auth.debug("No existing session found", error: error)
-            await MainActor.run {
-                self.isAuthenticated = false
-            }
+            self.isAuthenticated = false
         }
     }
 
@@ -190,13 +185,13 @@ class SupabaseService {
     }
 
     /// Get current access token for API requests
-    func getAccessToken() async throws -> String {
+    nonisolated func getAccessToken() async throws -> String {
         let session = try await client.auth.session
         return session.accessToken
     }
 
     /// Get current user ID (async version)
-    func getUserId() async throws -> String {
+    nonisolated func getUserId() async throws -> String {
         let session = try await client.auth.session
         return session.user.id.uuidString
     }
@@ -221,7 +216,7 @@ class SupabaseService {
 
         guard let session = response.session else {
             #if DEBUG
-            Log.auth.warning("⚠️ Signup completed but no session returned", context: .with { ctx in
+            Log.auth.warning("Signup completed but no session returned", context: .with { ctx in
                 ctx.add("email", email)
             })
             #endif
@@ -231,13 +226,11 @@ class SupabaseService {
         // Cache userId for synchronous access on future app launches
         cacheUserId(session.user.id.uuidString)
 
-        await MainActor.run {
-            self.currentSession = session
-            self.isAuthenticated = true
-        }
+        self.currentSession = session
+        self.isAuthenticated = true
 
         #if DEBUG
-        Log.auth.info("✅ User signed up", context: .with { ctx in
+        Log.auth.info("User signed up", context: .with { ctx in
             ctx.add("email", email)
         })
         #endif
@@ -247,7 +240,7 @@ class SupabaseService {
     /// Sign in existing user with email and password
     func signIn(email: String, password: String) async throws -> Session {
         #if DEBUG
-        Log.auth.debug("🔐 Starting sign-in", context: .with { ctx in
+        Log.auth.debug("Starting sign-in", context: .with { ctx in
             ctx.add("email", email)
         })
         #endif
@@ -261,20 +254,18 @@ class SupabaseService {
             // Cache userId for synchronous access on future app launches
             cacheUserId(session.user.id.uuidString)
 
-            await MainActor.run {
-                self.currentSession = session
-                self.isAuthenticated = true
-            }
+            self.currentSession = session
+            self.isAuthenticated = true
 
             #if DEBUG
-            Log.auth.info("✅ User signed in", context: .with { ctx in
+            Log.auth.info("User signed in", context: .with { ctx in
                 ctx.add("email", email)
             })
             #endif
             return session
         } catch {
             #if DEBUG
-            Log.auth.error("❌ Sign-in failed", context: .with { ctx in
+            Log.auth.error("Sign-in failed", context: .with { ctx in
                 ctx.add("email", email)
                 ctx.add("error_type", String(describing: type(of: error)))
                 ctx.add(error: error)
@@ -307,13 +298,11 @@ class SupabaseService {
         // Cache userId for synchronous access on future app launches
         cacheUserId(session.user.id.uuidString)
 
-        await MainActor.run {
-            self.currentSession = session
-            self.isAuthenticated = true
-        }
+        self.currentSession = session
+        self.isAuthenticated = true
 
         #if DEBUG
-        Log.auth.info("✅ User signed in with OAuth", context: .with { ctx in
+        Log.auth.info("User signed in with OAuth", context: .with { ctx in
             ctx.add("provider", String(describing: provider))
             ctx.add("email", session.user.email)
         })
@@ -328,13 +317,11 @@ class SupabaseService {
         // Clear cached userId so next app launch won't try to auto-route
         clearCachedUserId()
 
-        await MainActor.run {
-            self.currentSession = nil
-            self.isAuthenticated = false
-        }
+        self.currentSession = nil
+        self.isAuthenticated = false
 
         #if DEBUG
-        Log.auth.info("✅ User signed out")
+        Log.auth.info("User signed out")
         #endif
     }
 
@@ -342,10 +329,8 @@ class SupabaseService {
     func refreshSession() async throws -> Session {
         let session = try await client.auth.refreshSession()
 
-        await MainActor.run {
-            self.currentSession = session
-            self.isAuthenticated = true
-        }
+        self.currentSession = session
+        self.isAuthenticated = true
 
         return session
     }
@@ -353,7 +338,7 @@ class SupabaseService {
     // MARK: - User Information
 
     /// Get current user information
-    func getCurrentUser() async throws -> User {
+    nonisolated func getCurrentUser() async throws -> User {
         let session = try await client.auth.session
         return session.user
     }

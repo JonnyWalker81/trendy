@@ -11,6 +11,7 @@ import PostHog
 // import FullDisclosureSDK
 
 @Observable
+@MainActor
 class AuthViewModel {
     // Auth state
     private(set) var isAuthenticated = false
@@ -40,16 +41,12 @@ class AuthViewModel {
 
         do {
             let user = try await supabaseService.getCurrentUser()
-            await MainActor.run {
-                self.isAuthenticated = true
-                self.currentUserEmail = user.email
-                self.errorMessage = nil
-            }
+            self.isAuthenticated = true
+            self.currentUserEmail = user.email
+            self.errorMessage = nil
         } catch {
-            await MainActor.run {
-                self.isAuthenticated = false
-                self.currentUserEmail = nil
-            }
+            self.isAuthenticated = false
+            self.currentUserEmail = nil
         }
     }
 
@@ -58,23 +55,17 @@ class AuthViewModel {
     /// Sign up new user
     func signUp(email: String, password: String) async {
         guard validateEmail(email) else {
-            await MainActor.run {
-                self.errorMessage = "Please enter a valid email address"
-            }
+            self.errorMessage = "Please enter a valid email address"
             return
         }
 
         guard validatePassword(password) else {
-            await MainActor.run {
-                self.errorMessage = "Password must be at least 6 characters"
-            }
+            self.errorMessage = "Password must be at least 6 characters"
             return
         }
 
-        await MainActor.run {
-            self.isLoading = true
-            self.errorMessage = nil
-        }
+        self.isLoading = true
+        self.errorMessage = nil
 
         do {
             let session = try await supabaseService.signUp(email: email, password: password)
@@ -84,61 +75,37 @@ class AuthViewModel {
             if let email = session.user.email {
                 userProperties["email"] = email
             }
-            Log.auth.debug("📊 PostHog identify (signUp)", context: .with { ctx in
+            Log.auth.debug("PostHog identify (signUp)", context: .with { ctx in
                 ctx.add("user_id", session.user.id.uuidString)
                 ctx.add("email", session.user.email)
             })
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
-            // Identify user in FullDisclosure for feedback submissions
-//            do {
-//                try await FullDisclosure.shared.identify(
-//                    userId: session.user.id.uuidString,
-//                    email: session.user.email
-//                )
-//                Log.auth.debug("📝 FullDisclosure identify (signUp)", context: .with { ctx in
-//                    ctx.add("user_id", session.user.id.uuidString)
-//                    ctx.add("email", session.user.email)
-//                })
-//            } catch {
-//                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
-//            }
-
-            await MainActor.run {
-                self.isAuthenticated = true
-                self.currentUserEmail = session.user.email
-                self.errorMessage = nil
-                self.isLoading = false
-            }
+            self.isAuthenticated = true
+            self.currentUserEmail = session.user.email
+            self.errorMessage = nil
+            self.isLoading = false
         } catch {
-            await MainActor.run {
-                self.isAuthenticated = false
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-            }
+            self.isAuthenticated = false
+            self.errorMessage = error.localizedDescription
+            self.isLoading = false
         }
     }
 
     /// Sign in existing user
     func signIn(email: String, password: String) async {
         guard validateEmail(email) else {
-            await MainActor.run {
-                self.errorMessage = "Please enter a valid email address"
-            }
+            self.errorMessage = "Please enter a valid email address"
             return
         }
 
         guard !password.isEmpty else {
-            await MainActor.run {
-                self.errorMessage = "Please enter your password"
-            }
+            self.errorMessage = "Please enter your password"
             return
         }
 
-        await MainActor.run {
-            self.isLoading = true
-            self.errorMessage = nil
-        }
+        self.isLoading = true
+        self.errorMessage = nil
 
         do {
             let session = try await supabaseService.signIn(email: email, password: password)
@@ -148,47 +115,27 @@ class AuthViewModel {
             if let email = session.user.email {
                 userProperties["email"] = email
             }
-            Log.auth.debug("📊 PostHog identify (signIn)", context: .with { ctx in
+            Log.auth.debug("PostHog identify (signIn)", context: .with { ctx in
                 ctx.add("user_id", session.user.id.uuidString)
                 ctx.add("email", session.user.email)
             })
             PostHogSDK.shared.identify(session.user.id.uuidString, userProperties: userProperties)
 
-            // Identify user in FullDisclosure for feedback submissions
-//            do {
-//                try await FullDisclosure.shared.identify(
-//                    userId: session.user.id.uuidString,
-//                    email: session.user.email
-//                )
-//                Log.auth.debug("📝 FullDisclosure identify (signIn)", context: .with { ctx in
-//                    ctx.add("user_id", session.user.id.uuidString)
-//                    ctx.add("email", session.user.email)
-//                })
-//            } catch {
-//                Log.auth.warning("⚠️ FullDisclosure identify failed", error: error)
-//            }
-
-            await MainActor.run {
-                self.isAuthenticated = true
-                self.currentUserEmail = session.user.email
-                self.errorMessage = nil
-                self.isLoading = false
-            }
+            self.isAuthenticated = true
+            self.currentUserEmail = session.user.email
+            self.errorMessage = nil
+            self.isLoading = false
         } catch {
-            await MainActor.run {
-                self.isAuthenticated = false
-                self.errorMessage = "Invalid email or password"
-                self.isLoading = false
-            }
+            self.isAuthenticated = false
+            self.errorMessage = "Invalid email or password"
+            self.isLoading = false
         }
     }
 
     /// Sign out current user
     func signOut() async {
-        await MainActor.run {
-            self.isLoading = true
-            self.errorMessage = nil
-        }
+        self.isLoading = true
+        self.errorMessage = nil
 
         // Reset PostHog identification before signing out
         PostHogSDK.shared.reset()
@@ -199,17 +146,13 @@ class AuthViewModel {
         do {
             try await supabaseService.signOut()
 
-            await MainActor.run {
-                self.isAuthenticated = false
-                self.currentUserEmail = nil
-                self.errorMessage = nil
-                self.isLoading = false
-            }
+            self.isAuthenticated = false
+            self.currentUserEmail = nil
+            self.errorMessage = nil
+            self.isLoading = false
         } catch {
-            await MainActor.run {
-                self.errorMessage = error.localizedDescription
-                self.isLoading = false
-            }
+            self.errorMessage = error.localizedDescription
+            self.isLoading = false
         }
     }
 

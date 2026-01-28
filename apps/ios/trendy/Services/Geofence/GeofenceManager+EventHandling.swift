@@ -131,6 +131,8 @@ extension GeofenceManager {
 
 extension GeofenceManager {
     /// Handle geofence entry - create a new event
+    /// Must be called on MainActor to safely access processingGeofenceIds and modelContext.
+    @MainActor
     internal func handleGeofenceEntry(geofenceId: String) {
         Log.geofence.debug("handleGeofenceEntry called", context: .with { ctx in
             ctx.add("geofenceId", geofenceId)
@@ -273,6 +275,8 @@ extension GeofenceManager {
     }
 
     /// Handle geofence exit - update the existing event with end date
+    /// Must be called on MainActor to safely access modelContext.
+    @MainActor
     internal func handleGeofenceExit(geofenceId: String) {
         let geofenceDescriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }
