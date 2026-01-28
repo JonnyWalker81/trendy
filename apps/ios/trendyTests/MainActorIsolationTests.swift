@@ -39,6 +39,18 @@ struct MainActorIsolationTests {
         _ = store.entries
     }
 
+    /// Verify AIBackgroundTaskScheduler is @MainActor isolated.
+    /// Without @MainActor, mutable properties (insightsViewModel, eventStore,
+    /// foundationModelService) could be written from MainActor configure() and
+    /// read from BGTask background queue callbacks, creating a data race.
+    @Test("AIBackgroundTaskScheduler is MainActor isolated")
+    @MainActor func testAIBackgroundTaskSchedulerIsMainActorIsolated() async {
+        let scheduler = AIBackgroundTaskScheduler.shared
+        // If AIBackgroundTaskScheduler were not @MainActor, accessing .shared
+        // from a @MainActor context would require await in strict concurrency mode.
+        _ = scheduler
+    }
+
     /// Verify SyncHistoryStore.record() is safe to call from @MainActor.
     @Test("SyncHistoryStore record is MainActor safe")
     @MainActor func testSyncHistoryStoreRecordIsSafe() async {

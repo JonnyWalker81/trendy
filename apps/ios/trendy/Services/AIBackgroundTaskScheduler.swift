@@ -9,7 +9,13 @@ import Foundation
 import BackgroundTasks
 import UIKit
 
-/// Manages background task scheduling for AI insight generation
+/// Manages background task scheduling for AI insight generation.
+///
+/// @MainActor isolation ensures that mutable properties (insightsViewModel, eventStore,
+/// foundationModelService) are safely accessed. Without this, configure() writes these
+/// properties on MainActor while BGTask callbacks could read them from background queues,
+/// creating a data race.
+@MainActor
 final class AIBackgroundTaskScheduler {
     // MARK: - Task Identifiers
 
@@ -29,7 +35,6 @@ final class AIBackgroundTaskScheduler {
     // MARK: - Configuration
 
     /// Configure with dependencies
-    @MainActor
     func configure(
         insightsViewModel: InsightsViewModel,
         eventStore: EventStore,
@@ -42,8 +47,10 @@ final class AIBackgroundTaskScheduler {
 
     // MARK: - Task Registration
 
-    /// Register background tasks with the system
-    func registerTasks() {
+    /// Register background tasks with the system.
+    /// BGTaskScheduler.register calls its handler on a background queue,
+    /// so we use nonisolated to avoid requiring MainActor dispatch for registration.
+    nonisolated func registerTasks() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.dailyBriefingIdentifier,
             using: nil
@@ -112,11 +119,11 @@ final class AIBackgroundTaskScheduler {
 
     // MARK: - Task Handlers
 
-    private func handleDailyBriefing(task: BGProcessingTask) {
+    /// Handle daily briefing BGTask callback.
+    /// nonisolated because BGTaskScheduler invokes the handler on a background queue.
+    /// All @MainActor property access is dispatched via Task { @MainActor in }.
+    nonisolated private func handleDailyBriefing(task: BGProcessingTask) {
         Log.api.info("Handling daily briefing background task")
-
-        // Schedule the next occurrence
-        scheduleDailyBriefing()
 
         // Set up expiration handler
         task.expirationHandler = {
@@ -124,8 +131,16 @@ final class AIBackgroundTaskScheduler {
             task.setTaskCompleted(success: false)
         }
 
-        // Generate briefing
-        Task { @MainActor in
+        // Dispatch to MainActor for all property access and scheduling
+        Task { @MainActor [weak self] in
+            guard let self = self else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+
+            // Schedule the next occurrence (now on MainActor)
+            self.scheduleDailyBriefing()
+
             guard let viewModel = self.insightsViewModel else {
                 Log.api.warning("InsightsViewModel not configured for background task")
                 task.setTaskCompleted(success: false)
@@ -136,18 +151,18 @@ final class AIBackgroundTaskScheduler {
 
             // Send notification if briefing was generated
             if viewModel.dailyBriefing != nil {
-                await sendDailyBriefingNotification(viewModel.dailyBriefing!)
+                await self.sendDailyBriefingNotification(viewModel.dailyBriefing!)
             }
 
             task.setTaskCompleted(success: viewModel.dailyBriefing != nil)
         }
     }
 
-    private func handleWeeklyReflection(task: BGProcessingTask) {
+    /// Handle weekly reflection BGTask callback.
+    /// nonisolated because BGTaskScheduler invokes the handler on a background queue.
+    /// All @MainActor property access is dispatched via Task { @MainActor in }.
+    nonisolated private func handleWeeklyReflection(task: BGProcessingTask) {
         Log.api.info("Handling weekly reflection background task")
-
-        // Schedule the next occurrence
-        scheduleWeeklyReflection()
 
         // Set up expiration handler
         task.expirationHandler = {
@@ -155,8 +170,16 @@ final class AIBackgroundTaskScheduler {
             task.setTaskCompleted(success: false)
         }
 
-        // Generate reflection
-        Task { @MainActor in
+        // Dispatch to MainActor for all property access and scheduling
+        Task { @MainActor [weak self] in
+            guard let self = self else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+
+            // Schedule the next occurrence (now on MainActor)
+            self.scheduleWeeklyReflection()
+
             guard let viewModel = self.insightsViewModel else {
                 Log.api.warning("InsightsViewModel not configured for background task")
                 task.setTaskCompleted(success: false)
@@ -167,7 +190,7 @@ final class AIBackgroundTaskScheduler {
 
             // Send notification if reflection was generated
             if viewModel.weeklyReflection != nil {
-                await sendWeeklyReflectionNotification(viewModel.weeklyReflection!)
+                await self.sendWeeklyReflectionNotification(viewModel.weeklyReflection!)
             }
 
             task.setTaskCompleted(success: viewModel.weeklyReflection != nil)
@@ -176,7 +199,6 @@ final class AIBackgroundTaskScheduler {
 
     // MARK: - Notifications
 
-    @MainActor
     private func sendDailyBriefingNotification(_ briefing: DailyBriefing) async {
         let content = UNMutableNotificationContent()
         content.title = "Your Daily Briefing"
@@ -198,7 +220,6 @@ final class AIBackgroundTaskScheduler {
         }
     }
 
-    @MainActor
     private func sendWeeklyReflectionNotification(_ reflection: WeeklyReflection) async {
         let content = UNMutableNotificationContent()
         content.title = "Your Week in Review"
@@ -274,7 +295,6 @@ final class AIBackgroundTaskScheduler {
 #if DEBUG
 extension AIBackgroundTaskScheduler {
     /// Simulate a daily briefing task for testing
-    @MainActor
     func simulateDailyBriefing() async {
         guard let viewModel = insightsViewModel else {
             Log.api.warning("InsightsViewModel not configured")
@@ -289,7 +309,6 @@ extension AIBackgroundTaskScheduler {
     }
 
     /// Simulate a weekly reflection task for testing
-    @MainActor
     func simulateWeeklyReflection() async {
         guard let viewModel = insightsViewModel else {
             Log.api.warning("InsightsViewModel not configured")
