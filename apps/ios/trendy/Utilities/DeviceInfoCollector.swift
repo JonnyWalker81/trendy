@@ -22,7 +22,24 @@ final class DeviceInfoCollector {
     static let shared = DeviceInfoCollector()
 
     private let networkMonitor = NWPathMonitor()
-    private var currentNetworkStatus: NWPath?
+    /// Lock protecting `_currentNetworkStatus` which is written from a background
+    /// DispatchQueue and read from the main thread / async contexts.
+    private let networkStatusLock = NSLock()
+    private var _currentNetworkStatus: NWPath?
+
+    /// Thread-safe accessor for the current network path status.
+    private var currentNetworkStatus: NWPath? {
+        get {
+            networkStatusLock.lock()
+            defer { networkStatusLock.unlock() }
+            return _currentNetworkStatus
+        }
+        set {
+            networkStatusLock.lock()
+            _currentNetworkStatus = newValue
+            networkStatusLock.unlock()
+        }
+    }
 
     private init() {
         // Start network monitoring

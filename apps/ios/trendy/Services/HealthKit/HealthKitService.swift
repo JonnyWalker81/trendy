@@ -29,6 +29,7 @@ class HealthKitService: NSObject {
     static let appGroupIdentifier = "group.com.memento.trendy"
 
     /// Whether the App Group UserDefaults is working (vs falling back to standard)
+    /// Thread-safe: protected by @MainActor class-level isolation (compiler-enforced)
     private(set) static var isUsingAppGroup: Bool = false
 
     /// Shared UserDefaults that persists across app reinstalls

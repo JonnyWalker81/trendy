@@ -47,7 +47,10 @@ final class FileLogger: @unchecked Sendable {
     private var currentLogFile: URL?
     private var fileHandle: FileHandle?
     private let queue = DispatchQueue(label: "com.trendy.filelogger", qos: .utility)
-    private var isEnabled: Bool = true
+    /// Lock protecting `_isEnabled` which is written on `queue` via `setEnabled()`
+    /// and read from the caller's thread in `log()`.
+    private let isEnabledLock = NSLock()
+    private var _isEnabled: Bool = true
 
     // MARK: - Initialization
 
@@ -74,9 +77,9 @@ final class FileLogger: @unchecked Sendable {
 
     /// Enable or disable file logging
     func setEnabled(_ enabled: Bool) {
-        queue.async {
-            self.isEnabled = enabled
-        }
+        isEnabledLock.lock()
+        _isEnabled = enabled
+        isEnabledLock.unlock()
     }
 
     /// Write a log entry to file
@@ -86,7 +89,11 @@ final class FileLogger: @unchecked Sendable {
         message: String,
         context: String
     ) {
-        guard isEnabled else { return }
+        // Thread-safe read of isEnabled before dispatching to queue
+        isEnabledLock.lock()
+        let enabled = _isEnabled
+        isEnabledLock.unlock()
+        guard enabled else { return }
 
         queue.async {
             self.writeLog(level: level, category: category, message: message, context: context)
