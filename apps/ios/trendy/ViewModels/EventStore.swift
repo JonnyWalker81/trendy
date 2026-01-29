@@ -372,16 +372,28 @@ class EventStore {
 
     // MARK: - Sync
 
-    /// Reset the SyncEngine's cached DataStore after returning from background.
+    /// Reset all cached DataStore contexts after returning from background.
     ///
     /// When iOS suspends the app for extended periods (1+ hours), it may invalidate
-    /// file descriptors for the SQLite database. The SyncEngine caches a ModelContext
-    /// which holds these file handles. Without resetting, the first sync after returning
-    /// from background fails with "The file 'default.store' couldn't be opened".
+    /// file descriptors for the SQLite database. Both the SyncEngine's cached ModelContext
+    /// and EventStore's own ModelContext can hold stale file handles. Without resetting,
+    /// operations after returning from background fail with "The file 'default.store'
+    /// couldn't be opened".
     ///
     /// Call this when the scene phase transitions to `.active` BEFORE triggering any sync.
     func resetSyncEngineDataStore() async {
         await syncEngine?.resetDataStore()
+
+        // Also proactively refresh EventStore's own ModelContext.
+        // The mainContext may have stale SQLite file handles after prolonged background.
+        // Creating a fresh context ensures subsequent CRUD operations won't fail.
+        // fetchFromLocal() also has its own recovery, but this prevents failures in
+        // recordEvent/updateEvent/deleteEvent which use self.modelContext directly.
+        if let modelContainer = modelContainer {
+            let freshContext = ModelContext(modelContainer)
+            self.modelContext = freshContext
+            Log.data.debug("Refreshed EventStore ModelContext for foreground return")
+        }
     }
 
     /// Trigger a sync with the backend
@@ -580,9 +592,18 @@ class EventStore {
 
         } catch {
             Log.data.error("Fetch error", error: error)
-            errorMessage = "Failed to sync. Showing cached data."
-            // Still show cached data on error
-            try? await fetchFromLocal()
+
+            // If sync failed, still try to show cached data.
+            // fetchFromLocal() has its own stale-context recovery, so this retry
+            // can succeed even if the sync failed due to stale file handles.
+            do {
+                try await fetchFromLocal()
+                // Sync failed but local data loaded successfully
+                errorMessage = "Failed to sync. Showing cached data."
+            } catch {
+                Log.data.error("Failed to load cached data after sync error", error: error)
+                errorMessage = "Failed to load data. Try closing and reopening the app."
+            }
             await refreshSyncStateForUI()
         }
 
@@ -599,6 +620,9 @@ class EventStore {
         errorMessage = nil
 
         do {
+            // fetchFromLocal() has built-in stale-context recovery:
+            // if mainContext has stale file handles, it automatically retries
+            // with a fresh ModelContext
             try await fetchFromLocal()
             await refreshSyncStateForUI()
         } catch {
@@ -609,15 +633,9 @@ class EventStore {
         isLoading = false
     }
 
-    private func fetchFromLocal() async throws {
-        guard let modelContainer else { return }
-
-        // Use mainContext instead of creating a fresh ModelContext to avoid SQLite file locking issues.
-        // Creating multiple ModelContext(modelContainer) instances can cause "default.store couldn't be opened"
-        // errors when concurrent contexts try to access the same SQLite file.
-        // Since EventStore is @MainActor, using mainContext is the correct pattern.
-        let context = modelContainer.mainContext
-
+    /// Performs the actual fetch using the given ModelContext.
+    /// Extracted to allow retry with a different context if the first attempt fails.
+    private func performLocalFetch(using context: ModelContext) throws {
         let eventDescriptor = FetchDescriptor<Event>(
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
@@ -632,20 +650,64 @@ class EventStore {
         // when fetching from a fresh ModelContext (SwiftData relationship detachment)
         restoreBrokenRelationshipsInPlace(events: events, eventTypes: eventTypes)
 
-        Log.sync.info("🔧 fetchFromLocal: loaded data", context: .with { ctx in
+        Log.sync.info("fetchFromLocal: loaded data", context: .with { ctx in
             ctx.add("events_count", events.count)
             ctx.add("event_types_count", eventTypes.count)
-            // Log first few items
             for (index, et) in eventTypes.prefix(3).enumerated() {
                 ctx.add("type_\(index)", "\(et.name) (id: \(et.id))")
             }
-            // Log first few events
             for (index, ev) in events.prefix(5).enumerated() {
                 ctx.add("event_\(index)", "\(ev.eventType?.name ?? "nil") @ \(ev.timestamp)")
             }
         })
 
         hasLoadedOnce = true
+    }
+
+    /// Check if an error is a stale SQLite file handle error (default.store couldn't be opened).
+    /// This occurs after iOS invalidates file descriptors during prolonged background suspension.
+    private func isStaleStoreError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        // NSCocoaErrorDomain Code=256 is NSFileReadUnknownError, used by SwiftData/CoreData
+        // when the underlying SQLite file handle is stale
+        if nsError.domain == NSCocoaErrorDomain && nsError.code == 256 {
+            return true
+        }
+        // Also check the error description for the specific message
+        let description = error.localizedDescription.lowercased()
+        return description.contains("default.store") || description.contains("couldn't be opened")
+    }
+
+    private func fetchFromLocal() async throws {
+        guard let modelContainer else { return }
+
+        // Use mainContext for normal operation to avoid SQLite file locking issues.
+        // Creating multiple ModelContext instances concurrently can cause problems,
+        // but using mainContext is safe since EventStore is @MainActor.
+        let context = modelContainer.mainContext
+
+        do {
+            try performLocalFetch(using: context)
+        } catch {
+            // If the mainContext has stale SQLite file handles (from prolonged background),
+            // create a fresh ModelContext and retry. This handles the case where iOS
+            // invalidated file descriptors during background suspension.
+            // The mainContext will recover on subsequent calls as SwiftData reconnects.
+            guard isStaleStoreError(error) else {
+                throw error
+            }
+
+            Log.data.warning("mainContext has stale file handles, retrying with fresh context", error: error)
+
+            let freshContext = ModelContext(modelContainer)
+            try performLocalFetch(using: freshContext)
+
+            // Update the stored modelContext to the fresh one so subsequent operations
+            // (recordEvent, updateEvent, etc.) also use a valid context
+            self.modelContext = freshContext
+
+            Log.data.info("Successfully recovered from stale store with fresh ModelContext")
+        }
     }
 
     // MARK: - Event CRUD

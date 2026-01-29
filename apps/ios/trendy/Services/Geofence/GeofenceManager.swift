@@ -9,6 +9,7 @@ import Foundation
 import CoreLocation
 import SwiftData
 import Observation
+import UIKit
 
 /// Manages geofence monitoring using CoreLocation
 @Observable
@@ -26,7 +27,7 @@ class GeofenceManager: NSObject {
     // MARK: - Properties
 
     internal let locationManager: CLLocationManager
-    internal let modelContext: ModelContext
+    internal var modelContext: ModelContext
     internal let eventStore: EventStore
     internal let notificationManager: NotificationManager?
 
@@ -110,6 +111,14 @@ class GeofenceManager: NSObject {
         )
 
         Log.geofence.debug("GeofenceManager initialized with background and launch event observers")
+
+        // Register for foreground return to refresh ModelContext
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSceneDidBecomeActive),
+            name: UIScene.didActivateNotification,
+            object: nil
+        )
 
         // Process any pending events that arrived before we were initialized.
         // This handles the race condition where iOS delivers geofence events

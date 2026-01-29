@@ -86,6 +86,16 @@ extension GeofenceManager {
         ensureRegionsRegistered()
     }
 
+    /// Refresh the ModelContext when the app returns to foreground.
+    /// After prolonged background suspension, iOS may invalidate SQLite file handles.
+    /// Creating a fresh ModelContext ensures geofence event persistence won't fail
+    /// with "default.store couldn't be opened".
+    @objc internal func handleSceneDidBecomeActive(_ notification: Notification) {
+        let container = modelContext.container
+        modelContext = ModelContext(container)
+        Log.geofence.debug("Refreshed GeofenceManager ModelContext for foreground return")
+    }
+
     /// Handle background entry notification from AppDelegate
     @objc internal func handleBackgroundEntry(_ notification: Notification) {
         guard let identifier = notification.userInfo?["identifier"] as? String else {

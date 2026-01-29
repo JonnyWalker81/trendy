@@ -9,6 +9,7 @@ import Foundation
 import HealthKit
 import SwiftData
 import Observation
+import UIKit
 
 /// Manages HealthKit data monitoring and automatic event creation.
 /// @MainActor ensures all mutable state (processedSampleIds, processingWorkoutTimestamps,
@@ -20,7 +21,7 @@ class HealthKitService: NSObject {
     // MARK: - Properties
 
     let healthStore: HKHealthStore
-    let modelContext: ModelContext
+    var modelContext: ModelContext
     let modelContainer: ModelContainer
     let eventStore: EventStore
     let notificationManager: NotificationManager?
@@ -207,6 +208,15 @@ class HealthKitService: NSObject {
             object: nil
         )
 
+        // Refresh ModelContext when app returns to foreground to prevent
+        // "default.store couldn't be opened" errors from stale SQLite file handles
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSceneDidBecomeActive),
+            name: UIScene.didActivateNotification,
+            object: nil
+        )
+
         // Debug: Log current state
         #if DEBUG
         logCurrentState()
@@ -275,5 +285,14 @@ class HealthKitService: NSObject {
                 ctx.add("reconciled_count", reconciledCount)
             })
         }
+    }
+
+    /// Refresh the ModelContext when the app returns to foreground.
+    /// After prolonged background suspension, iOS may invalidate SQLite file handles.
+    /// Creating a fresh ModelContext ensures HealthKit event persistence won't fail
+    /// with "default.store couldn't be opened".
+    @objc private func handleSceneDidBecomeActive() {
+        modelContext = ModelContext(modelContainer)
+        Log.healthKit.debug("Refreshed HealthKitService ModelContext for foreground return")
     }
 }
