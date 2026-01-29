@@ -16,8 +16,13 @@ import Foundation
 // MARK: - Test Helpers
 
 /// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// - Parameter initialCursor: If provided, sets the sync cursor in UserDefaults BEFORE engine creation
+///   so the engine reads it at init time. Use non-zero to skip bootstrap.
+private func makeTestDependencies(initialCursor: Int? = nil) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    if let cursor = initialCursor {
+        UserDefaults.standard.set(cursor, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -32,11 +37,6 @@ private func seedEventMutation(mockStore: MockDataStore, eventId: String) {
     _ = mockStore.seedPendingMutation(entityType: .event, entityId: eventId, operation: .create, payload: payload)
 }
 
-/// UserDefaults cursor key
-private var cursorKey: String {
-    "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
-}
-
 // MARK: - Health Check
 
 @Suite("Health Check")
@@ -47,10 +47,7 @@ struct HealthCheckTests {
         // Covers SYNC-05: Verify health check detects captive portal (prevents false syncs)
         // Captive portals return HTML instead of JSON, causing decoding errors
 
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero (skip bootstrap)
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a pending mutation (so sync would try to flush if health check passed)
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -86,11 +83,10 @@ struct HealthCheckTests {
 
     @Test("Health check passes with valid response")
     func testHealthCheckPassesWithValidResponse() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for successful sync
         mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-        UserDefaults.standard.set(1000, forKey: cursorKey)
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // Seed a mutation to flush
@@ -121,10 +117,7 @@ struct HealthCheckTests {
 
     @Test("Health check failure with network error blocks sync")
     func testHealthCheckFailureWithNetworkError() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -147,14 +140,13 @@ struct HealthCheckTests {
 
     @Test("Health check called before every sync")
     func testHealthCheckCalledBeforeEverySync() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for multiple successful syncs
         mockNetwork.getEventTypesResponses = [
             .success([APIModelFixture.makeAPIEventType()]),
             .success([APIModelFixture.makeAPIEventType()])
         ]
-        UserDefaults.standard.set(1000, forKey: cursorKey)
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // First sync
@@ -170,10 +162,7 @@ struct HealthCheckTests {
 
     @Test("Sync blocked during captive portal - no pullChanges called")
     func testSyncBlockedDuringCaptivePortalNoPullChanges() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -204,11 +193,10 @@ struct HealthCheckEdgeCasesTests {
 
     @Test("Health check passes with empty event types array")
     func testHealthCheckPassesWithEmptyArray() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure health check to return empty array (valid response, just no types yet)
         mockNetwork.getEventTypesResponses = [.success([])]
-        UserDefaults.standard.set(1000, forKey: cursorKey)
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         await engine.performSync()
@@ -220,10 +208,7 @@ struct HealthCheckEdgeCasesTests {
 
     @Test("Health check failure does not affect pending mutation count")
     func testHealthCheckFailurePreservesPendingCount() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed 3 mutations
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -247,10 +232,7 @@ struct HealthCheckEdgeCasesTests {
 
     @Test("Health check timeout error blocks sync")
     func testHealthCheckTimeoutBlocksSync() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -269,10 +251,7 @@ struct HealthCheckEdgeCasesTests {
 
     @Test("Health check server error (5xx) blocks sync")
     func testHealthCheckServerErrorBlocksSync() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
@@ -292,10 +271,7 @@ struct HealthCheckEdgeCasesTests {
 
     @Test("Health check 401 unauthorized blocks sync")
     func testHealthCheck401BlocksSync() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Seed a mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
