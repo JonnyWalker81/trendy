@@ -82,13 +82,18 @@ actor SyncEngine {
     /// iOS may invalidate file descriptors during prolonged background suspension,
     /// and the cached ModelContext would then fail to access the store file.
     ///
-    /// This is safe to call even during sync operations because:
-    /// - SyncEngine is an actor, so this runs serially with all other operations
-    /// - The next operation that accesses cachedDataStore will create a fresh store
+    /// This always clears the cache, even if a sync was in progress. After prolonged
+    /// background suspension, the in-progress sync's file handles are also stale, so
+    /// skipping the reset would leave the engine in a permanently broken state.
+    /// The isSyncing flag is also reset to prevent the engine from being stuck in a
+    /// "syncing" state from a pre-background sync that will never complete.
+    ///
+    /// This is safe because SyncEngine is an actor, so this runs serially with
+    /// all other operations. The next operation will create a fresh store.
     func resetDataStore() {
-        guard !isSyncing else {
-            Log.sync.debug("Skipping DataStore reset - sync in progress")
-            return
+        if isSyncing {
+            Log.sync.warning("Resetting DataStore while sync was in progress - sync had stale handles too")
+            isSyncing = false
         }
         Log.sync.info("Resetting cached DataStore (app returned from background)")
         _cachedDataStore = nil

@@ -29,6 +29,10 @@ extension HealthKitService {
         isAllDay: Bool = false,
         isBulkImport: Bool = false
     ) async throws {
+        // Ensure ModelContext has valid file handles before database operations.
+        // HealthKit observer queries can fire in background before UIScene.didActivateNotification.
+        ensureValidModelContext()
+
         let event = Event(
             timestamp: timestamp,
             eventType: eventType,

@@ -678,6 +678,38 @@ class EventStore {
         return description.contains("default.store") || description.contains("couldn't be opened")
     }
 
+    /// Ensure the ModelContext is valid by performing a lightweight probe query.
+    ///
+    /// After prolonged background suspension, iOS may invalidate SQLite file descriptors.
+    /// This method detects stale handles BEFORE CRUD operations insert data into the context,
+    /// preventing the scenario where objects are inserted into a stale context that cannot save.
+    ///
+    /// Call this at the start of any CRUD operation that will modify and save data.
+    /// If the probe fails, a fresh ModelContext is created transparently.
+    private func ensureValidModelContext() {
+        guard let modelContainer else { return }
+        guard let context = modelContext else { return }
+
+        do {
+            // Lightweight probe: fetchCount is the cheapest query that exercises the SQLite connection.
+            // If the file handle is stale, this will throw before we insert any objects.
+            _ = try context.fetchCount(FetchDescriptor<EventType>())
+        } catch {
+            guard isStaleStoreError(error) else {
+                // Non-stale error (e.g., schema issue) - don't replace context
+                Log.data.warning("ModelContext probe failed with non-stale error", error: error)
+                return
+            }
+
+            Log.data.warning("ModelContext has stale file handles - creating fresh context before CRUD operation", error: error)
+
+            let freshContext = ModelContext(modelContainer)
+            self.modelContext = freshContext
+
+            Log.data.info("Refreshed ModelContext proactively before CRUD operation")
+        }
+    }
+
     private func fetchFromLocal() async throws {
         guard let modelContainer else { return }
 
@@ -713,6 +745,7 @@ class EventStore {
     // MARK: - Event CRUD
 
     func recordEvent(type: EventType, timestamp: Date = Date(), isAllDay: Bool = false, endDate: Date? = nil, notes: String? = nil, properties: [String: PropertyValue] = [:]) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Sync with system calendar if enabled (iOS-only feature)
@@ -826,6 +859,7 @@ class EventStore {
     }
 
     func updateEvent(_ event: Event) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Update system calendar if synced (external system, order doesn't matter for data safety)
@@ -920,6 +954,7 @@ class EventStore {
     }
 
     func deleteEvent(_ event: Event) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Delete from system calendar if synced
@@ -992,6 +1027,7 @@ class EventStore {
     // MARK: - EventType CRUD
 
     func createEventType(name: String, colorHex: String, iconName: String) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Create with UUIDv7 - ID is immediately known
@@ -1043,6 +1079,7 @@ class EventStore {
     }
 
     func updateEventType(_ eventType: EventType, name: String, colorHex: String, iconName: String) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         eventType.name = name
@@ -1088,6 +1125,7 @@ class EventStore {
     }
 
     func deleteEventType(_ eventType: EventType) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Step 1: Queue deletion mutation BEFORE deleting locally
@@ -1184,6 +1222,7 @@ class EventStore {
 
     @discardableResult
     func createGeofence(_ geofence: Geofence) async -> Bool {
+        ensureValidModelContext()
         guard let modelContext else {
             Log.geofence.error("createGeofence failed: modelContext is nil")
             return false
@@ -1241,6 +1280,7 @@ class EventStore {
     }
 
     func updateGeofence(_ geofence: Geofence) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Step 1: Queue mutation BEFORE save to ensure atomicity
@@ -1290,6 +1330,7 @@ class EventStore {
     }
 
     func deleteGeofence(_ geofence: Geofence) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
 
         // Step 1: Queue deletion mutation BEFORE deleting locally
@@ -1427,6 +1468,7 @@ class EventStore {
 
     /// Sync an existing event to the backend (used by GeofenceManager, HealthKitService)
     func syncEventToBackend(_ event: Event) async {
+        ensureValidModelContext()
         guard let modelContext else {
             Log.sync.error("syncEventToBackend: modelContext is nil - event will NOT sync!", context: .with { ctx in
                 ctx.add("event_id", event.id)
@@ -1550,6 +1592,7 @@ class EventStore {
     /// Sync an existing HealthKit event update to the backend
     /// This sends an UPDATE mutation instead of CREATE, ensuring the backend receives the new values
     func syncHealthKitEventUpdate(_ event: Event) async {
+        ensureValidModelContext()
         guard let modelContext else {
             Log.sync.error("syncHealthKitEventUpdate: modelContext is nil", context: .with { ctx in
                 ctx.add("event_id", event.id)
@@ -1619,6 +1662,7 @@ class EventStore {
 
     /// Sync an auto-created EventType to the backend (used by HealthKitService)
     func syncEventTypeToBackend(_ eventType: EventType) async {
+        ensureValidModelContext()
         guard let modelContext else {
             Log.sync.error("syncEventTypeToBackend: modelContext is nil - eventType will NOT sync!", context: .with { ctx in
                 ctx.add("event_type_id", eventType.id)
@@ -1664,6 +1708,7 @@ class EventStore {
 
     /// Sync a geofence to the backend
     func syncGeofenceToBackend(_ geofence: Geofence) async {
+        ensureValidModelContext()
         guard let modelContext else { return }
         guard let syncEngine = syncEngine else {
             Log.sync.warning("syncGeofenceToBackend: no syncEngine available")
@@ -1710,6 +1755,7 @@ class EventStore {
     /// Re-sync all local HealthKit events to the backend
     /// Use this to recover orphaned events that were created locally but never synced
     func resyncHealthKitEvents() async {
+        ensureValidModelContext()
         guard let modelContext else {
             Log.sync.error("resyncHealthKitEvents: modelContext is nil")
             return

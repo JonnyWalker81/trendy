@@ -96,6 +96,31 @@ extension GeofenceManager {
         Log.geofence.debug("Refreshed GeofenceManager ModelContext for foreground return")
     }
 
+    /// Ensure the ModelContext has valid SQLite file handles before performing a database operation.
+    /// This is a lightweight probe that detects stale handles from background suspension
+    /// and transparently creates a fresh context if needed.
+    ///
+    /// Call this before any fetch/save operation that could fail with stale handles,
+    /// especially in background geofence event handlers where UIScene.didActivateNotification
+    /// may not have fired yet.
+    internal func ensureValidModelContext() {
+        do {
+            _ = try modelContext.fetchCount(FetchDescriptor<Geofence>())
+        } catch {
+            let nsError = error as NSError
+            let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
+                || error.localizedDescription.lowercased().contains("default.store")
+                || error.localizedDescription.lowercased().contains("couldn't be opened")
+
+            guard isStale else { return }
+
+            Log.geofence.warning("GeofenceManager ModelContext has stale file handles - refreshing", error: error)
+            let container = modelContext.container
+            modelContext = ModelContext(container)
+            Log.geofence.info("Refreshed GeofenceManager ModelContext after stale handle detection")
+        }
+    }
+
     /// Handle background entry notification from AppDelegate
     @objc internal func handleBackgroundEntry(_ notification: Notification) {
         guard let identifier = notification.userInfo?["identifier"] as? String else {
@@ -147,6 +172,10 @@ extension GeofenceManager {
         Log.geofence.debug("handleGeofenceEntry called", context: .with { ctx in
             ctx.add("geofenceId", geofenceId)
         })
+
+        // Ensure ModelContext has valid file handles before any database operation.
+        // Background geofence events can arrive before UIScene.didActivateNotification fires.
+        ensureValidModelContext()
 
         // RACE CONDITION FIX: Early claim pattern to prevent concurrent calls from creating duplicates.
         // If another call is already processing this geofence, skip this one.
@@ -288,6 +317,9 @@ extension GeofenceManager {
     /// Must be called on MainActor to safely access modelContext.
     @MainActor
     internal func handleGeofenceExit(geofenceId: String) {
+        // Ensure ModelContext has valid file handles before any database operation.
+        ensureValidModelContext()
+
         let geofenceDescriptor = FetchDescriptor<Geofence>(
             predicate: #Predicate { geofence in geofence.id == geofenceId }
         )

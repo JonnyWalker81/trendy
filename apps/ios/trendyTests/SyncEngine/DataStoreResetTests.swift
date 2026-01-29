@@ -65,8 +65,8 @@ struct DataStoreResetTests {
         #expect(factory.callCount == 2, "Multiple resets should still result in only one new DataStore on next access")
     }
 
-    @Test("resetDataStore skipped when sync is in progress")
-    func resetSkippedDuringSync() async throws {
+    @Test("resetDataStore always clears cache even if sync was in progress")
+    func resetAlwaysClearsCache() async throws {
         cleanupSyncEngineUserDefaults()
         let mockNetwork = MockNetworkClient()
         let mockStore = MockDataStore()
@@ -84,17 +84,16 @@ struct DataStoreResetTests {
             await engine.performSync()
         }
 
-        // Try to reset during sync - should be skipped
-        // Note: Due to actor serialization, resetDataStore will actually run
-        // AFTER performSync completes or between actor-isolated operations.
-        // The isSyncing guard ensures it's skipped if called during active sync.
+        // Reset during sync - should always clear the cache.
+        // After prolonged background, the in-progress sync's file handles are also stale,
+        // so skipping the reset would leave the engine in a broken state.
+        // Due to actor serialization, resetDataStore runs AFTER performSync completes.
         await engine.resetDataStore()
 
         await syncTask.value
 
-        // Verify no crash occurred and sync completed normally
-        // The DataStore should have been created only once (the initial lazy creation)
-        // since reset was skipped during sync
+        // Verify no crash occurred and sync completed normally.
+        // The DataStore cache was cleared by resetDataStore, so next access creates a new one.
         #expect(factory.callCount >= 1, "DataStore should be created at least once")
     }
 

@@ -295,4 +295,28 @@ class HealthKitService: NSObject {
         modelContext = ModelContext(modelContainer)
         Log.healthKit.debug("Refreshed HealthKitService ModelContext for foreground return")
     }
+
+    /// Ensure the ModelContext has valid SQLite file handles before performing a database operation.
+    /// This is a lightweight probe that detects stale handles from background suspension
+    /// and transparently creates a fresh context if needed.
+    ///
+    /// Call this before any fetch/save operation that could fail with stale handles,
+    /// especially in background HealthKit observer query callbacks where
+    /// UIScene.didActivateNotification may not have fired yet.
+    func ensureValidModelContext() {
+        do {
+            _ = try modelContext.fetchCount(FetchDescriptor<EventType>())
+        } catch {
+            let nsError = error as NSError
+            let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
+                || error.localizedDescription.lowercased().contains("default.store")
+                || error.localizedDescription.lowercased().contains("couldn't be opened")
+
+            guard isStale else { return }
+
+            Log.healthKit.warning("HealthKitService ModelContext has stale file handles - refreshing", error: error)
+            modelContext = ModelContext(modelContainer)
+            Log.healthKit.info("Refreshed HealthKitService ModelContext after stale handle detection")
+        }
+    }
 }
