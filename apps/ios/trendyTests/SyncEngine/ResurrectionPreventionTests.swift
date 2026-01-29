@@ -135,10 +135,13 @@ struct ResurrectionPreventionSkipTests {
         seedDeleteMutation(mockStore: mockStore, entityId: "evt-deleted")
 
         // Setup: Change feed has CREATE for deleted entity AND a new entity
+        // Note: data must be provided for entries expected to upsert (guard let data check in applyUpsert)
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(
             changes: [
-                APIModelFixture.makeChangeEntry(id: 1001, entityType: "event", operation: "create", entityId: "evt-deleted"),
-                APIModelFixture.makeChangeEntry(id: 1002, entityType: "event", operation: "create", entityId: "evt-new"),
+                APIModelFixture.makeChangeEntry(id: 1001, entityType: "event", operation: "create", entityId: "evt-deleted",
+                                                data: APIModelFixture.makeChangeEntryDataForEvent()),
+                APIModelFixture.makeChangeEntry(id: 1002, entityType: "event", operation: "create", entityId: "evt-new",
+                                                data: APIModelFixture.makeChangeEntryDataForEvent()),
             ],
             nextCursor: 1002,
             hasMore: false
@@ -315,9 +318,11 @@ struct ResurrectionPreventionCursorTests {
         // and no new delete was queued
 
         // Setup: Second sync - same entity ID comes back as CREATE
+        // data must be provided so applyUpsert doesn't skip due to nil data guard
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(
             changes: [
-                APIModelFixture.makeChangeEntry(id: 1002, entityType: "event", operation: "create", entityId: "evt-1"),
+                APIModelFixture.makeChangeEntry(id: 1002, entityType: "event", operation: "create", entityId: "evt-1",
+                                                data: APIModelFixture.makeChangeEntryDataForEvent()),
             ],
             nextCursor: 1002,
             hasMore: false
