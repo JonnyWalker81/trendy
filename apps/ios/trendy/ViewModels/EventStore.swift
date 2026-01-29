@@ -154,6 +154,11 @@ class EventStore {
         }
 
         Log.sync.info("Network restored - starting sync")
+
+        // Reset DataStore before sync in case the app was backgrounded when connectivity dropped.
+        // The cached ModelContext may have stale file handles after iOS reclaimed resources.
+        await syncEngine?.resetDataStore()
+
         await performSync()
         await refreshSyncStateForUI()
     }
@@ -366,6 +371,18 @@ class EventStore {
     }
 
     // MARK: - Sync
+
+    /// Reset the SyncEngine's cached DataStore after returning from background.
+    ///
+    /// When iOS suspends the app for extended periods (1+ hours), it may invalidate
+    /// file descriptors for the SQLite database. The SyncEngine caches a ModelContext
+    /// which holds these file handles. Without resetting, the first sync after returning
+    /// from background fails with "The file 'default.store' couldn't be opened".
+    ///
+    /// Call this when the scene phase transitions to `.active` BEFORE triggering any sync.
+    func resetSyncEngineDataStore() async {
+        await syncEngine?.resetDataStore()
+    }
 
     /// Trigger a sync with the backend
     func performSync() async {

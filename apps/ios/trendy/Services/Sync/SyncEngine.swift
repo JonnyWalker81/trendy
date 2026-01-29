@@ -57,9 +57,42 @@ actor SyncEngine {
     /// Since SyncEngine is an actor, all access is serialized, making it safe
     /// to reuse a single ModelContext. This prevents "default.store couldn't be opened"
     /// errors caused by creating too many concurrent ModelContext/SQLite connections.
-    private lazy var cachedDataStore: any DataStoreProtocol = {
-        dataStoreFactory.makeDataStore()
-    }()
+    ///
+    /// This is resettable (not lazy var) because after prolonged background suspension,
+    /// iOS may invalidate the underlying SQLite file handles. When the app returns to
+    /// foreground, we need to create a fresh ModelContext with valid file handles.
+    /// Call `resetDataStore()` when the app returns from background.
+    private var _cachedDataStore: (any DataStoreProtocol)?
+
+    /// Returns the cached DataStore, creating it if needed.
+    /// This replaces the previous `lazy var` to support resetting after background suspension.
+    private var cachedDataStore: any DataStoreProtocol {
+        if let existing = _cachedDataStore {
+            return existing
+        }
+        let store = dataStoreFactory.makeDataStore()
+        _cachedDataStore = store
+        return store
+    }
+
+    /// Reset the cached DataStore, forcing a fresh ModelContext on next access.
+    ///
+    /// Call this when the app returns from background to prevent
+    /// "default.store couldn't be opened" errors caused by stale SQLite file handles.
+    /// iOS may invalidate file descriptors during prolonged background suspension,
+    /// and the cached ModelContext would then fail to access the store file.
+    ///
+    /// This is safe to call even during sync operations because:
+    /// - SyncEngine is an actor, so this runs serially with all other operations
+    /// - The next operation that accesses cachedDataStore will create a fresh store
+    func resetDataStore() {
+        guard !isSyncing else {
+            Log.sync.debug("Skipping DataStore reset - sync in progress")
+            return
+        }
+        Log.sync.info("Resetting cached DataStore (app returned from background)")
+        _cachedDataStore = nil
+    }
 
     // MARK: - State
 

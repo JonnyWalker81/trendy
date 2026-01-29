@@ -99,6 +99,13 @@ struct MainTabView: View {
                 // Sync data and reconcile geofences when app becomes active
                 if let store = eventStore {
                     Task {
+                        // CRITICAL: Reset SyncEngine's cached DataStore BEFORE any sync operations.
+                        // When iOS suspends the app for extended periods (1+ hours), it may invalidate
+                        // SQLite file descriptors. The SyncEngine caches a ModelContext which holds these
+                        // file handles. Without resetting, the first sync after returning from background
+                        // fails with "The file 'default.store' couldn't be opened" (30ms/16ms fast failures).
+                        await store.resetSyncEngineDataStore()
+
                         // Refresh HealthKit daily aggregates first to ensure fresh data
                         if let hkService = healthKitService, hkService.hasHealthKitAuthorization {
                             await hkService.refreshDailyAggregates()
