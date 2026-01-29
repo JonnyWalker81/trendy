@@ -47,6 +47,21 @@ private func seedCreateMutation(mockStore: MockDataStore, eventId: String, event
     return mockStore.seedPendingMutation(entityType: .event, entityId: eventId, operation: .create, payload: payload)
 }
 
+/// Helper to seed a CREATE pending mutation for an event type (uses individual idempotency path)
+private func seedEventTypeCreateMutation(mockStore: MockDataStore, eventTypeId: String) -> PendingMutation {
+    let request = APIModelFixture.makeCreateEventTypeRequest(id: eventTypeId)
+    let payload = try! JSONEncoder().encode(request)
+    return mockStore.seedPendingMutation(entityType: .eventType, entityId: eventTypeId, operation: .create, payload: payload)
+}
+
+/// Helper to seed an EventType entity in MockDataStore for deletion tests
+private func seedEventTypeEntity(mockStore: MockDataStore, id: String) {
+    _ = mockStore.seedEventType { type in
+        type.id = id
+        type.name = "Test Type"
+    }
+}
+
 /// Helper to seed an Event in MockDataStore for deletion tests
 private func seedEvent(mockStore: MockDataStore, id: String, eventTypeId: String = "type-1") {
     // Seed an event type first
@@ -151,28 +166,28 @@ struct IdempotencyKeyUniquenessTests {
         #expect(uuid != nil, "clientRequestId should be valid UUID - got: \(mutation.clientRequestId)")
     }
 
-    @Test("Same event not created twice with same idempotency key (DUP-01)")
+    @Test("Same entity not created twice with same idempotency key (DUP-01)")
     func sameEventNotCreatedTwiceWithSameKey() async throws {
         let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
 
         // Configure for successful sync
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
 
-        // Configure success response
-        mockNetwork.createEventWithIdempotencyResponses = [
-            .success(APIModelFixture.makeAPIEvent(id: "evt-1"))
+        // Configure success response for eventType idempotency path
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
+            .success(APIModelFixture.makeAPIEventType(id: "type-new"))
         ]
 
-        // Seed mutation
-        let mutation = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
+        // Seed eventType CREATE mutation (goes through individual idempotency path)
+        let mutation = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-new")
         let originalKey = mutation.clientRequestId
 
         await engine.performSync()
 
         // Verify idempotency key was used correctly
-        #expect(mockNetwork.createEventWithIdempotencyCalls.count == 1,
+        #expect(mockNetwork.createEventTypeWithIdempotencyCalls.count == 1,
                 "Should have exactly one API call")
-        #expect(mockNetwork.createEventWithIdempotencyCalls.first?.idempotencyKey == originalKey,
+        #expect(mockNetwork.createEventTypeWithIdempotencyCalls.first?.idempotencyKey == originalKey,
                 "API call should use mutation's clientRequestId as idempotency key")
     }
 }
@@ -195,13 +210,13 @@ struct RetryBehaviorTests {
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // Configure: first call fails with network error, second succeeds
-        mockNetwork.createEventWithIdempotencyResponses = [
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
             .failure(APIError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, userInfo: nil))),
-            .success(APIModelFixture.makeAPIEvent(id: "evt-1"))
+            .success(APIModelFixture.makeAPIEventType(id: "type-new"))
         ]
 
-        // Seed mutation and capture its idempotency key
-        let mutation = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
+        // Seed eventType CREATE mutation and capture its idempotency key
+        let mutation = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-new")
         let originalKey = mutation.clientRequestId
 
         // First sync - will fail
@@ -211,7 +226,7 @@ struct RetryBehaviorTests {
         await engine.performSync()
 
         // Verify both calls used the same idempotency key
-        let calls = mockNetwork.createEventWithIdempotencyCalls
+        let calls = mockNetwork.createEventTypeWithIdempotencyCalls
         #expect(calls.count == 2, "Should have two API calls (initial + retry) - got \(calls.count)")
 
         if calls.count >= 2 {
@@ -234,18 +249,18 @@ struct ConflictHandlingTests {
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
 
-        // Configure 409 Conflict response
-        mockNetwork.createEventWithIdempotencyResponses = [
+        // Configure 409 Conflict response for eventType idempotency path
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
             .failure(APIError.serverError("Duplicate key violation", 409))
         ]
 
-        // Seed mutation AND local event (the duplicate)
-        _ = seedCreateMutation(mockStore: mockStore, eventId: "evt-duplicate")
-        seedEvent(mockStore: mockStore, id: "evt-duplicate")
+        // Seed eventType CREATE mutation AND local eventType entity (the duplicate)
+        _ = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-duplicate")
+        seedEventTypeEntity(mockStore: mockStore, id: "type-duplicate")
 
-        // Verify event exists before sync
-        let eventsBefore = try mockStore.fetchAllEvents()
-        #expect(eventsBefore.count == 1, "Event should exist before sync")
+        // Verify eventType exists before sync
+        let typesBefore = try mockStore.fetchAllEventTypes()
+        #expect(typesBefore.count == 1, "EventType should exist before sync")
 
         await engine.performSync()
 
@@ -254,8 +269,8 @@ struct ConflictHandlingTests {
         #expect(pendingAfter.isEmpty, "409 Conflict should remove mutation from queue")
 
         // Verify local duplicate was deleted
-        let eventsAfter = try mockStore.fetchAllEvents()
-        #expect(eventsAfter.isEmpty, "Local duplicate should be deleted on 409")
+        let typesAfter = try mockStore.fetchAllEventTypes()
+        #expect(typesAfter.isEmpty, "Local duplicate should be deleted on 409")
     }
 
     @Test("409 with unique constraint message also triggers deduplication")
@@ -266,13 +281,13 @@ struct ConflictHandlingTests {
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
 
         // Configure error with unique constraint message (not 409 code)
-        mockNetwork.createEventWithIdempotencyResponses = [
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
             .failure(APIError.serverError("unique constraint violation on external_id", 400))
         ]
 
-        // Seed mutation and local event
-        _ = seedCreateMutation(mockStore: mockStore, eventId: "evt-unique")
-        seedEvent(mockStore: mockStore, id: "evt-unique")
+        // Seed eventType CREATE mutation and local eventType entity
+        _ = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-unique")
+        seedEventTypeEntity(mockStore: mockStore, id: "type-unique")
 
         await engine.performSync()
 
@@ -288,13 +303,13 @@ struct ConflictHandlingTests {
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
 
-        // Configure 400 Bad Request (not duplicate)
-        mockNetwork.createEventWithIdempotencyResponses = [
+        // Configure 400 Bad Request (not duplicate) for eventType idempotency path
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
             .failure(APIError.httpError(400))
         ]
 
-        // Seed mutation
-        _ = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
+        // Seed eventType CREATE mutation (goes through individual idempotency path)
+        _ = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-1")
 
         await engine.performSync()
 
@@ -311,13 +326,13 @@ struct ConflictHandlingTests {
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
 
-        // Configure 500 Internal Server Error
-        mockNetwork.createEventWithIdempotencyResponses = [
+        // Configure 500 Internal Server Error for eventType idempotency path
+        mockNetwork.createEventTypeWithIdempotencyResponses = [
             .failure(APIError.serverError("Internal server error", 500))
         ]
 
-        // Seed mutation
-        _ = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
+        // Seed eventType CREATE mutation (goes through individual idempotency path)
+        _ = seedEventTypeCreateMutation(mockStore: mockStore, eventTypeId: "type-1")
 
         await engine.performSync()
 
