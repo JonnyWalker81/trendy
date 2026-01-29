@@ -47,33 +47,48 @@ private func seedEventMutation(mockStore: MockDataStore, eventId: String) {
     _ = mockStore.seedPendingMutation(entityType: .event, entityId: eventId, operation: .create, payload: payload)
 }
 
-/// Helper to trip the circuit breaker by causing 3 consecutive rate limit errors
+/// Helper to trip the circuit breaker by causing 3 consecutive rate limit errors.
+///
+/// Because all seeded mutations fit in a single batch (batch size = 50),
+/// each performSync() cycle makes exactly 1 batch call. The circuit breaker
+/// threshold check runs at the TOP of the batch loop, so:
+///   - Syncs 1-3: batch call -> 429 -> counter increments (1, 2, 3)
+///   - Sync 4: loop starts -> counter >= 3 -> tripCircuitBreaker() called
+///
+/// The mutation stays in the queue after a rate-limit failure, so we only
+/// seed once. We need 4 health check responses (one per sync) and 3 batch
+/// responses (the 4th sync trips before making a batch call).
 private func tripCircuitBreaker(mockNetwork: MockNetworkClient, mockStore: MockDataStore, engine: SyncEngine) async {
-    // Configure health check to pass
-    mockNetwork.getEventTypesResponses = [
-        .success([APIModelFixture.makeAPIEventType()]),
-        .success([APIModelFixture.makeAPIEventType()]),
-        .success([APIModelFixture.makeAPIEventType()])
-    ]
-
     // Set cursor to non-zero to skip bootstrap
     UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Configure empty change feed
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
-    // 3 rate limit failures (one per batch call)
-    mockNetwork.createEventsBatchResponses = [
+    // 4 health check responses (one per sync cycle)
+    mockNetwork.getEventTypesResponses.append(contentsOf: [
+        .success([APIModelFixture.makeAPIEventType()]),
+        .success([APIModelFixture.makeAPIEventType()]),
+        .success([APIModelFixture.makeAPIEventType()]),
+        .success([APIModelFixture.makeAPIEventType()])
+    ])
+
+    // 3 rate limit failures (one per sync cycle; 4th sync trips before calling batch)
+    mockNetwork.createEventsBatchResponses.append(contentsOf: [
         .failure(APIError.httpError(429)),
         .failure(APIError.httpError(429)),
         .failure(APIError.httpError(429))
-    ]
+    ])
 
-    // Seed 3 mutations to trigger flush
-    seedEventMutation(mockStore: mockStore, eventId: "evt-1")
-    seedEventMutation(mockStore: mockStore, eventId: "evt-2")
-    seedEventMutation(mockStore: mockStore, eventId: "evt-3")
+    // Seed 1 mutation - it stays in queue after each rate limit failure
+    seedEventMutation(mockStore: mockStore, eventId: "evt-trip-\(UUID().uuidString.prefix(8))")
 
+    // 3 syncs to increment consecutive rate limit counter to 3
+    await engine.performSync()
+    await engine.performSync()
+    await engine.performSync()
+
+    // 4th sync: batch loop detects counter >= threshold, trips circuit breaker
     await engine.performSync()
 }
 
@@ -98,25 +113,32 @@ struct CircuitBreakerTripTests {
     func circuitBreakerDoesNotTripAfter2RateLimits() async throws {
         let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
 
-        // Configure for flush
-        configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
+        // Set cursor to non-zero to skip bootstrap
+        UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
-        // Only 2 rate limit failures followed by success
-        mockNetwork.createEventsBatchResponses = [
-            .failure(APIError.httpError(429)),
-            .failure(APIError.httpError(429)),
+        // Seed 1 mutation - it stays in queue after rate limit failures
+        seedEventMutation(mockStore: mockStore, eventId: "evt-1")
+
+        // Sync 1: batch call -> 429 -> counter=1
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 2: batch call -> 429 -> counter=2
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 3: batch call -> success -> counter resets to 0
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(
             .success(APIModelFixture.makeBatchCreateEventsResponse(
-                created: [APIModelFixture.makeAPIEvent(id: "evt-3")],
+                created: [APIModelFixture.makeAPIEvent(id: "evt-1")],
                 total: 1,
                 success: 1
             ))
-        ]
-
-        // Seed 3 mutations
-        seedEventMutation(mockStore: mockStore, eventId: "evt-1")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-2")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-3")
-
+        )
         await engine.performSync()
 
         // Verify circuit breaker is NOT tripped (only 2 consecutive errors before success)
@@ -128,22 +150,8 @@ struct CircuitBreakerTripTests {
     func circuitBreakerTripsOnExactly3() async throws {
         let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
 
-        // Configure for flush
-        configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
-
-        // Exactly 3 rate limit failures
-        mockNetwork.createEventsBatchResponses = [
-            .failure(APIError.httpError(429)),
-            .failure(APIError.httpError(429)),
-            .failure(APIError.httpError(429))
-        ]
-
-        // Seed 3 mutations (one per batch to ensure sequential processing)
-        seedEventMutation(mockStore: mockStore, eventId: "evt-1")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-2")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-3")
-
-        await engine.performSync()
+        // Trip the circuit breaker (uses 3 rate limits + 1 detection sync)
+        await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
 
         // Verify circuit breaker is tripped
         let isTripped = await engine.isCircuitBreakerTripped
@@ -187,54 +195,64 @@ struct CircuitBreakerResetTests {
     func rateLimitCounterResetsOnSuccess() async throws {
         let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
 
-        // Configure for flush with 2 failures then success
-        configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
+        // Set cursor to non-zero to skip bootstrap
+        UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
-        // First sync: 2 failures then success
-        mockNetwork.createEventsBatchResponses = [
-            .failure(APIError.httpError(429)),
-            .failure(APIError.httpError(429)),
+        // Seed 1 mutation - it stays in queue after rate limit failures
+        seedEventMutation(mockStore: mockStore, eventId: "evt-1")
+
+        // Sync 1: batch call -> 429 -> counter=1
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 2: batch call -> 429 -> counter=2
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 3: batch call -> success -> counter resets to 0
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(
             .success(APIModelFixture.makeBatchCreateEventsResponse(
-                created: [APIModelFixture.makeAPIEvent(id: "evt-3")],
+                created: [APIModelFixture.makeAPIEvent(id: "evt-1")],
                 total: 1,
                 success: 1
             ))
-        ]
-
-        seedEventMutation(mockStore: mockStore, eventId: "evt-1")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-2")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-3")
-
+        )
         await engine.performSync()
 
         // Counter should have reset to 0 after success
         var isTripped = await engine.isCircuitBreakerTripped
         #expect(isTripped == false, "Should not be tripped after success resets counter")
 
-        // Now prepare for second sync with 2 more failures
-        mockNetwork.reset()
-        mockStore.reset()
-        mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
+        // Now seed a new mutation for the second round of failures
+        seedEventMutation(mockStore: mockStore, eventId: "evt-2")
 
-        mockNetwork.createEventsBatchResponses = [
-            .failure(APIError.httpError(429)),
-            .failure(APIError.httpError(429)),
+        // Sync 4: batch call -> 429 -> counter=1
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 5: batch call -> 429 -> counter=2
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(.failure(APIError.httpError(429)))
+        await engine.performSync()
+
+        // Sync 6: batch call -> success -> counter resets to 0
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
+        mockNetwork.createEventsBatchResponses.append(
             .success(APIModelFixture.makeBatchCreateEventsResponse(
-                created: [APIModelFixture.makeAPIEvent(id: "evt-6")],
+                created: [APIModelFixture.makeAPIEvent(id: "evt-2")],
                 total: 1,
                 success: 1
             ))
-        ]
-
-        seedEventMutation(mockStore: mockStore, eventId: "evt-4")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-5")
-        seedEventMutation(mockStore: mockStore, eventId: "evt-6")
-
+        )
         await engine.performSync()
 
         // If counter didn't reset, we'd have 4 total failures (2+2) and be tripped
-        // Since counter reset on success, we only have 2 consecutive failures
+        // Since counter reset on success, we only have 2 consecutive failures each time
         isTripped = await engine.isCircuitBreakerTripped
         #expect(isTripped == false, "Counter should have reset on previous success - only 2 consecutive failures now")
     }
@@ -272,8 +290,8 @@ struct CircuitBreakerSyncBlockingTests {
         let callsBefore = mockNetwork.createEventsBatchCalls.count
 
         // Attempt another sync (should be blocked)
-        // Reset mock to have fresh health check responses but keep circuit breaker state
-        mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
+        // Add health check response for the blocked sync attempt
+        mockNetwork.getEventTypesResponses.append(.success([APIModelFixture.makeAPIEventType()]))
 
         // Seed another mutation
         seedEventMutation(mockStore: mockStore, eventId: "evt-blocked")
