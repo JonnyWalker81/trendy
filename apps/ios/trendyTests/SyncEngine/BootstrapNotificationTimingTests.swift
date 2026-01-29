@@ -102,22 +102,23 @@ struct BootstrapNotificationTimingTests {
 
     @Test("Bootstrap notification is posted only during successful bootstrap sync")
     func notificationPostedOnlyDuringBootstrap() async throws {
+        // Clean UserDefaults BEFORE creating engine since it reads cursor at init
         cleanupSyncEngineUserDefaults()
+
         let mockNetwork = MockNetworkClient()
         let mockStore = MockDataStore()
         let factory = MockDataStoreFactory(returning: mockStore)
         let engine = SyncEngine(networkClient: mockNetwork, dataStoreFactory: factory)
 
-        // Reset cursor to trigger bootstrap
-        let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
-        UserDefaults.standard.set(0, forKey: cursorKey)
-
-        // Configure for bootstrap success
-        mockNetwork.getEventTypesResponses = [.success([])]  // Health check passes
-        mockNetwork.eventTypesToReturn = []  // Bootstrap: empty event types
+        // Configure for bootstrap success (cursor=0 after cleanup triggers bootstrap)
+        // Two getEventTypes responses: one for health check, one for bootstrap fetch
+        mockNetwork.getEventTypesResponses = [
+            .success([]),  // Health check
+            .success([])   // Bootstrap: fetchEventTypesForBootstrap
+        ]
         mockNetwork.geofencesToReturn = []   // Bootstrap: empty geofences
-        mockNetwork.eventsToReturn = []      // Bootstrap: empty events
-        mockNetwork.latestCursorToReturn = 1000
+        mockNetwork.getAllEventsResponses = [.success([])]  // Bootstrap: empty events
+        mockNetwork.getLatestCursorResponses = [.success(1000)]  // Post-bootstrap cursor
 
         let observer = await NotificationTimingObserver()
 
@@ -133,8 +134,9 @@ struct BootstrapNotificationTimingTests {
         // Clean up for next test
         await observer.reset()
 
-        // Now do a non-bootstrap sync (cursor > 0)
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        // Now do a non-bootstrap sync (cursor > 0, already 1000 from first sync)
+        // Health check needs a response (queue was exhausted; falls through to eventTypesToReturn)
+        mockNetwork.eventTypesToReturn = []
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         await engine.performSync()
@@ -146,25 +148,26 @@ struct BootstrapNotificationTimingTests {
 
     @Test("No database operations occur after bootstrap notification is posted")
     func noDbOpsAfterNotification() async throws {
-        cleanupSyncEngineUserDefaults()
         // This test verifies that moving the notification to the end of performSync()
         // means no more database operations happen after it's posted.
+
+        // Clean UserDefaults BEFORE creating engine since it reads cursor at init
+        cleanupSyncEngineUserDefaults()
 
         let mockNetwork = MockNetworkClient()
         let mockStore = TrackingMockDataStore()
         let factory = MockDataStoreFactory(returning: mockStore)
         let engine = SyncEngine(networkClient: mockNetwork, dataStoreFactory: factory)
 
-        // Reset cursor to trigger bootstrap
-        let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
-        UserDefaults.standard.set(0, forKey: cursorKey)
-
-        // Configure for bootstrap success
-        mockNetwork.getEventTypesResponses = [.success([])]
-        mockNetwork.eventTypesToReturn = []
+        // Configure for bootstrap success (cursor=0 after cleanup triggers bootstrap)
+        // Two getEventTypes responses: one for health check, one for bootstrap fetch
+        mockNetwork.getEventTypesResponses = [
+            .success([]),  // Health check
+            .success([])   // Bootstrap: fetchEventTypesForBootstrap
+        ]
         mockNetwork.geofencesToReturn = []
-        mockNetwork.eventsToReturn = []
-        mockNetwork.latestCursorToReturn = 1000
+        mockNetwork.getAllEventsResponses = [.success([])]  // Bootstrap: empty events
+        mockNetwork.getLatestCursorResponses = [.success(1000)]  // Post-bootstrap cursor
 
         var notificationTime: Date?
         let observer = NotificationCenter.default.addObserver(
