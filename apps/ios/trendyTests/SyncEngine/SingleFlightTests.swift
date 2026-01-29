@@ -17,6 +17,7 @@ import Foundation
 
 /// Helper to create fresh test dependencies for each test
 private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+    cleanupSyncEngineUserDefaults()
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)

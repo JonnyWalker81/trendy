@@ -10,6 +10,17 @@ import Foundation
 import SwiftUI
 @testable import trendy
 
+// MARK: - SyncEngine Test Isolation
+
+/// Clean up SyncEngine UserDefaults keys to prevent test pollution across parallel test runs.
+/// Call this at the start of every test helper that creates SyncEngine dependencies.
+func cleanupSyncEngineUserDefaults() {
+    let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+    let pendingDeleteIdsKey = "sync_engine_pending_delete_ids_\(AppEnvironment.current.rawValue)"
+    UserDefaults.standard.removeObject(forKey: cursorKey)
+    UserDefaults.standard.removeObject(forKey: pendingDeleteIdsKey)
+}
+
 // MARK: - Deterministic Fixtures
 
 /// Factory for creating deterministic Event fixtures

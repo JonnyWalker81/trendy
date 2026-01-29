@@ -46,6 +46,7 @@ final class CountingDataStoreFactory: DataStoreFactory, @unchecked Sendable {
 
 /// Helper to create test dependencies with counting factory
 private func makeCountingDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: CountingDataStoreFactory, engine: SyncEngine) {
+    cleanupSyncEngineUserDefaults()
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = CountingDataStoreFactory(mockStore: mockStore)

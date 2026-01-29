@@ -17,6 +17,7 @@ import Foundation
 
 /// Helper to create fresh test dependencies for each test
 private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+    cleanupSyncEngineUserDefaults()
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -95,16 +96,20 @@ struct HealthCheckTests {
         // Seed a mutation to flush
         seedEventMutation(mockStore: mockStore, eventId: "evt-1")
 
-        // Configure success response for flush
-        mockNetwork.createEventWithIdempotencyResponses = [
-            .success(APIModelFixture.makeAPIEvent(id: "evt-1"))
+        // Configure success response for flush (event CREATEs go through batch path)
+        mockNetwork.createEventsBatchResponses = [
+            .success(APIModelFixture.makeBatchCreateEventsResponse(
+                created: [APIModelFixture.makeAPIEvent(id: "evt-1")],
+                total: 1,
+                success: 1
+            ))
         ]
 
         await engine.performSync()
 
         // Verify sync proceeded normally
         #expect(mockNetwork.getEventTypesCalls.count == 1, "Health check should be called")
-        #expect(mockNetwork.createEventWithIdempotencyCalls.count == 1,
+        #expect(mockNetwork.createEventsBatchCalls.count == 1,
                 "Flush should occur after successful health check")
 
         // Verify mutation was processed

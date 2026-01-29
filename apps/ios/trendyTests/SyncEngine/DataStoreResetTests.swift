@@ -67,6 +67,7 @@ struct DataStoreResetTests {
 
     @Test("resetDataStore skipped when sync is in progress")
     func resetSkippedDuringSync() async throws {
+        cleanupSyncEngineUserDefaults()
         let mockNetwork = MockNetworkClient()
         let mockStore = MockDataStore()
         let factory = CountingDataStoreFactory(mockStore: mockStore)
@@ -139,6 +140,7 @@ struct DataStoreResetTests {
 
     @Test("Simulated background-foreground cycle with DataStore reset prevents stale context")
     func backgroundForegroundCycle() async throws {
+        cleanupSyncEngineUserDefaults()
         // This test simulates the exact failure scenario:
         // 1. App is active, sync works fine
         // 2. App goes to background for extended period

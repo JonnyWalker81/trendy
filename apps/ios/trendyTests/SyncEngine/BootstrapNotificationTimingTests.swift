@@ -102,6 +102,7 @@ struct BootstrapNotificationTimingTests {
 
     @Test("Bootstrap notification is posted only during successful bootstrap sync")
     func notificationPostedOnlyDuringBootstrap() async throws {
+        cleanupSyncEngineUserDefaults()
         let mockNetwork = MockNetworkClient()
         let mockStore = MockDataStore()
         let factory = MockDataStoreFactory(returning: mockStore)
@@ -145,6 +146,7 @@ struct BootstrapNotificationTimingTests {
 
     @Test("No database operations occur after bootstrap notification is posted")
     func noDbOpsAfterNotification() async throws {
+        cleanupSyncEngineUserDefaults()
         // This test verifies that moving the notification to the end of performSync()
         // means no more database operations happen after it's posted.
 
