@@ -87,37 +87,42 @@ extension GeofenceManager {
     }
 
     /// Refresh the ModelContext when the app returns to foreground.
-    /// After prolonged background suspension, iOS may invalidate SQLite file handles.
-    /// Creating a fresh ModelContext ensures geofence event persistence won't fail
-    /// with "default.store couldn't be opened".
+    /// Delegates to PersistenceController for centralized context management.
     @objc internal func handleSceneDidBecomeActive(_ notification: Notification) {
-        let container = modelContext.container
-        modelContext = ModelContext(container)
-        Log.geofence.debug("Refreshed GeofenceManager ModelContext for foreground return")
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            modelContext = controller.validContext
+            Log.geofence.debug("GeofenceManager: updated ModelContext from PersistenceController")
+        } else {
+            let container = modelContext.container
+            modelContext = ModelContext(container)
+            Log.geofence.debug("Refreshed GeofenceManager ModelContext for foreground return (fallback)")
+        }
     }
 
     /// Ensure the ModelContext has valid SQLite file handles before performing a database operation.
-    /// This is a lightweight probe that detects stale handles from background suspension
-    /// and transparently creates a fresh context if needed.
-    ///
-    /// Call this before any fetch/save operation that could fail with stale handles,
-    /// especially in background geofence event handlers where UIScene.didActivateNotification
-    /// may not have fired yet.
+    /// Delegates to PersistenceController for centralized validation.
     internal func ensureValidModelContext() {
-        do {
-            _ = try modelContext.fetchCount(FetchDescriptor<Geofence>())
-        } catch {
-            let nsError = error as NSError
-            let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
-                || error.localizedDescription.lowercased().contains("default.store")
-                || error.localizedDescription.lowercased().contains("couldn't be opened")
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            modelContext = controller.validContext
+        } else {
+            // Fallback: inline probe
+            do {
+                _ = try modelContext.fetchCount(FetchDescriptor<Geofence>())
+            } catch {
+                let nsError = error as NSError
+                let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
+                    || error.localizedDescription.lowercased().contains("default.store")
+                    || error.localizedDescription.lowercased().contains("couldn't be opened")
 
-            guard isStale else { return }
+                guard isStale else { return }
 
-            Log.geofence.warning("GeofenceManager ModelContext has stale file handles - refreshing", error: error)
-            let container = modelContext.container
-            modelContext = ModelContext(container)
-            Log.geofence.info("Refreshed GeofenceManager ModelContext after stale handle detection")
+                Log.geofence.warning("GeofenceManager ModelContext has stale file handles - refreshing", error: error)
+                let container = modelContext.container
+                modelContext = ModelContext(container)
+                Log.geofence.info("Refreshed GeofenceManager ModelContext after stale handle detection")
+            }
         }
     }
 
@@ -276,7 +281,7 @@ extension GeofenceManager {
         modelContext.insert(event)
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "GeofenceManager")
 
             // Track this as an active event
             activeGeofenceEvents[geofenceId] = event.id
@@ -368,7 +373,7 @@ extension GeofenceManager {
         let duration = durationSeconds
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "GeofenceManager")
 
             // Remove from active events
             activeGeofenceEvents.removeValue(forKey: geofenceId)
@@ -409,5 +414,19 @@ extension GeofenceManager {
     /// Clear the last error (call after UI has handled it)
     func clearError() {
         lastError = nil
+    }
+
+    /// Save modelContext with background task protection to prevent
+    /// iOS from suspending mid-transaction and causing stale file handles.
+    private func protectedSave(name: String) throws {
+        guard modelContext.hasChanges else { return }
+
+        if let controller = PersistenceController.shared {
+            try controller.performProtectedWrite(name: name) {
+                try modelContext.save()
+            }
+        } else {
+            try modelContext.save()
+        }
     }
 }

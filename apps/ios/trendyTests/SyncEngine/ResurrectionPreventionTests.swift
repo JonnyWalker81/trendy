@@ -19,9 +19,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -30,12 +34,10 @@ private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStor
 }
 
 /// Helper to configure mock for pullChanges testing (skip bootstrap)
+/// NOTE: Cursor must be set via makeTestDependencies(initialCursor:) since SyncEngine reads it at init time.
 private func configureForPullChanges(mockNetwork: MockNetworkClient, mockStore: MockDataStore) {
     // Health check passes (required before any sync operations)
     mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-
-    // Set cursor to non-zero to skip bootstrap (otherwise it wipes data and bootstraps)
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Default empty change feed - tests will override with specific changes
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -64,7 +66,7 @@ struct ResurrectionPreventionSkipTests {
 
     @Test("Deleted items not re-created during pullChanges (RES-01)")
     func deletedItemsNotRecreatedDuringPullChanges() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges path (non-zero cursor)
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -96,7 +98,7 @@ struct ResurrectionPreventionSkipTests {
 
     @Test("Multiple deleted items all skipped during pullChanges (RES-02, RES-03)")
     func multipleDeletedItemsAllSkipped() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -126,7 +128,7 @@ struct ResurrectionPreventionSkipTests {
 
     @Test("Mixed delete and non-delete items handled correctly")
     func mixedDeleteAndNonDeleteItemsHandledCorrectly() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -163,7 +165,7 @@ struct ResurrectionPreventionPopulationTests {
 
     @Test("pendingDeleteIds populated before pullChanges (RES-02)")
     func pendingDeleteIdsPopulatedBeforePullChanges() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -196,7 +198,7 @@ struct ResurrectionPreventionPopulationTests {
         // The fallback is called when the in-memory pendingDeleteIds check passes
         // but provides belt-and-suspenders protection
 
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -228,7 +230,7 @@ struct ResurrectionPreventionCursorTests {
 
     @Test("Cursor advances after pullChanges (RES-04)")
     func cursorAdvancesAfterPullChanges() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges with initial cursor
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -252,7 +254,7 @@ struct ResurrectionPreventionCursorTests {
 
     @Test("Cursor advances with pending deletes (RES-04)")
     func cursorAdvancesWithPendingDeletes() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -279,7 +281,7 @@ struct ResurrectionPreventionCursorTests {
 
     @Test("pendingDeleteIds cleared after successful sync (RES-05)")
     func pendingDeleteIdsClearedAfterSuccessfulSync() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -344,7 +346,7 @@ struct ResurrectionPreventionEntityTypesTests {
 
     @Test("Event type deletion prevented from resurrection")
     func eventTypeDeletionPreventedFromResurrection() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -370,7 +372,7 @@ struct ResurrectionPreventionEntityTypesTests {
 
     @Test("Geofence deletion prevented from resurrection")
     func geofenceDeletionPreventedFromResurrection() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Setup: Configure for pullChanges
         configureForPullChanges(mockNetwork: mockNetwork, mockStore: mockStore)

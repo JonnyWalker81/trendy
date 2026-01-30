@@ -19,9 +19,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -30,12 +34,10 @@ private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStor
 }
 
 /// Helper to configure mock for successful health check and skip bootstrap
+/// NOTE: Cursor must be set via makeTestDependencies(initialCursor:) since SyncEngine reads it at init time.
 private func configureForFlush(mockNetwork: MockNetworkClient, mockStore: MockDataStore) {
     // Health check passes (required before any sync operations)
     mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-
-    // Set cursor to non-zero to skip bootstrap (otherwise it tries to download all data)
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Configure empty change feed to skip pullChanges processing
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -60,8 +62,7 @@ private func seedEventMutation(mockStore: MockDataStore, eventId: String) {
 /// seed once. We need 4 health check responses (one per sync) and 3 batch
 /// responses (the 4th sync trips before making a batch call).
 private func tripCircuitBreaker(mockNetwork: MockNetworkClient, mockStore: MockDataStore, engine: SyncEngine) async {
-    // Set cursor to non-zero to skip bootstrap
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    // NOTE: Cursor must already be set to non-zero via makeTestDependencies(initialCursor:)
 
     // Configure empty change feed
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -100,7 +101,7 @@ struct CircuitBreakerTripTests {
 
     @Test("Circuit breaker trips after 3 consecutive rate limit errors (CB-01)")
     func circuitBreakerTripsAfter3RateLimits() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -112,10 +113,8 @@ struct CircuitBreakerTripTests {
 
     @Test("Circuit breaker does NOT trip after 2 rate limit errors")
     func circuitBreakerDoesNotTripAfter2RateLimits() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
-        // Set cursor to non-zero to skip bootstrap
-        UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // Seed 1 mutation - it stays in queue after rate limit failures
@@ -149,7 +148,7 @@ struct CircuitBreakerTripTests {
 
     @Test("Circuit breaker trips on exactly 3 consecutive rate limits")
     func circuitBreakerTripsOnExactly3() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker (uses 3 rate limits + 1 detection sync)
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -171,7 +170,7 @@ struct CircuitBreakerResetTests {
 
     @Test("Circuit breaker resets after manual reset call (CB-02)")
     func circuitBreakerResetsAfterManualReset() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -194,10 +193,8 @@ struct CircuitBreakerResetTests {
 
     @Test("Rate limit counter resets on successful sync (CB-05)")
     func rateLimitCounterResetsOnSuccess() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
-        // Set cursor to non-zero to skip bootstrap
-        UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // Seed 1 mutation - it stays in queue after rate limit failures
@@ -260,7 +257,7 @@ struct CircuitBreakerResetTests {
 
     @Test("Circuit breaker backoff time is within expected range after first trip")
     func backoffTimeInExpectedRange() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -278,7 +275,7 @@ struct CircuitBreakerSyncBlockingTests {
 
     @Test("Sync blocked while circuit breaker tripped (CB-03)")
     func syncBlockedWhileTripped() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -306,7 +303,7 @@ struct CircuitBreakerSyncBlockingTests {
 
     @Test("Sync allowed after circuit breaker reset")
     func syncAllowedAfterReset() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip the circuit breaker
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -353,7 +350,7 @@ struct CircuitBreakerExponentialBackoffTests {
 
     @Test("Backoff timing follows exponential progression (CB-04)")
     func backoffFollowsExponentialProgression() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip 1: 30s (base backoff)
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -401,9 +398,9 @@ struct CircuitBreakerExponentialBackoffTests {
         #expect(backoff > 295 && backoff <= 305, "Trip 6: should stay at ~300s (max cap), got \(backoff)")
     }
 
-    @Test("Backoff multiplier starts at 1.0 after full reset")
-    func backoffMultiplierStartsAt1AfterFullReset() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+    @Test("Backoff multiplier resets to 1.0 after successful sync")
+    func backoffMultiplierResetsAfterSuccessfulSync() async throws {
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Trip twice to increase multiplier
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
@@ -415,17 +412,34 @@ struct CircuitBreakerExponentialBackoffTests {
         var backoff = await engine.circuitBreakerBackoffRemaining
         #expect(backoff > 55 && backoff <= 65, "Trip 2: expected ~60s")
 
-        // Reset - this resets multiplier back to 1.0
+        // Reset circuit breaker, then do a successful sync to reset multiplier
         await engine.resetCircuitBreaker()
+        mockNetwork.reset()
+        mockStore.reset()
 
-        // Verify multiplier reset by checking next trip is back to base
+        // Configure for a successful sync with a mutation that succeeds
+        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
+        mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
+        let request = APIModelFixture.makeCreateEventRequest(id: "evt-success", eventTypeId: "type-1")
+        let payload = try! JSONEncoder().encode(request)
+        _ = mockStore.seedPendingMutation(entityType: .event, entityId: "evt-success", operation: .create, payload: payload)
+        mockNetwork.createEventsBatchResponses = [
+            .success(APIModelFixture.makeBatchCreateEventsResponse(
+                created: [APIModelFixture.makeAPIEvent(id: "evt-success")],
+                total: 1,
+                success: 1
+            ))
+        ]
+        await engine.performSync()
+
+        // After successful sync, multiplier should be reset to 1.0
+        // Now trip again and verify backoff is back to base (30s)
         mockNetwork.reset()
         mockStore.reset()
         await tripCircuitBreaker(mockNetwork: mockNetwork, mockStore: mockStore, engine: engine)
         backoff = await engine.circuitBreakerBackoffRemaining
 
-        // After resetCircuitBreaker, multiplier goes back to 1.0
-        // So next trip should be 30s * 1.0 = 30s
-        #expect(backoff > 25 && backoff <= 35, "After full reset, backoff should be ~30s (multiplier reset to 1.0), got \(backoff)")
+        // After successful sync resets multiplier, next trip should be 30s * 1.0 = 30s
+        #expect(backoff > 25 && backoff <= 35, "After successful sync, backoff should be ~30s (multiplier reset to 1.0), got \(backoff)")
     }
 }

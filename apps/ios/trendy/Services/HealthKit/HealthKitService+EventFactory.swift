@@ -48,7 +48,7 @@ extension HealthKitService {
         modelContext.insert(event)
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "HealthKit-createEvent")
             Log.healthKit.info("Created event", context: .with { ctx in
                 ctx.add("category", category.displayName)
                 ctx.add("isBulkImport", isBulkImport)
@@ -280,7 +280,7 @@ extension HealthKitService {
         event.syncStatus = .pending
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "HealthKit-createEvent")
             Log.data.info("Updated HealthKit event locally", context: .with { ctx in
                 ctx.add("category", event.healthKitCategory ?? "unknown")
                 ctx.add("sampleId", event.healthKitSampleId ?? "none")
@@ -344,7 +344,7 @@ extension HealthKitService {
         modelContext.insert(newEventType)
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "HealthKit-createEvent")
         } catch {
             Log.healthKit.error("Failed to create EventType", error: error, context: .with { ctx in
                 ctx.add("category", category.displayName)

@@ -42,7 +42,11 @@ class EventStore {
     /// Minimum interval between fetches (5 seconds) to prevent redundant API calls on tab switches
     private let fetchDebounceInterval: TimeInterval = 5.0
 
+    /// Direct ModelContext reference - now managed by PersistenceController.
+    /// On foreground return, PersistenceController refreshes its mainContext,
+    /// and this reference is updated via refreshModelContext().
     private var modelContext: ModelContext?
+
     private var modelContainer: ModelContainer?
     private var calendarManager: CalendarManager?
     var syncWithCalendar = true
@@ -161,6 +165,30 @@ class EventStore {
 
         await performSync()
         await refreshSyncStateForUI()
+    }
+
+    // MARK: - Protected Persistence
+
+    /// Save the ModelContext with background task protection.
+    ///
+    /// This wraps the save in a UIKit background task to prevent iOS from
+    /// suspending the app mid-SQLite-transaction. Without this, the app can
+    /// be suspended while holding SQLite locks, which causes "default.store
+    /// couldn't be opened" errors on next launch.
+    ///
+    /// - Parameter name: Descriptive name for the background task (debugging)
+    /// - Throws: The save error if save fails
+    private func protectedSave(name: String = "EventStore-save") throws {
+        guard let modelContext, modelContext.hasChanges else { return }
+
+        if let controller = PersistenceController.shared {
+            try controller.performProtectedWrite(name: name) {
+                try modelContext.save()
+            }
+        } else {
+            // Fallback for tests
+            try modelContext.save()
+        }
     }
 
     // MARK: - Widget Integration
@@ -335,7 +363,12 @@ class EventStore {
     // MARK: - Setup
 
     func setModelContext(_ context: ModelContext, syncHistoryStore: SyncHistoryStore? = nil) {
-        self.modelContext = context
+        // Use PersistenceController's context if available (ensures centralized lifecycle management)
+        if let controller = PersistenceController.shared {
+            self.modelContext = controller.validContext
+        } else {
+            self.modelContext = context
+        }
         self.modelContainer = context.container
         self.syncHistoryStore = syncHistoryStore
 
@@ -384,19 +417,27 @@ class EventStore {
     func resetSyncEngineDataStore() async {
         await syncEngine?.resetDataStore()
 
-        // Also proactively refresh EventStore's own ModelContext.
-        // The mainContext may have stale SQLite file handles after prolonged background.
-        // Creating a fresh context ensures subsequent CRUD operations won't fail.
-        // fetchFromLocal() also has its own recovery, but this prevents failures in
-        // recordEvent/updateEvent/deleteEvent which use self.modelContext directly.
-        if let modelContainer = modelContainer {
+        // Use PersistenceController for centralized context refresh.
+        // PersistenceController.handleWillEnterForeground() already refreshed
+        // its mainContext when UIScene.willEnterForegroundNotification fired.
+        // We update our local reference to the fresh context.
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            self.modelContext = controller.validContext
+            Log.data.debug("EventStore: updated ModelContext reference from PersistenceController")
+        } else if let modelContainer = modelContainer {
+            // Fallback for tests or when PersistenceController is not available
             let freshContext = ModelContext(modelContainer)
             self.modelContext = freshContext
-            Log.data.debug("Refreshed EventStore ModelContext for foreground return")
+            Log.data.debug("Refreshed EventStore ModelContext for foreground return (fallback)")
         }
     }
 
-    /// Trigger a sync with the backend
+    /// Trigger a sync with the backend.
+    ///
+    /// The entire sync operation is wrapped in a UIKit background task to prevent
+    /// iOS from suspending the app mid-sync, which would leave SQLite locks held
+    /// and cause "default.store couldn't be opened" errors on next launch.
     func performSync() async {
         guard let syncEngine = syncEngine else { return }
 
@@ -410,23 +451,40 @@ class EventStore {
         // Queue mutations for any widget-created events that may have been missed
         await queueMutationsForUnsyncedEvents()
 
-        // Start a background task to poll sync state and update UI in real-time
-        // This ensures LoadingView shows progress during sync, not just "Loading..."
-        let pollingTask = Task { @MainActor in
-            while !Task.isCancelled {
-                await refreshSyncStateForUI()
-                try? await Task.sleep(nanoseconds: 250_000_000) // 250ms polling interval
+        // Wrap the entire sync in a background task to prevent mid-sync suspension
+        if let controller = PersistenceController.shared {
+            await controller.performProtectedWriteAsync(name: "SyncEngine-performSync") {
+                // Start a background task to poll sync state and update UI in real-time
+                let pollingTask = Task { @MainActor in
+                    while !Task.isCancelled {
+                        await self.refreshSyncStateForUI()
+                        try? await Task.sleep(nanoseconds: 250_000_000) // 250ms polling interval
+                    }
+                }
+
+                await syncEngine.performSync()
+
+                // Stop polling now that sync is complete
+                pollingTask.cancel()
+
+                // Refresh local data after sync
+                try? await self.fetchFromLocal()
+                await self.refreshSyncStateForUI()
             }
+        } else {
+            // Fallback for tests
+            let pollingTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    await refreshSyncStateForUI()
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+            }
+
+            await syncEngine.performSync()
+            pollingTask.cancel()
+            try? await fetchFromLocal()
+            await refreshSyncStateForUI()
         }
-
-        await syncEngine.performSync()
-
-        // Stop polling now that sync is complete
-        pollingTask.cancel()
-
-        // Refresh local data after sync
-        try? await fetchFromLocal()
-        await refreshSyncStateForUI()
     }
 
     /// Force a full resync by resetting the cursor and re-fetching all data from the backend.
@@ -680,63 +738,73 @@ class EventStore {
 
     /// Ensure the ModelContext is valid by performing a lightweight probe query.
     ///
-    /// After prolonged background suspension, iOS may invalidate SQLite file descriptors.
-    /// This method detects stale handles BEFORE CRUD operations insert data into the context,
-    /// preventing the scenario where objects are inserted into a stale context that cannot save.
+    /// Delegates to PersistenceController for centralized context validation.
+    /// If the probe fails, PersistenceController creates a fresh context and
+    /// we update our local reference.
     ///
     /// Call this at the start of any CRUD operation that will modify and save data.
-    /// If the probe fails, a fresh ModelContext is created transparently.
     private func ensureValidModelContext() {
-        guard let modelContainer else { return }
-        guard let context = modelContext else { return }
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            // Always sync our reference with the controller's current context
+            self.modelContext = controller.validContext
+        } else {
+            // Fallback for tests: use the old inline probe approach
+            guard let modelContainer else { return }
+            guard let context = modelContext else { return }
 
-        do {
-            // Lightweight probe: fetchCount is the cheapest query that exercises the SQLite connection.
-            // If the file handle is stale, this will throw before we insert any objects.
-            _ = try context.fetchCount(FetchDescriptor<EventType>())
-        } catch {
-            guard isStaleStoreError(error) else {
-                // Non-stale error (e.g., schema issue) - don't replace context
-                Log.data.warning("ModelContext probe failed with non-stale error", error: error)
-                return
+            do {
+                _ = try context.fetchCount(FetchDescriptor<EventType>())
+            } catch {
+                guard isStaleStoreError(error) else {
+                    Log.data.warning("ModelContext probe failed with non-stale error", error: error)
+                    return
+                }
+
+                Log.data.warning("ModelContext has stale file handles - creating fresh context before CRUD operation", error: error)
+                let freshContext = ModelContext(modelContainer)
+                self.modelContext = freshContext
+                Log.data.info("Refreshed ModelContext proactively before CRUD operation")
             }
-
-            Log.data.warning("ModelContext has stale file handles - creating fresh context before CRUD operation", error: error)
-
-            let freshContext = ModelContext(modelContainer)
-            self.modelContext = freshContext
-
-            Log.data.info("Refreshed ModelContext proactively before CRUD operation")
         }
     }
 
     private func fetchFromLocal() async throws {
         guard let modelContainer else { return }
 
-        // Use mainContext for normal operation to avoid SQLite file locking issues.
-        // Creating multiple ModelContext instances concurrently can cause problems,
-        // but using mainContext is safe since EventStore is @MainActor.
-        let context = modelContainer.mainContext
+        // Prefer PersistenceController's validated context to avoid stale handles
+        let context: ModelContext
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            context = controller.validContext
+            // Keep our reference in sync
+            self.modelContext = context
+        } else {
+            // Fallback for tests
+            context = modelContainer.mainContext
+        }
 
         do {
             try performLocalFetch(using: context)
         } catch {
-            // If the mainContext has stale SQLite file handles (from prolonged background),
-            // create a fresh ModelContext and retry. This handles the case where iOS
-            // invalidated file descriptors during background suspension.
-            // The mainContext will recover on subsequent calls as SwiftData reconnects.
+            // If the context has stale SQLite file handles (from prolonged background),
+            // create a fresh ModelContext and retry.
             guard isStaleStoreError(error) else {
                 throw error
             }
 
-            Log.data.warning("mainContext has stale file handles, retrying with fresh context", error: error)
+            Log.data.warning("Context has stale file handles, retrying with fresh context", error: error)
 
             let freshContext = ModelContext(modelContainer)
             try performLocalFetch(using: freshContext)
 
-            // Update the stored modelContext to the fresh one so subsequent operations
-            // (recordEvent, updateEvent, etc.) also use a valid context
+            // Update both our reference and the controller's context
             self.modelContext = freshContext
+            if let controller = PersistenceController.shared {
+                // Force the controller to also use this fresh context
+                controller.handleWillEnterForeground()
+                self.modelContext = controller.validContext
+            }
 
             Log.data.info("Successfully recovered from stale store with fresh ModelContext")
         }
@@ -822,7 +890,7 @@ class EventStore {
 
         // Step 2: Save event locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
 
             // Optimistic update: immediately add event to UI array
@@ -924,7 +992,7 @@ class EventStore {
 
         // Step 2: Save update locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
 
             Log.sync.info("Event updated locally", context: .with { ctx in
@@ -1003,7 +1071,7 @@ class EventStore {
         events.removeAll { $0.id == eventId }
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
 
             Log.sync.info("Event deleted locally", context: .with { ctx in
@@ -1063,7 +1131,7 @@ class EventStore {
 
         // Step 2: Save event type locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -1109,7 +1177,7 @@ class EventStore {
 
         // Step 2: Save event type locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
         } catch {
             errorMessage = EventError.saveFailed.localizedDescription
@@ -1149,7 +1217,7 @@ class EventStore {
         modelContext.delete(eventType)
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
             reloadWidgets()
 
             // Trigger sync if online
@@ -1265,7 +1333,7 @@ class EventStore {
 
         // Step 2: Save geofence locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
             return false
@@ -1317,7 +1385,7 @@ class EventStore {
 
         // Step 2: Save geofence locally (after mutation is queued)
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
         } catch {
             errorMessage = "Failed to save geofence: \(error.localizedDescription)"
             return
@@ -1354,7 +1422,7 @@ class EventStore {
         modelContext.delete(geofence)
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             // Trigger sync if online
             if let syncEngine = syncEngine, isOnline {
@@ -1485,7 +1553,7 @@ class EventStore {
         let eventId = event.id
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             // Fetch the event fresh from the context to ensure we have persisted values
             // This fixes issues where SwiftData model properties may be stale when accessed across async boundaries
@@ -1608,7 +1676,7 @@ class EventStore {
         let eventId = event.id
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             // Fetch the event fresh from the context to ensure we have persisted values
             let descriptor = FetchDescriptor<Event>(predicate: #Predicate { $0.id == eventId })
@@ -1676,7 +1744,7 @@ class EventStore {
         }
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             let request = CreateEventTypeRequest(
                 id: eventType.id,  // Client-generated UUIDv7
@@ -1716,7 +1784,7 @@ class EventStore {
         }
 
         do {
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             let request = CreateGeofenceRequest(
                 id: geofence.id,  // Client-generated UUIDv7
@@ -1846,7 +1914,7 @@ class EventStore {
             }
 
             // Save any relationship restorations
-            try modelContext.save()
+            try protectedSave(name: "EventStore-save")
 
             Log.sync.info("Queued HealthKit events for sync", context: .with { ctx in
                 ctx.add("synced_count", syncedCount)

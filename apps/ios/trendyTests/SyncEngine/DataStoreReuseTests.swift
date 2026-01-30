@@ -45,8 +45,12 @@ final class CountingDataStoreFactory: DataStoreFactory, @unchecked Sendable {
 }
 
 /// Helper to create test dependencies with counting factory
-private func makeCountingDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: CountingDataStoreFactory, engine: SyncEngine) {
+private func makeCountingDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: CountingDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = CountingDataStoreFactory(mockStore: mockStore)
@@ -55,12 +59,10 @@ private func makeCountingDependencies() -> (mockNetwork: MockNetworkClient, mock
 }
 
 /// Helper to configure mock for a successful sync pass
+/// NOTE: Cursor must be set via makeCountingDependencies(initialCursor:) since SyncEngine reads it at init time.
 private func configureForSuccessfulSync(mockNetwork: MockNetworkClient, responseCount: Int = 5) {
     // Health check passes
     mockNetwork.getEventTypesResponses = Array(repeating: .success([APIModelFixture.makeAPIEventType()]), count: responseCount)
-
-    // Set cursor to non-zero to skip bootstrap
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Empty change feed
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -73,7 +75,7 @@ struct DataStoreReuseTests {
 
     @Test("SyncEngine creates DataStore only once across multiple operations")
     func dataStoreCreatedOnce() async throws {
-        let (mockNetwork, _, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
         configureForSuccessfulSync(mockNetwork: mockNetwork)
 
         // Perform multiple operations that previously each created a new DataStore
@@ -88,7 +90,7 @@ struct DataStoreReuseTests {
 
     @Test("Multiple sync cycles reuse the same cached DataStore")
     func multipleSyncCyclesReuseSameStore() async throws {
-        let (mockNetwork, _, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
         configureForSuccessfulSync(mockNetwork: mockNetwork, responseCount: 20)
 
         // Run multiple sync cycles
@@ -103,7 +105,7 @@ struct DataStoreReuseTests {
 
     @Test("queueMutation reuses cached DataStore instead of creating new one")
     func queueMutationReusesDataStore() async throws {
-        let (_, _, factory, engine) = makeCountingDependencies()
+        let (_, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
 
         // Queue multiple mutations
         for i in 0..<5 {
@@ -123,7 +125,7 @@ struct DataStoreReuseTests {
 
     @Test("Concurrent sync and mutation queue operations don't create multiple DataStores")
     func concurrentOperationsReuseDataStore() async throws {
-        let (mockNetwork, _, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
         configureForSuccessfulSync(mockNetwork: mockNetwork, responseCount: 20)
 
         // Simulate the race condition scenario:
@@ -161,7 +163,7 @@ struct DataStoreReuseTests {
 
     @Test("clearPendingMutations reuses cached DataStore")
     func clearPendingMutationsReusesDataStore() async throws {
-        let (_, _, factory, engine) = makeCountingDependencies()
+        let (_, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
 
         // Queue a mutation then clear
         try await engine.queueMutation(
@@ -182,7 +184,7 @@ struct DataStoreReuseTests {
 
     @Test("skipToLatestCursor reuses cached DataStore")
     func skipToLatestCursorReusesDataStore() async throws {
-        let (mockNetwork, _, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
 
         // Configure for cursor fetch
         mockNetwork.latestCursorToReturn = 5000
@@ -210,7 +212,7 @@ struct GeofenceSyncRaceConditionTests {
         // With the fix, SyncEngine reuses a single cached DataStore,
         // so only ONE ModelContext is ever created, preventing SQLite file contention.
 
-        let (mockNetwork, mockStore, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, mockStore, factory, engine) = makeCountingDependencies(initialCursor: 1000)
         configureForSuccessfulSync(mockNetwork: mockNetwork, responseCount: 20)
 
         // Phase 1: Start a sync (simulating regular app sync)
@@ -254,7 +256,7 @@ struct GeofenceSyncRaceConditionTests {
         // Each event triggers queueMutation + performSync
         // Previously, each would create new ModelContext instances
 
-        let (mockNetwork, _, factory, engine) = makeCountingDependencies()
+        let (mockNetwork, _, factory, engine) = makeCountingDependencies(initialCursor: 1000)
         configureForSuccessfulSync(mockNetwork: mockNetwork, responseCount: 30)
 
         // Simulate 5 rapid geofence events

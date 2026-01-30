@@ -397,7 +397,12 @@ struct LocalStore: DataStoreProtocol {
 
     // MARK: - Save
 
-    /// Save any pending changes to the context
+    /// Save any pending changes to the context.
+    ///
+    /// Note: Background task protection is applied at the caller level
+    /// (EventStore.performSync wraps the entire sync in a background task).
+    /// LocalStore runs inside the SyncEngine actor, which is not MainActor-isolated,
+    /// so it cannot directly use UIApplication background task APIs.
     func save() throws {
         if modelContext.hasChanges {
             try modelContext.save()

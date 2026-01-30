@@ -15,9 +15,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -26,12 +30,10 @@ private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStor
 }
 
 /// Helper to configure mock for incremental sync (health check passes, non-zero cursor)
-private func configureForIncrementalSync(mockNetwork: MockNetworkClient, initialCursor: Int64 = 1000) {
+/// NOTE: The cursor must be set via makeTestDependencies(initialCursor:) since SyncEngine reads it at init time.
+private func configureForIncrementalSync(mockNetwork: MockNetworkClient) {
     // Health check passes
     mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-
-    // Set cursor to non-zero to skip bootstrap and trigger pullChanges
-    UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 }
 
 /// UserDefaults cursor key
@@ -48,10 +50,10 @@ struct CursorPaginationTests {
     func testSYNC02_PaginationAdvancesCursorUntilHasMoreFalse() async throws {
         // Covers SYNC-02: Verify cursor pagination with hasMore flag and cursor advancement
 
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for incremental sync starting at cursor 1000
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 1000)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Configure multi-page getChangesResponses:
         // Page 1: nextCursor=2000, hasMore=true
@@ -81,10 +83,10 @@ struct CursorPaginationTests {
 
     @Test("Pagination stops immediately when hasMore is false")
     func testPaginationStopsWhenHasMoreFalse() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for incremental sync
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 1000)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Single-page response with hasMore=false
         mockNetwork.getChangesResponses = [
@@ -100,10 +102,10 @@ struct CursorPaginationTests {
 
     @Test("Cursor saved to UserDefaults after pagination")
     func testCursorSavedToUserDefaults() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 500)
 
         // Configure for incremental sync
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 500)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Single-page response
         mockNetwork.getChangesResponses = [
@@ -119,10 +121,10 @@ struct CursorPaginationTests {
 
     @Test("Empty changes array still advances cursor")
     func testEmptyChangesStillAdvancesCursor() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 100)
 
         // Configure for incremental sync
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 100)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Two pages with empty changes
         mockNetwork.getChangesResponses = [
@@ -147,10 +149,10 @@ struct CursorEdgeCasesTests {
 
     @Test("Cursor only advances forward (never backward)")
     func testCursorOnlyAdvancesForward() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 5000)
 
         // Start at cursor 5000
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 5000)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Response tries to set cursor backward to 1000 (invalid)
         mockNetwork.getChangesResponses = [
@@ -166,11 +168,11 @@ struct CursorEdgeCasesTests {
 
     @Test("Large cursor values handled correctly")
     func testLargeCursorValues() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
-
         // Start with large cursor
         let largeCursor: Int64 = 9_000_000_000
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: largeCursor)
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: largeCursor)
+
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Response with even larger cursor
         let largerCursor: Int64 = 9_000_000_001
@@ -190,10 +192,10 @@ struct CursorEdgeCasesTests {
 
     @Test("Pagination with changes applies them correctly")
     func testPaginationWithChangesAppliesCorrectly() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for incremental sync
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 1000)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
         // Create change entry data for an event type using factory
         guard let changeData = APIModelFixture.makeChangeEntryDataForEventType(
@@ -231,15 +233,18 @@ struct CursorEdgeCasesTests {
 
     @Test("Multiple pages of changes processed correctly")
     func testMultiplePagesOfChanges() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for incremental sync
-        configureForIncrementalSync(mockNetwork: mockNetwork, initialCursor: 1000)
+        configureForIncrementalSync(mockNetwork: mockNetwork)
 
-        // Create change entries
-        let change1 = APIModelFixture.makeChangeEntry(id: 1001, entityType: "event_type", operation: "create", entityId: "type-1")
-        let change2 = APIModelFixture.makeChangeEntry(id: 1002, entityType: "event_type", operation: "create", entityId: "type-2")
-        let change3 = APIModelFixture.makeChangeEntry(id: 1003, entityType: "event_type", operation: "create", entityId: "type-3")
+        // Create change entries with data (required for applyUpsert to process them)
+        let data1 = APIModelFixture.makeChangeEntryDataForEventType(name: "Type 1", color: "#FF0000", icon: "star")
+        let data2 = APIModelFixture.makeChangeEntryDataForEventType(name: "Type 2", color: "#00FF00", icon: "heart")
+        let data3 = APIModelFixture.makeChangeEntryDataForEventType(name: "Type 3", color: "#0000FF", icon: "bolt")
+        let change1 = APIModelFixture.makeChangeEntry(id: 1001, entityType: "event_type", operation: "create", entityId: "type-1", data: data1)
+        let change2 = APIModelFixture.makeChangeEntry(id: 1002, entityType: "event_type", operation: "create", entityId: "type-2", data: data2)
+        let change3 = APIModelFixture.makeChangeEntry(id: 1003, entityType: "event_type", operation: "create", entityId: "type-3", data: data3)
 
         // Three pages with changes
         mockNetwork.getChangesResponses = [

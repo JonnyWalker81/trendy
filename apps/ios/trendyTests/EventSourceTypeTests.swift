@@ -43,13 +43,27 @@ struct EventSourceTypeBasicTests {
         #expect(EventSourceType.imported.rawValue == "imported", "Imported raw value should be 'imported'")
     }
 
+    @Test("EventSourceType geofence has correct raw value")
+    func test_eventSourceType_geofence_hasCorrectRawValue() {
+        #expect(EventSourceType.geofence.rawValue == "geofence", "Geofence raw value should be 'geofence'")
+    }
+
+    @Test("EventSourceType healthKit has correct raw value")
+    func test_eventSourceType_healthKit_hasCorrectRawValue() {
+        #expect(EventSourceType.healthKit.rawValue == "healthkit", "HealthKit raw value should be 'healthkit'")
+    }
+
     @Test("EventSourceType can be initialized from raw value")
     func test_eventSourceType_initFromRawValue_succeeds() {
         let manual = EventSourceType(rawValue: "manual")
         let imported = EventSourceType(rawValue: "imported")
+        let geofence = EventSourceType(rawValue: "geofence")
+        let healthKit = EventSourceType(rawValue: "healthkit")
 
         #expect(manual == .manual, "Should initialize .manual from 'manual'")
         #expect(imported == .imported, "Should initialize .imported from 'imported'")
+        #expect(geofence == .geofence, "Should initialize .geofence from 'geofence'")
+        #expect(healthKit == .healthKit, "Should initialize .healthKit from 'healthkit'")
     }
 
     @Test("EventSourceType init from invalid raw value returns nil")
@@ -67,9 +81,11 @@ struct EventSourceTypeCaseIterableTests {
     func test_eventSourceType_allCases_containsAllCases() {
         let allCases = EventSourceType.allCases
 
-        #expect(allCases.count == 2, "Should have exactly 2 cases")
+        #expect(allCases.count == 4, "Should have exactly 4 cases")
         #expect(allCases.contains(.manual), "allCases should contain .manual")
         #expect(allCases.contains(.imported), "allCases should contain .imported")
+        #expect(allCases.contains(.geofence), "allCases should contain .geofence")
+        #expect(allCases.contains(.healthKit), "allCases should contain .healthKit")
     }
 
     @Test("EventSourceType allCases order is stable")
@@ -78,6 +94,8 @@ struct EventSourceTypeCaseIterableTests {
 
         #expect(allCases[0] == .manual, "First case should be .manual")
         #expect(allCases[1] == .imported, "Second case should be .imported")
+        #expect(allCases[2] == .geofence, "Third case should be .geofence")
+        #expect(allCases[3] == .healthKit, "Fourth case should be .healthKit")
     }
 
     @Test("EventSourceType can iterate over all cases")
@@ -85,16 +103,22 @@ struct EventSourceTypeCaseIterableTests {
         var count = 0
         var foundManual = false
         var foundImported = false
+        var foundGeofence = false
+        var foundHealthKit = false
 
         for type in EventSourceType.allCases {
             count += 1
             if type == .manual { foundManual = true }
             if type == .imported { foundImported = true }
+            if type == .geofence { foundGeofence = true }
+            if type == .healthKit { foundHealthKit = true }
         }
 
-        #expect(count == 2, "Should iterate over 2 cases")
+        #expect(count == 4, "Should iterate over 4 cases")
         #expect(foundManual, "Should find .manual during iteration")
         #expect(foundImported, "Should find .imported during iteration")
+        #expect(foundGeofence, "Should find .geofence during iteration")
+        #expect(foundHealthKit, "Should find .healthKit during iteration")
     }
 }
 

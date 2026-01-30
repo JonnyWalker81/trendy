@@ -288,35 +288,53 @@ class HealthKitService: NSObject {
     }
 
     /// Refresh the ModelContext when the app returns to foreground.
-    /// After prolonged background suspension, iOS may invalidate SQLite file handles.
-    /// Creating a fresh ModelContext ensures HealthKit event persistence won't fail
-    /// with "default.store couldn't be opened".
+    /// Delegates to PersistenceController for centralized context management.
     @objc private func handleSceneDidBecomeActive() {
-        modelContext = ModelContext(modelContainer)
-        Log.healthKit.debug("Refreshed HealthKitService ModelContext for foreground return")
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            modelContext = controller.validContext
+            Log.healthKit.debug("HealthKitService: updated ModelContext from PersistenceController")
+        } else {
+            modelContext = ModelContext(modelContainer)
+            Log.healthKit.debug("Refreshed HealthKitService ModelContext for foreground return (fallback)")
+        }
     }
 
     /// Ensure the ModelContext has valid SQLite file handles before performing a database operation.
-    /// This is a lightweight probe that detects stale handles from background suspension
-    /// and transparently creates a fresh context if needed.
-    ///
-    /// Call this before any fetch/save operation that could fail with stale handles,
-    /// especially in background HealthKit observer query callbacks where
-    /// UIScene.didActivateNotification may not have fired yet.
+    /// Delegates to PersistenceController for centralized validation.
     func ensureValidModelContext() {
-        do {
-            _ = try modelContext.fetchCount(FetchDescriptor<EventType>())
-        } catch {
-            let nsError = error as NSError
-            let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
-                || error.localizedDescription.lowercased().contains("default.store")
-                || error.localizedDescription.lowercased().contains("couldn't be opened")
+        if let controller = PersistenceController.shared {
+            controller.ensureValidContext()
+            modelContext = controller.validContext
+        } else {
+            // Fallback: inline probe
+            do {
+                _ = try modelContext.fetchCount(FetchDescriptor<EventType>())
+            } catch {
+                let nsError = error as NSError
+                let isStale = (nsError.domain == NSCocoaErrorDomain && nsError.code == 256)
+                    || error.localizedDescription.lowercased().contains("default.store")
+                    || error.localizedDescription.lowercased().contains("couldn't be opened")
 
-            guard isStale else { return }
+                guard isStale else { return }
 
-            Log.healthKit.warning("HealthKitService ModelContext has stale file handles - refreshing", error: error)
-            modelContext = ModelContext(modelContainer)
-            Log.healthKit.info("Refreshed HealthKitService ModelContext after stale handle detection")
+                Log.healthKit.warning("HealthKitService ModelContext has stale file handles - refreshing", error: error)
+                modelContext = ModelContext(modelContainer)
+                Log.healthKit.info("Refreshed HealthKitService ModelContext after stale handle detection")
+            }
+        }
+    }
+
+    /// Save modelContext with background task protection.
+    func protectedSave(name: String = "HealthKitService") throws {
+        guard modelContext.hasChanges else { return }
+
+        if let controller = PersistenceController.shared {
+            try controller.performProtectedWrite(name: name) {
+                try modelContext.save()
+            }
+        } else {
+            try modelContext.save()
         }
     }
 }

@@ -49,7 +49,9 @@ struct APIConfiguration {
     let baseURL: String
 
     var isValid: Bool {
-        !baseURL.isEmpty && (baseURL.hasPrefix("http://") || baseURL.hasPrefix("https://"))
+        !baseURL.isEmpty &&
+        (baseURL.hasPrefix("http://") || baseURL.hasPrefix("https://")) &&
+        baseURL.count > (baseURL.hasPrefix("https://") ? 8 : 7)
     }
 }
 
@@ -60,7 +62,8 @@ struct SupabaseConfiguration {
 
     var isValid: Bool {
         !url.isEmpty && !anonKey.isEmpty &&
-        (url.hasPrefix("http://") || url.hasPrefix("https://"))
+        (url.hasPrefix("http://") || url.hasPrefix("https://")) &&
+        url.count > (url.hasPrefix("https://") ? 8 : 7)
     }
 }
 
@@ -71,7 +74,8 @@ struct PostHogConfiguration {
 
     var isValid: Bool {
         !apiKey.isEmpty && !host.isEmpty &&
-        (host.hasPrefix("http://") || host.hasPrefix("https://"))
+        (host.hasPrefix("http://") || host.hasPrefix("https://")) &&
+        host.count > (host.hasPrefix("https://") ? 8 : 7)
     }
 }
 

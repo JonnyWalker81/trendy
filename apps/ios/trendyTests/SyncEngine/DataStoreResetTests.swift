@@ -68,6 +68,9 @@ struct DataStoreResetTests {
     @Test("resetDataStore always clears cache even if sync was in progress")
     func resetAlwaysClearsCache() async throws {
         cleanupSyncEngineUserDefaults()
+        // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+        let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
+        UserDefaults.standard.set(1000, forKey: cursorKey)
         let mockNetwork = MockNetworkClient()
         let mockStore = MockDataStore()
         let factory = CountingDataStoreFactory(mockStore: mockStore)
@@ -75,8 +78,6 @@ struct DataStoreResetTests {
 
         // Configure for a sync that will run
         mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-        let cursorKey = "sync_engine_cursor_\(AppEnvironment.current.rawValue)"
-        UserDefaults.standard.set(1000, forKey: cursorKey)
         mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
 
         // Start sync in background

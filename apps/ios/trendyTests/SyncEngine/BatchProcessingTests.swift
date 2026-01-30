@@ -15,9 +15,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -26,12 +30,10 @@ private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStor
 }
 
 /// Helper to configure mock for flush operations (skip bootstrap, pass health check)
+/// NOTE: Cursor must be set via makeTestDependencies(initialCursor:) since SyncEngine reads it at init time.
 private func configureForFlush(mockNetwork: MockNetworkClient, mockStore: MockDataStore) {
     // Health check passes (required before any sync operations)
     mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-
-    // Set cursor to non-zero to skip bootstrap
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Configure empty change feed to skip pullChanges processing
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -84,7 +86,7 @@ struct BatchProcessingTests {
     func testSYNC04_BatchProcessingHandlesPartialFailures() async throws {
         // Covers SYNC-04: Verify batch processing with 50-event batches and partial failure handling
 
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -132,7 +134,7 @@ struct BatchProcessingTests {
 
     @Test("Batch size is 50 events")
     func testBatchSizeIs50Events() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -166,7 +168,7 @@ struct BatchProcessingTests {
 
     @Test("Whole batch failure keeps all mutations pending")
     func testWholeBatchFailureKeepsAllPending() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -192,7 +194,7 @@ struct BatchProcessingTests {
 
     @Test("Successful batch removes all mutations from queue")
     func testSuccessfulBatchRemovesAllFromQueue() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -218,7 +220,7 @@ struct BatchProcessingTests {
 
     @Test("Batch failure increments attempt count on mutations")
     func testBatchFailureIncrementsAttemptCount() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -252,7 +254,7 @@ struct BatchProcessingEdgeCasesTests {
 
     @Test("Duplicate errors in batch are treated as success")
     func testDuplicateErrorsTreatedAsSuccess() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -289,40 +291,49 @@ struct BatchProcessingEdgeCasesTests {
                 "Duplicate errors should remove mutation from queue")
     }
 
-    @Test("Rate limit error during batch triggers circuit breaker check")
+    @Test("Rate limit error during batch triggers circuit breaker after threshold")
     func testRateLimitDuringBatch() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
-        // Configure for flush with multiple health check responses
+        // Configure empty change feed
+        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
+
+        // Seed 1 mutation - stays in queue after rate limit failure
+        seedMultipleMutations(mockStore: mockStore, count: 1, prefix: "evt")
+
+        // Each sync cycle makes 1 batch call (all mutations fit in one batch).
+        // Circuit breaker threshold is 3: need 3 syncs to hit 429 three times,
+        // then 4th sync detects threshold and trips the breaker.
+        // 4 health check responses + 3 batch failures (4th sync trips before batch call)
         mockNetwork.getEventTypesResponses = [
+            .success([APIModelFixture.makeAPIEventType()]),
             .success([APIModelFixture.makeAPIEventType()]),
             .success([APIModelFixture.makeAPIEventType()]),
             .success([APIModelFixture.makeAPIEventType()])
         ]
-        UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
-        mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
-
-        // Seed 3 mutations (enough for 3 batch attempts)
-        seedMultipleMutations(mockStore: mockStore, count: 3, prefix: "evt")
-
-        // Configure 3 rate limit errors
         mockNetwork.createEventsBatchResponses = [
             .failure(APIError.httpError(429)),
             .failure(APIError.httpError(429)),
             .failure(APIError.httpError(429))
         ]
 
+        // 3 syncs to increment consecutive rate limit counter to 3
+        await engine.performSync()
+        await engine.performSync()
         await engine.performSync()
 
-        // After 3 rate limit errors, circuit breaker should be tripped
+        // 4th sync: batch loop detects counter >= threshold, trips circuit breaker
+        await engine.performSync()
+
+        // After 3 consecutive rate limit errors, circuit breaker should be tripped
         let isTripped = await engine.isCircuitBreakerTripped
         #expect(isTripped == true,
-                "Circuit breaker should trip after 3 rate limit errors")
+                "Circuit breaker should trip after 3 consecutive rate limit errors")
     }
 
     @Test("Empty batch (no pending mutations) skips batch call")
     func testEmptyBatchSkipsBatchCall() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush but don't seed any mutations
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -336,7 +347,7 @@ struct BatchProcessingEdgeCasesTests {
 
     @Test("Non-event mutations processed individually after batch")
     func testNonEventMutationsProcessedIndividually() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)

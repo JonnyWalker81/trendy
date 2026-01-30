@@ -708,7 +708,10 @@ actor SyncEngine {
         Log.sync.info("Circuit breaker manually reset by user")
         consecutiveRateLimitErrors = 0
         rateLimitBackoffUntil = nil
-        rateLimitBackoffMultiplier = 1.0
+        // NOTE: Do NOT reset rateLimitBackoffMultiplier here.
+        // The multiplier escalates across trips to implement exponential backoff.
+        // It is only reset to 1.0 by clearPendingMutations() (full reset)
+        // or on successful sync completion.
         await updateState(.idle)
     }
 
@@ -875,8 +878,9 @@ actor SyncEngine {
                 syncedCount += batchSyncedCount
                 await updateState(.syncing(synced: syncedCount, total: totalPending))
 
-                // Reset consecutive rate limit counter on success
+                // Reset consecutive rate limit counter and backoff multiplier on success
                 consecutiveRateLimitErrors = 0
+                rateLimitBackoffMultiplier = 1.0
 
             } catch let error as APIError where error.isRateLimitError {
                 // Rate limit error - increment counter

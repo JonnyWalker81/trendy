@@ -19,9 +19,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -30,12 +34,10 @@ private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStor
 }
 
 /// Helper to configure mock for flush operations (skip bootstrap, pass health check)
+/// NOTE: Cursor must be set via makeTestDependencies(initialCursor:) since SyncEngine reads it at init time.
 private func configureForFlush(mockNetwork: MockNetworkClient, mockStore: MockDataStore) {
     // Health check passes (required before any sync operations)
     mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
-
-    // Set cursor to non-zero to skip bootstrap
-    UserDefaults.standard.set(1000, forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
 
     // Configure empty change feed to skip pullChanges processing
     mockNetwork.changeFeedResponseToReturn = ChangeFeedResponse(changes: [], nextCursor: 1000, hasMore: false)
@@ -85,7 +87,7 @@ struct QueueDeduplicationTests {
 
     @Test("Mutation queue prevents duplicate pending entries (DUP-05)")
     func queuePreventsDuplicateEntries() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Queue first mutation
         let request = APIModelFixture.makeCreateEventRequest(id: "evt-1", eventTypeId: "type-1")
@@ -103,7 +105,7 @@ struct QueueDeduplicationTests {
 
     @Test("Queue allows different operations for same entity")
     func queueAllowsDifferentOperationsForSameEntity() async throws {
-        let (_, mockStore, _, engine) = makeTestDependencies()
+        let (_, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Queue CREATE
         let createRequest = APIModelFixture.makeCreateEventRequest(id: "evt-1", eventTypeId: "type-1")
@@ -120,7 +122,7 @@ struct QueueDeduplicationTests {
 
     @Test("Queue allows same operation for different entities")
     func queueAllowsSameOperationForDifferentEntities() async throws {
-        let (_, mockStore, _, engine) = makeTestDependencies()
+        let (_, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Queue CREATE for evt-1
         let request1 = APIModelFixture.makeCreateEventRequest(id: "evt-1", eventTypeId: "type-1")
@@ -145,7 +147,7 @@ struct IdempotencyKeyUniquenessTests {
 
     @Test("Different mutations have different idempotency keys (DUP-03)")
     func differentMutationsHaveDifferentKeys() async throws {
-        let (_, mockStore, _, _) = makeTestDependencies()
+        let (_, mockStore, _, _) = makeTestDependencies(initialCursor: 1000)
 
         // Seed two different mutations
         let mutation1 = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
@@ -158,7 +160,7 @@ struct IdempotencyKeyUniquenessTests {
 
     @Test("Idempotency key is UUID format")
     func idempotencyKeyIsUUIDFormat() async throws {
-        let (_, mockStore, _, _) = makeTestDependencies()
+        let (_, mockStore, _, _) = makeTestDependencies(initialCursor: 1000)
 
         let mutation = seedCreateMutation(mockStore: mockStore, eventId: "evt-1")
 
@@ -169,7 +171,7 @@ struct IdempotencyKeyUniquenessTests {
 
     @Test("Same entity not created twice with same idempotency key (DUP-01)")
     func sameEventNotCreatedTwiceWithSameKey() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for successful sync
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -200,7 +202,7 @@ struct RetryBehaviorTests {
 
     @Test("Retry after network error reuses same idempotency key (DUP-02)")
     func retryReusesSameIdempotencyKey() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush with extra health check responses for retry
         mockNetwork.getEventTypesResponses = [
@@ -245,7 +247,7 @@ struct ConflictHandlingTests {
 
     @Test("Server 409 Conflict response deletes local duplicate (DUP-04)")
     func conflict409DeletesLocalDuplicate() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -276,7 +278,7 @@ struct ConflictHandlingTests {
 
     @Test("409 with unique constraint message also triggers deduplication")
     func uniqueConstraintMessageTriggersDedupe() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -299,7 +301,7 @@ struct ConflictHandlingTests {
 
     @Test("Non-409 errors do not trigger deduplication")
     func non409ErrorsDoNotDeduplicate() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)
@@ -322,7 +324,7 @@ struct ConflictHandlingTests {
 
     @Test("500 errors do not trigger deduplication")
     func server500DoesNotDeduplicate() async throws {
-        let (mockNetwork, mockStore, _, engine) = makeTestDependencies()
+        let (mockNetwork, mockStore, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for flush
         configureForFlush(mockNetwork: mockNetwork, mockStore: mockStore)

@@ -66,6 +66,9 @@ extension Color {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
 
+        // Must be exactly 6 hex characters
+        guard hexSanitized.count == 6 else { return nil }
+
         var rgb: UInt64 = 0
 
         guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
@@ -86,7 +89,7 @@ extension Color {
 
         uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
-        let rgb: Int = (Int)(red * 255) << 16 | (Int)(green * 255) << 8 | (Int)(blue * 255)
+        let rgb: Int = Int(round(red * 255)) << 16 | Int(round(green * 255)) << 8 | Int(round(blue * 255))
 
         return String(format: "#%06x", rgb)
     }

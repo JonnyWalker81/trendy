@@ -52,6 +52,11 @@ struct trendyApp: App {
     @State private var syncStatusViewModel = SyncStatusViewModel()
     @State private var syncHistoryStore = SyncHistoryStore()
 
+    // MARK: - Persistence
+
+    /// Centralized persistence controller - manages all ModelContext lifecycle
+    private let persistenceController: PersistenceController
+
     // MARK: - SwiftData
 
     var sharedModelContainer: ModelContainer = {
@@ -445,6 +450,12 @@ struct trendyApp: App {
 
         // Register background tasks for AI insight generation
         AIBackgroundTaskScheduler.shared.registerTasks()
+
+        // Initialize centralized persistence controller
+        // This MUST happen after sharedModelContainer is created (it's a lazy var)
+        let controller = PersistenceController(modelContainer: sharedModelContainer)
+        PersistenceController.shared = controller
+        self.persistenceController = controller
     }
 
     // MARK: - Body

@@ -15,9 +15,13 @@ import Foundation
 
 // MARK: - Test Helpers
 
-/// Helper to create fresh test dependencies for each test
-private func makeTestDependencies() -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
+/// Helper to create fresh test dependencies for each test, with optional initial cursor
+private func makeTestDependencies(initialCursor: Int64 = 0) -> (mockNetwork: MockNetworkClient, mockStore: MockDataStore, factory: MockDataStoreFactory, engine: SyncEngine) {
     cleanupSyncEngineUserDefaults()
+    // Set cursor BEFORE creating SyncEngine, because SyncEngine reads cursor in init()
+    if initialCursor != 0 {
+        UserDefaults.standard.set(Int(initialCursor), forKey: "sync_engine_cursor_\(AppEnvironment.current.rawValue)")
+    }
     let mockNetwork = MockNetworkClient()
     let mockStore = MockDataStore()
     let factory = MockDataStoreFactory(mockStore: mockStore)
@@ -139,10 +143,7 @@ struct BootstrapFetchTests {
 
     @Test("Bootstrap NOT triggered when cursor is non-zero")
     func testBootstrapNotTriggeredWhenCursorNonZero() async throws {
-        let (mockNetwork, _, _, engine) = makeTestDependencies()
-
-        // Set cursor to non-zero
-        UserDefaults.standard.set(1000, forKey: cursorKey)
+        let (mockNetwork, _, _, engine) = makeTestDependencies(initialCursor: 1000)
 
         // Configure for incremental sync
         mockNetwork.getEventTypesResponses = [.success([APIModelFixture.makeAPIEventType()])]
