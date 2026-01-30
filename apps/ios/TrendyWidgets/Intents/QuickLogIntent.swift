@@ -3,13 +3,16 @@
 //  TrendyWidgets
 //
 //  AppIntent for quick event logging from interactive widgets.
+//  Events are written to a JSON pending queue in the App Group container.
+//  The main app imports them into SwiftData on next foreground.
 //
 
 import AppIntents
-import SwiftData
 import WidgetKit
 
-/// AppIntent that logs an event when user taps an interactive widget button
+/// AppIntent that logs an event when user taps an interactive widget button.
+/// Instead of writing directly to SwiftData (which caused 0xdead10cc crashes),
+/// this writes a pending event to a JSON file in the App Group.
 struct QuickLogIntent: AppIntent {
     static var title: LocalizedStringResource = "Log Event"
     static var description = IntentDescription("Quickly log an event from the widget")
@@ -23,7 +26,6 @@ struct QuickLogIntent: AppIntent {
         self.eventTypeId = eventTypeId
     }
 
-    @MainActor
     func perform() async throws -> some IntentResult {
         let dataManager = WidgetDataManager.shared
 

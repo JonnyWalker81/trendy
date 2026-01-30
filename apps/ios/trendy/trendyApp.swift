@@ -92,9 +92,9 @@ struct trendyApp: App {
             }
         }
 
-        // Normal production path: Use persistent App Group container
-        // Ensure App Group container directories exist before SwiftData tries to use them
-        ensureAppGroupDirectoriesExist()
+        // Normal production path: Use app's private container (not App Group)
+        // Migrate database from App Group to private container on first launch after update
+        migrateFromAppGroupIfNeeded()
 
         // Check if we need to clear container data (set by DebugStorageView)
         if UserDefaults.standard.bool(forKey: "debug_clear_container_on_launch") {
@@ -105,13 +105,22 @@ struct trendyApp: App {
             Log.data.info("🗑️ Debug: Container cleared")
         }
 
-        // Use App Group container for widget sharing
-        // Explicitly disable CloudKit sync - we use our own backend for sync
+        // IMPORTANT: Store database in app's PRIVATE container, NOT the App Group.
+        // Previously, the database was in the App Group container to share with widgets.
+        // This caused 0xdead10cc crashes because iOS terminates apps that hold SQLite
+        // file locks in shared containers during background suspension.
+        //
+        // Widgets now receive data via a lightweight JSON file in the App Group
+        // (see WidgetDataBridge.swift), eliminating all SQLite access from the
+        // shared container.
+        //
+        // See: https://ryanashcraft.com/sqlite-databases-in-app-group-containers/
+        // See: https://scottdriggers.com/blog/0xdead10cc-crash-caused-by-swiftdata-modelcontainer/
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
             allowsSave: true,
-            groupContainer: .identifier(appGroupIdentifier),
+            groupContainer: .none,
             cloudKitDatabase: .none  // Disable iCloud/CloudKit sync
         )
 
@@ -221,8 +230,8 @@ struct trendyApp: App {
 
         // Log SwiftData container location
         #if DEBUG
-        Log.data.debug("📦 SwiftData using App Group", context: .with { ctx in
-            ctx.add("app_group", appGroupIdentifier)
+        Log.data.debug("📦 SwiftData using private container (not App Group)", context: .with { ctx in
+            ctx.add("note", "Widgets use JSON bridge via App Group")
             ctx.add("schema_version", "V2 (UUIDv7 String IDs)")
         })
         #endif
@@ -230,64 +239,159 @@ struct trendyApp: App {
         return container
     }()
 
-    /// Ensure the App Group container directories exist before SwiftData tries to use them
-    private static func ensureAppGroupDirectoriesExist() {
+    /// Migrate SwiftData database from App Group container to app's private container.
+    ///
+    /// Previously, the database was stored in the App Group container to share with widgets.
+    /// This caused 0xdead10cc crashes. On first launch after the update, we move the database
+    /// files to the app's private Library/Application Support directory, which is the default
+    /// location for SwiftData with `groupContainer: .none`.
+    ///
+    /// After migration, the old database files in the App Group are deleted to free space
+    /// and prevent the widget from accidentally opening them.
+    private static func migrateFromAppGroupIfNeeded() {
+        let migrationKey = "database_migrated_from_app_group_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        let fileManager = FileManager.default
+
+        // Source: App Group container's Application Support
         guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            Log.data.warning("⚠️ Could not get App Group container URL")
+            Log.data.warning("Could not get App Group container URL for migration")
+            UserDefaults.standard.set(true, forKey: migrationKey)
             return
         }
 
-        let applicationSupportURL = appGroupURL
+        let appGroupAppSupport = appGroupURL
             .appendingPathComponent("Library", isDirectory: true)
             .appendingPathComponent("Application Support", isDirectory: true)
 
-        let fileManager = FileManager.default
-        if !fileManager.fileExists(atPath: applicationSupportURL.path) {
-            do {
-                try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
-                Log.data.debug("📁 Created App Group directory: Library/Application Support")
-            } catch {
-                Log.data.warning("⚠️ Failed to create App Group directories", error: error)
-            }
-        }
-    }
-
-    /// Clear the SwiftData database files from the App Group container
-    private static func clearDatabaseFiles() {
-        guard let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            Log.data.warning("⚠️ Could not get App Group container URL")
+        // Destination: App's private Application Support (where SwiftData with groupContainer: .none stores)
+        guard let privateAppSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            Log.data.warning("Could not get private Application Support directory")
+            UserDefaults.standard.set(true, forKey: migrationKey)
             return
         }
 
-        let fileManager = FileManager.default
+        // Ensure destination directory exists
+        if !fileManager.fileExists(atPath: privateAppSupport.path) {
+            do {
+                try fileManager.createDirectory(at: privateAppSupport, withIntermediateDirectories: true)
+            } catch {
+                Log.data.warning("Failed to create Application Support directory", error: error)
+            }
+        }
 
-        // Delete all contents of the App Group container
-        if let contents = try? fileManager.contentsOfDirectory(at: appGroupURL, includingPropertiesForKeys: nil) {
-            for item in contents {
+        // Check if old database exists in App Group
+        let oldStoreFile = appGroupAppSupport.appendingPathComponent("default.store")
+        guard fileManager.fileExists(atPath: oldStoreFile.path) else {
+            Log.data.info("No database in App Group container - fresh install or already migrated")
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            return
+        }
+
+        // Check if new location already has a database (don't overwrite)
+        let newStoreFile = privateAppSupport.appendingPathComponent("default.store")
+        if fileManager.fileExists(atPath: newStoreFile.path) {
+            Log.data.info("Database already exists in private container - skipping migration, cleaning up App Group")
+            // Clean up old database from App Group
+            cleanupAppGroupDatabase(appGroupAppSupport: appGroupAppSupport)
+            UserDefaults.standard.set(true, forKey: migrationKey)
+            return
+        }
+
+        // Move all database files (default.store, default.store-shm, default.store-wal)
+        let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+        var migrationSuccess = true
+
+        for fileName in storeFiles {
+            let source = appGroupAppSupport.appendingPathComponent(fileName)
+            let destination = privateAppSupport.appendingPathComponent(fileName)
+
+            guard fileManager.fileExists(atPath: source.path) else { continue }
+
+            do {
+                try fileManager.moveItem(at: source, to: destination)
+                Log.data.info("Migrated database file from App Group", context: .with { ctx in
+                    ctx.add("file", fileName)
+                })
+            } catch {
+                Log.data.warning("Failed to migrate database file", context: .with { ctx in
+                    ctx.add("file", fileName)
+                    ctx.add(error: error)
+                })
+                migrationSuccess = false
+            }
+        }
+
+        if migrationSuccess {
+            Log.data.info("Successfully migrated SwiftData database from App Group to private container")
+            // Clean up any remaining database files in App Group
+            cleanupAppGroupDatabase(appGroupAppSupport: appGroupAppSupport)
+        } else {
+            Log.data.warning("Database migration incomplete - will resync from backend on next launch")
+            // Mark for resync since migration was partial
+            markForPostMigrationResync()
+        }
+
+        UserDefaults.standard.set(true, forKey: migrationKey)
+    }
+
+    /// Remove old database files from the App Group container.
+    /// This prevents the widget from accidentally opening the old SQLite database
+    /// and also frees storage space.
+    private static func cleanupAppGroupDatabase(appGroupAppSupport: URL) {
+        let fileManager = FileManager.default
+        let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+
+        for fileName in storeFiles {
+            let fileURL = appGroupAppSupport.appendingPathComponent(fileName)
+            if fileManager.fileExists(atPath: fileURL.path) {
                 do {
-                    try fileManager.removeItem(at: item)
-                    Log.data.debug("Deleted file", context: .with { ctx in
-                        ctx.add("file", item.lastPathComponent)
+                    try fileManager.removeItem(at: fileURL)
+                    Log.data.debug("Cleaned up old App Group database file", context: .with { ctx in
+                        ctx.add("file", fileName)
                     })
                 } catch {
-                    Log.data.warning("Failed to delete file", context: .with { ctx in
-                        ctx.add("file", item.lastPathComponent)
+                    Log.data.warning("Failed to clean up App Group database file", context: .with { ctx in
+                        ctx.add("file", fileName)
                         ctx.add(error: error)
                     })
                 }
             }
         }
+    }
 
-        // Recreate the Library/Application Support directory that SwiftData expects
-        let applicationSupportURL = appGroupURL
-            .appendingPathComponent("Library", isDirectory: true)
-            .appendingPathComponent("Application Support", isDirectory: true)
+    /// Clear the SwiftData database files from the app's private container
+    private static func clearDatabaseFiles() {
+        let fileManager = FileManager.default
 
-        do {
-            try fileManager.createDirectory(at: applicationSupportURL, withIntermediateDirectories: true)
-            Log.data.debug("✅ Recreated: Library/Application Support")
-        } catch {
-            Log.data.warning("⚠️ Failed to recreate Application Support directory", error: error)
+        // Clear from private Application Support (current location)
+        if let privateAppSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let storeFiles = ["default.store", "default.store-shm", "default.store-wal"]
+            for fileName in storeFiles {
+                let fileURL = privateAppSupport.appendingPathComponent(fileName)
+                if fileManager.fileExists(atPath: fileURL.path) {
+                    do {
+                        try fileManager.removeItem(at: fileURL)
+                        Log.data.debug("Deleted database file", context: .with { ctx in
+                            ctx.add("file", fileName)
+                        })
+                    } catch {
+                        Log.data.warning("Failed to delete database file", context: .with { ctx in
+                            ctx.add("file", fileName)
+                            ctx.add(error: error)
+                        })
+                    }
+                }
+            }
+        }
+
+        // Also clear from App Group container (legacy location)
+        if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+            let appGroupAppSupport = appGroupURL
+                .appendingPathComponent("Library", isDirectory: true)
+                .appendingPathComponent("Application Support", isDirectory: true)
+            cleanupAppGroupDatabase(appGroupAppSupport: appGroupAppSupport)
         }
     }
 

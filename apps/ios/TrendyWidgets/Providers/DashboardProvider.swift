@@ -85,7 +85,6 @@ struct DashboardProvider: AppIntentTimelineProvider {
         return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 
-    @MainActor
     private func getEntry(for configuration: Intent) async -> Entry {
         let dataManager = WidgetDataManager.shared
 
@@ -107,8 +106,11 @@ struct DashboardProvider: AppIntentTimelineProvider {
         var recentEvents: [RecentEventData] = []
         if configuration.showRecentEvents ?? true {
             let events = (try? await dataManager.getRecentEvents(limit: 5)) ?? []
+            let allTypes = (try? await dataManager.getAllEventTypes()) ?? []
+            let typeMap = Dictionary(uniqueKeysWithValues: allTypes.map { ($0.id, $0) })
+
             recentEvents = events.compactMap { event in
-                guard let eventType = event.eventType else { return nil }
+                guard let eventType = typeMap[event.eventTypeId] else { return nil }
                 return RecentEventData(
                     id: event.id,
                     eventTypeName: eventType.name,

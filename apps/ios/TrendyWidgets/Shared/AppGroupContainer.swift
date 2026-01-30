@@ -2,36 +2,32 @@
 //  AppGroupContainer.swift
 //  TrendyWidgets
 //
-//  Shared App Group configuration for SwiftData access between main app and widgets.
+//  App Group configuration for sharing data between main app and widget extension.
+//
+//  NOTE: This file previously created a shared SwiftData ModelContainer.
+//  That approach caused 0xdead10cc crashes because iOS terminates apps holding
+//  SQLite file locks in shared containers during background suspension.
+//
+//  Widgets now use a JSON bridge (see WidgetDataManager.swift) instead of
+//  direct SwiftData access. This file is kept for the App Group identifier
+//  constant and backward compatibility.
 //
 
 import Foundation
-import SwiftData
 
 /// App Group identifier for sharing data between main app and widget extension
 let appGroupIdentifier = "group.com.memento.trendy"
 
-/// Shared ModelContainer configuration for widgets
-enum AppGroupContainer {
-    /// Creates a ModelContainer using the shared App Group storage
-    /// - Returns: A ModelContainer configured for the shared store
-    static func createSharedModelContainer() -> ModelContainer {
-        let schema = Schema([
-            Event.self,
-            EventType.self,
-            PropertyDefinition.self
-        ])
-
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            groupContainer: .identifier(appGroupIdentifier)
-        )
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create shared ModelContainer: \(error)")
-        }
-    }
-}
+/// NOTE: The following was removed to fix 0xdead10cc crashes:
+///
+/// Previously, AppGroupContainer.createSharedModelContainer() created a
+/// ModelContainer using the shared App Group storage. This allowed both
+/// the main app and widget to open the same SQLite database.
+///
+/// This was replaced by a JSON bridge architecture:
+/// - Main app writes widget_snapshot.json to the App Group
+/// - Widget reads this JSON file (no SQLite involved)
+/// - Widget writes widget_pending_events.json for quick-log actions
+/// - Main app processes pending events on foreground
+///
+/// See: WidgetDataBridge.swift (main app) and WidgetDataManager.swift (widget)

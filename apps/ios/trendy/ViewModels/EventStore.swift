@@ -193,9 +193,73 @@ class EventStore {
 
     // MARK: - Widget Integration
 
-    /// Reloads all widget timelines to reflect data changes
+    /// Reloads all widget timelines and writes fresh snapshot data.
+    /// The snapshot is a JSON file in the App Group that widgets read instead
+    /// of opening the SwiftData database directly (which caused 0xdead10cc crashes).
     private func reloadWidgets() {
+        // Write snapshot for widgets to read
+        writeWidgetSnapshot()
+
+        // Tell WidgetKit to reload timelines so widgets read the fresh snapshot
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Write current data as a JSON snapshot for widgets to read.
+    /// This is called after every data mutation (create, update, delete, sync).
+    private func writeWidgetSnapshot() {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+
+        let widgetEventTypes = eventTypes.map { et in
+            WidgetSnapshot.WidgetEventType(
+                id: et.id,
+                name: et.name,
+                colorHex: et.colorHex,
+                iconName: et.iconName
+            )
+        }
+
+        let todayEvents = events
+            .filter { $0.timestamp >= startOfDay && $0.timestamp < endOfDay }
+            .sorted { $0.timestamp > $1.timestamp }
+            .map { event in
+                WidgetSnapshot.WidgetEvent(
+                    id: event.id,
+                    eventTypeId: event.eventType?.id ?? "",
+                    timestamp: event.timestamp,
+                    sourceTypeRaw: event.sourceTypeRaw,
+                    notes: event.notes,
+                    endDate: event.endDate,
+                    geofenceId: event.geofenceId,
+                    healthKitSampleId: event.healthKitSampleId
+                )
+            }
+
+        let recentEvents = Array(events
+            .sorted { $0.timestamp > $1.timestamp }
+            .prefix(50)
+            .map { event in
+                WidgetSnapshot.WidgetEvent(
+                    id: event.id,
+                    eventTypeId: event.eventType?.id ?? "",
+                    timestamp: event.timestamp,
+                    sourceTypeRaw: event.sourceTypeRaw,
+                    notes: event.notes,
+                    endDate: event.endDate,
+                    geofenceId: event.geofenceId,
+                    healthKitSampleId: event.healthKitSampleId
+                )
+            })
+
+        let snapshot = WidgetSnapshot(
+            updatedAt: Date(),
+            eventTypes: widgetEventTypes,
+            recentEvents: recentEvents,
+            todayEvents: todayEvents
+        )
+
+        WidgetDataWriter.writeSnapshot(snapshot)
     }
 
     /// Sets up Darwin notification observer to receive updates from widgets
@@ -209,7 +273,9 @@ class EventStore {
                 guard let observer = observer else { return }
                 let eventStore = Unmanaged<EventStore>.fromOpaque(observer).takeUnretainedValue()
                 Task { @MainActor in
-                    // Queue mutations for any widget-created events before fetching
+                    // Import any pending events created by the widget
+                    await eventStore.importPendingWidgetEvents()
+                    // Queue mutations for any unsynced events before fetching
                     await eventStore.queueMutationsForUnsyncedEvents()
                     await eventStore.fetchData()
                 }
@@ -218,6 +284,58 @@ class EventStore {
             nil,
             .deliverImmediately
         )
+    }
+
+    /// Import pending events created by the widget extension.
+    /// The widget writes events as JSON to the App Group; this method reads
+    /// them and creates proper SwiftData Event objects.
+    func importPendingWidgetEvents() async {
+        let pendingEvents = WidgetDataWriter.drainPendingEvents()
+        guard !pendingEvents.isEmpty else { return }
+
+        guard let modelContext = modelContext else {
+            Log.data.warning("Cannot import widget events: no ModelContext")
+            return
+        }
+
+        var importedCount = 0
+        for pending in pendingEvents {
+            // Find the EventType
+            let eventTypeId = pending.eventTypeId
+            let descriptor = FetchDescriptor<EventType>(
+                predicate: #Predicate { $0.id == eventTypeId }
+            )
+            guard let eventType = try? modelContext.fetch(descriptor).first else {
+                Log.data.warning("Widget event skipped: EventType not found", context: .with { ctx in
+                    ctx.add("eventTypeId", pending.eventTypeId)
+                })
+                continue
+            }
+
+            // Create the event
+            let event = Event(
+                timestamp: pending.timestamp,
+                eventType: eventType,
+                sourceType: .manual
+            )
+            modelContext.insert(event)
+            importedCount += 1
+        }
+
+        if importedCount > 0 {
+            do {
+                if let controller = PersistenceController.shared {
+                    try controller.save(name: "importWidgetEvents")
+                } else {
+                    try modelContext.save()
+                }
+                Log.data.info("Imported pending widget events", context: .with { ctx in
+                    ctx.add("count", importedCount)
+                })
+            } catch {
+                Log.data.error("Failed to save imported widget events", error: error)
+            }
+        }
     }
 
     /// Removes Darwin notification observer

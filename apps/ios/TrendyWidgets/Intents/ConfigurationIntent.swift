@@ -30,9 +30,8 @@ struct EventTypeEntity: AppEntity {
 
 // MARK: - Event Type Query
 
-/// Query for fetching EventTypes from the shared data store
+/// Query for fetching EventTypes from the JSON bridge (no SwiftData access)
 struct EventTypeQuery: EntityQuery {
-    @MainActor
     func entities(for identifiers: [String]) async throws -> [EventTypeEntity] {
         let dataManager = WidgetDataManager.shared
         let allTypes = try await dataManager.getAllEventTypes()
@@ -49,7 +48,6 @@ struct EventTypeQuery: EntityQuery {
             }
     }
 
-    @MainActor
     func suggestedEntities() async throws -> [EventTypeEntity] {
         let dataManager = WidgetDataManager.shared
         let allTypes = try await dataManager.getAllEventTypes()

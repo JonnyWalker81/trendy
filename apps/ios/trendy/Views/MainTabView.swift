@@ -104,6 +104,9 @@ struct MainTabView: View {
                         // Now reset SyncEngine's cached DataStore and update EventStore's reference.
                         await store.resetSyncEngineDataStore()
 
+                        // Import any pending events created by the widget while we were in background
+                        await store.importPendingWidgetEvents()
+
                         // Refresh HealthKit daily aggregates first to ensure fresh data
                         if let hkService = healthKitService, hkService.hasHealthKitAuthorization {
                             await hkService.refreshDailyAggregates()
