@@ -27,6 +27,11 @@ protocol DataStoreFactory: Sendable {
 
 /// Default factory implementation using ModelContainer.
 /// Production code uses this to create real LocalStore instances.
+///
+/// **IMPORTANT:** All ModelContext instances created by this factory have
+/// `autosaveEnabled = false` to prevent SQLite writes during background suspension.
+/// SwiftData's default autosave can trigger writes while the app is suspended,
+/// causing iOS to kill the app with 0xdead10cc (holding file locks in suspended state).
 final class DefaultDataStoreFactory: DataStoreFactory, @unchecked Sendable {
     // ModelContainer is Sendable, so this is safe
     private let modelContainer: ModelContainer
@@ -37,6 +42,7 @@ final class DefaultDataStoreFactory: DataStoreFactory, @unchecked Sendable {
 
     func makeDataStore() -> any DataStoreProtocol {
         let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
         return LocalStore(modelContext: context)
     }
 }

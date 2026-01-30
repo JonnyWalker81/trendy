@@ -95,7 +95,9 @@ extension GeofenceManager {
             Log.geofence.debug("GeofenceManager: updated ModelContext from PersistenceController")
         } else {
             let container = modelContext.container
-            modelContext = ModelContext(container)
+            let freshContext = ModelContext(container)
+            freshContext.autosaveEnabled = false
+            modelContext = freshContext
             Log.geofence.debug("Refreshed GeofenceManager ModelContext for foreground return (fallback)")
         }
     }
@@ -120,7 +122,9 @@ extension GeofenceManager {
 
                 Log.geofence.warning("GeofenceManager ModelContext has stale file handles - refreshing", error: error)
                 let container = modelContext.container
-                modelContext = ModelContext(container)
+                let freshContext = ModelContext(container)
+                freshContext.autosaveEnabled = false
+                modelContext = freshContext
                 Log.geofence.info("Refreshed GeofenceManager ModelContext after stale handle detection")
             }
         }

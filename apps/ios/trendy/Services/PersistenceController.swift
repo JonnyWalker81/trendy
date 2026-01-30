@@ -35,6 +35,8 @@ import UIKit
 /// - Background task protection for all SQLite writes
 /// - Centralized foreground return handling
 /// - Reduced SQLite connection contention
+/// - **Autosave disabled on ALL contexts** to prevent SQLite writes during background suspension
+///   (which causes 0xdead10cc kills and "default.store couldn't be opened" errors)
 @MainActor
 final class PersistenceController: @unchecked Sendable {
 
@@ -50,6 +52,7 @@ final class PersistenceController: @unchecked Sendable {
 
     /// The current valid ModelContext for MainActor-isolated operations.
     /// This is refreshed on foreground return and after stale handle detection.
+    /// **autosaveEnabled is always false** to prevent unsolicited SQLite writes.
     private(set) var mainContext: ModelContext
 
     /// Track whether we're in a suspended/background state
@@ -58,47 +61,130 @@ final class PersistenceController: @unchecked Sendable {
     /// Counter for active background tasks (for debugging)
     private var activeBackgroundTasks = 0
 
+    /// Callback to notify SyncEngine to release its cached DataStore on background entry.
+    /// Set by EventStore during initialization.
+    var onBackgroundEntry: (() async -> Void)?
+
     // MARK: - Initialization
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
-        self.mainContext = modelContainer.mainContext
+
+        // CRITICAL: Disable autosaveEnabled on the main context.
+        // SwiftData's default (autosaveEnabled=true) can trigger SQLite writes during
+        // background suspension, which causes iOS to kill the app with 0xdead10cc
+        // (holding file locks in suspended state). By disabling autosave, we ensure
+        // ALL saves are explicit and wrapped in background task protection.
+        let context = modelContainer.mainContext
+        context.autosaveEnabled = false
+        self.mainContext = context
 
         // Observe app lifecycle for centralized context management
         setupLifecycleObservers()
 
-        Log.data.info("PersistenceController initialized")
+        Log.data.info("PersistenceController initialized", context: .with { ctx in
+            ctx.add("autosaveEnabled", false)
+        })
     }
 
     // MARK: - Lifecycle Management
 
     private func setupLifecycleObservers() {
-        // When app enters background, mark state
+        // When app enters background, save and release locks.
+        // IMPORTANT: Use OperationQueue.main (NOT a Task{@MainActor}) so the handler
+        // runs synchronously during notification delivery. Task{@MainActor} merely
+        // enqueues work, which may not execute before iOS suspends the app.
         NotificationCenter.default.addObserver(
             forName: UIScene.didEnterBackgroundNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            // We're on the main thread and PersistenceController is @MainActor,
+            // so we can call MainActor-isolated methods directly via assumeIsolated.
+            MainActor.assumeIsolated {
                 self?.handleDidEnterBackground()
             }
         }
 
-        // When app returns to foreground, refresh all contexts
+        // When app returns to foreground, refresh all contexts.
+        // Same pattern: run synchronously to ensure context is refreshed
+        // BEFORE any SwiftUI .onChange(of: scenePhase) handlers fire.
         NotificationCenter.default.addObserver(
             forName: UIScene.willEnterForegroundNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.handleWillEnterForeground()
             }
         }
     }
 
+    /// Handle app entering background: save pending changes and release SQLite locks.
+    ///
+    /// This is the KEY prevention mechanism against 0xdead10cc crashes. When the app enters
+    /// background, iOS may suspend it at any time. If any SQLite file lock is held at that
+    /// moment, iOS terminates the app with 0xdead10cc. We prevent this by:
+    ///
+    /// 1. Saving any pending changes (flushing the write-ahead log)
+    /// 2. Notifying SyncEngine to release its cached DataStore (which holds its own ModelContext)
+    ///
+    /// Apple DTS recommendation: "Nullify the model container, and also other SwiftData objects
+    /// such as model context(s) and models associated with the container."
+    /// See: https://developer.apple.com/forums/thread/762093
     private func handleDidEnterBackground() {
         isBackgrounded = true
-        Log.data.debug("PersistenceController: app entered background")
+
+        // Begin a SINGLE background task that covers ALL cleanup work.
+        // This is critical: iOS can suspend the app at any time after
+        // didEnterBackground fires. The background task gives us time
+        // to complete both the save AND the SyncEngine DataStore release.
+        var taskId: UIBackgroundTaskIdentifier = .invalid
+        taskId = UIApplication.shared.beginBackgroundTask(withName: "SwiftData-BackgroundCleanup") {
+            // Expiration handler: if we run out of time, end the task
+            Log.data.warning("PersistenceController: background cleanup task expired")
+            if taskId != .invalid {
+                UIApplication.shared.endBackgroundTask(taskId)
+                taskId = .invalid
+            }
+        }
+
+        // Step 1: Flush any pending changes to disk while we still have time.
+        if mainContext.hasChanges {
+            do {
+                try mainContext.save()
+                Log.data.info("PersistenceController: saved pending changes before background")
+            } catch {
+                Log.data.warning("PersistenceController: failed to save before background", error: error)
+            }
+        }
+
+        // Step 2: Notify SyncEngine to release its cached DataStore.
+        // SyncEngine runs on its own actor and has its own ModelContext that can hold
+        // SQLite locks independently. We must release those locks too.
+        //
+        // CRITICAL FIX: Previously this was fire-and-forget (Task without awaiting).
+        // The background task would end before SyncEngine had a chance to release
+        // its DataStore. Now we keep the background task alive until the release
+        // completes, ensuring no SQLite file handles are held during suspension.
+        if let callback = onBackgroundEntry {
+            Task {
+                await callback()
+                Log.data.info("PersistenceController: SyncEngine DataStore released")
+                if taskId != .invalid {
+                    UIApplication.shared.endBackgroundTask(taskId)
+                    taskId = .invalid
+                }
+            }
+        } else {
+            // No SyncEngine callback - end background task immediately
+            if taskId != .invalid {
+                UIApplication.shared.endBackgroundTask(taskId)
+                taskId = .invalid
+            }
+        }
+
+        Log.data.info("PersistenceController: prepared for background suspension")
     }
 
     /// Refresh all ModelContext instances when the app returns to foreground.
@@ -107,14 +193,29 @@ final class PersistenceController: @unchecked Sendable {
     /// This is the SINGLE PLACE where all contexts are refreshed, replacing the previous
     /// approach where each component (EventStore, GeofenceManager, HealthKitService)
     /// independently tried to detect and recover from stale handles.
+    ///
+    /// IMPORTANT: This always creates a fresh context, regardless of whether
+    /// handleDidEnterBackground ran. This covers:
+    /// - Normal background/foreground cycle (isBackgrounded was true)
+    /// - Cold launch by iOS for background activity (geofence/HealthKit) where
+    ///   the app never went through didEnterBackground (isBackgrounded was false)
+    /// - App relaunched after 0xdead10cc termination
+    ///
+    /// Creating a fresh ModelContext is cheap and safe, while using a stale one
+    /// after background suspension causes "default.store couldn't be opened" crashes.
     func handleWillEnterForeground() {
-        guard isBackgrounded else { return }
+        let wasBackgrounded = isBackgrounded
         isBackgrounded = false
 
-        // Create a fresh context - this gets a new SQLite connection
-        mainContext = ModelContext(modelContainer)
+        // Create a fresh context with autosave DISABLED
+        let freshContext = ModelContext(modelContainer)
+        freshContext.autosaveEnabled = false
+        mainContext = freshContext
 
-        Log.data.info("PersistenceController: refreshed ModelContext for foreground return")
+        Log.data.info("PersistenceController: refreshed ModelContext for foreground return", context: .with { ctx in
+            ctx.add("autosaveEnabled", false)
+            ctx.add("wasBackgrounded", wasBackgrounded)
+        })
     }
 
     // MARK: - Context Access
@@ -129,11 +230,15 @@ final class PersistenceController: @unchecked Sendable {
 
     /// Create a fresh ModelContext for background actor operations (e.g., SyncEngine).
     ///
-    /// Each call creates a NEW context. The caller is responsible for the lifecycle
-    /// of this context. This is intended for actor-isolated operations that need
-    /// their own context.
+    /// Each call creates a NEW context with autosave disabled. The caller is responsible
+    /// for the lifecycle of this context. This is intended for actor-isolated operations
+    /// that need their own context.
+    ///
+    /// **autosaveEnabled is always false** to prevent SQLite writes during background suspension.
     func makeBackgroundContext() -> ModelContext {
-        return ModelContext(modelContainer)
+        let context = ModelContext(modelContainer)
+        context.autosaveEnabled = false
+        return context
     }
 
     // MARK: - Protected Writes
@@ -228,7 +333,9 @@ final class PersistenceController: @unchecked Sendable {
             let isStale = isStaleStoreError(error)
             if isStale {
                 Log.data.warning("PersistenceController: stale handles detected, refreshing context", error: error)
-                mainContext = ModelContext(modelContainer)
+                let freshContext = ModelContext(modelContainer)
+                freshContext.autosaveEnabled = false
+                mainContext = freshContext
                 Log.data.info("PersistenceController: context refreshed after stale handle detection")
                 return true
             } else {
@@ -276,7 +383,9 @@ final class PersistenceController: @unchecked Sendable {
                 // Refresh and retry - note that unsaved changes in the old context are LOST.
                 // This is acceptable because the alternative is a crash/error.
                 // The caller should handle this gracefully (e.g., re-queue the operation).
-                mainContext = ModelContext(modelContainer)
+                let freshContext = ModelContext(modelContainer)
+                freshContext.autosaveEnabled = false
+                mainContext = freshContext
                 Log.data.info("PersistenceController: context refreshed after failed save - pending changes were lost")
                 throw error
             }

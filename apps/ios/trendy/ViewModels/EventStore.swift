@@ -500,6 +500,15 @@ class EventStore {
             )
         }
 
+        // Register background entry callback so PersistenceController can notify
+        // SyncEngine to release its cached DataStore (which holds its own ModelContext
+        // and can hold SQLite locks independently). This prevents 0xdead10cc kills.
+        if let syncEngine = syncEngine, let controller = PersistenceController.shared {
+            controller.onBackgroundEntry = { [weak syncEngine] in
+                await syncEngine?.resetDataStore()
+            }
+        }
+
         // Load initial state (pending count, pending delete IDs) and refresh cached sync state
         if let syncEngine = syncEngine {
             Task {
@@ -546,6 +555,7 @@ class EventStore {
         } else if let modelContainer = modelContainer {
             // Fallback for tests or when PersistenceController is not available
             let freshContext = ModelContext(modelContainer)
+            freshContext.autosaveEnabled = false
             self.modelContext = freshContext
             Log.data.debug("Refreshed EventStore ModelContext for foreground return (fallback)")
         }
@@ -881,6 +891,7 @@ class EventStore {
 
                 Log.data.warning("ModelContext has stale file handles - creating fresh context before CRUD operation", error: error)
                 let freshContext = ModelContext(modelContainer)
+                freshContext.autosaveEnabled = false
                 self.modelContext = freshContext
                 Log.data.info("Refreshed ModelContext proactively before CRUD operation")
             }
@@ -914,6 +925,7 @@ class EventStore {
             Log.data.warning("Context has stale file handles, retrying with fresh context", error: error)
 
             let freshContext = ModelContext(modelContainer)
+            freshContext.autosaveEnabled = false
             try performLocalFetch(using: freshContext)
 
             // Update both our reference and the controller's context

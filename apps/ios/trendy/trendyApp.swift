@@ -228,11 +228,19 @@ struct trendyApp: App {
             }
         }
 
+        // CRITICAL: Disable autosave on the container's mainContext.
+        // SwiftData's default (autosaveEnabled=true) can trigger SQLite writes during
+        // background suspension, which causes iOS to kill the app with 0xdead10cc
+        // (holding file locks in suspended state). All saves must be explicit and
+        // wrapped in background task protection via PersistenceController.
+        container.mainContext.autosaveEnabled = false
+
         // Log SwiftData container location
         #if DEBUG
         Log.data.debug("📦 SwiftData using private container (not App Group)", context: .with { ctx in
             ctx.add("note", "Widgets use JSON bridge via App Group")
             ctx.add("schema_version", "V2 (UUIDv7 String IDs)")
+            ctx.add("autosaveEnabled", false)
         })
         #endif
 

@@ -295,7 +295,9 @@ class HealthKitService: NSObject {
             modelContext = controller.validContext
             Log.healthKit.debug("HealthKitService: updated ModelContext from PersistenceController")
         } else {
-            modelContext = ModelContext(modelContainer)
+            let freshContext = ModelContext(modelContainer)
+            freshContext.autosaveEnabled = false
+            modelContext = freshContext
             Log.healthKit.debug("Refreshed HealthKitService ModelContext for foreground return (fallback)")
         }
     }
@@ -319,7 +321,9 @@ class HealthKitService: NSObject {
                 guard isStale else { return }
 
                 Log.healthKit.warning("HealthKitService ModelContext has stale file handles - refreshing", error: error)
-                modelContext = ModelContext(modelContainer)
+                let freshContext = ModelContext(modelContainer)
+                freshContext.autosaveEnabled = false
+                modelContext = freshContext
                 Log.healthKit.info("Refreshed HealthKitService ModelContext after stale handle detection")
             }
         }
